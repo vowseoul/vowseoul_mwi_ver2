@@ -39,7 +39,7 @@ function LoginForm() {
       if (signInError) throw signInError
 
       if (data?.user) {
-        setAuth(true, data.user.email === 'admin@vowseoul.com')
+        setAuth(true, data.user.email === 'vovvseoul@gmail.com')
         
         // Check for draft invitation to associate
         if (typeof window !== 'undefined') {
@@ -49,7 +49,7 @@ function LoginForm() {
               const parsedDraft = JSON.parse(draft)
               const store = useAppStore.getState()
               store.setUser(data.user)
-              store.setAuth(true, data.user.email === 'admin@vowseoul.com')
+              store.setAuth(true, data.user.email === 'vovvseoul@gmail.com')
               store.setCurrentInvitation(parsedDraft)
               
               const savedId = await store.saveInvitation()

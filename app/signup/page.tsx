@@ -63,7 +63,7 @@ function SignupForm() {
 
       if (data?.user) {
         setUser(data.user)
-        setAuth(true, data.user.email === 'admin@vowseoul.com')
+        setAuth(true, data.user.email === 'vovvseoul@gmail.com')
         toast.success('회원가입이 완료되었습니다!')
 
         // Check for draft invitation to associate
@@ -74,7 +74,7 @@ function SignupForm() {
               const parsedDraft = JSON.parse(draft)
               const store = useAppStore.getState()
               store.setUser(data.user)
-              store.setAuth(true, data.user.email === 'admin@vowseoul.com')
+              store.setAuth(true, data.user.email === 'vovvseoul@gmail.com')
               store.setCurrentInvitation(parsedDraft)
               
               const savedId = await store.saveInvitation()

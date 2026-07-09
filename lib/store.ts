@@ -423,7 +423,7 @@ if (typeof window !== 'undefined') {
     const store = useAppStore.getState()
     if (session?.user) {
       store.setUser(session.user)
-      store.setAuth(true, session.user.email === 'admin@vowseoul.com')
+      store.setAuth(true, session.user.email === 'vovvseoul@gmail.com')
       
       // Only load user invitations if we are on a page that needs them (mypage, editor, etc.) to prevent Web Locks error on other pages
       const path = window.location.pathname

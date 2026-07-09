@@ -5,13 +5,13 @@
 -- (auth.users 가 충돌나지 않도록 uuid 및 email로 검사)
 INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, role, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
 VALUES
-  ('e1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d', 'admin@vowseoul.com', crypt('admin1234', gen_salt('bf')), now(), 'authenticated', '{"provider":"email","providers":["email"]}', '{"name":"운영자"}', now(), now()),
+  ('e1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d', 'vovvseoul@gmail.com', crypt('admin1234', gen_salt('bf')), now(), 'authenticated', '{"provider":"email","providers":["email"]}', '{"name":"운영자"}', now(), now()),
   ('f6e5d4c3-b2a1-0f9e-8d7c-6b5a4f3e2d1c', 'designer@vowseoul.com', crypt('designer1234', gen_salt('bf')), now(), 'authenticated', '{"provider":"email","providers":["email"]}', '{"name":"디자이너"}', now(), now())
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.profiles (id, email, role, name, created_at)
 VALUES
-  ('e1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d', 'admin@vowseoul.com', 'ADMIN', '운영자', now()),
+  ('e1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d', 'vovvseoul@gmail.com', 'ADMIN', '운영자', now()),
   ('f6e5d4c3-b2a1-0f9e-8d7c-6b5a4f3e2d1c', 'designer@vowseoul.com', 'DESIGNER', '디자이너', now())
 ON CONFLICT (id) DO NOTHING;
 

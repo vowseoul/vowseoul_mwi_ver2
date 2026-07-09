@@ -104,7 +104,7 @@ export default function RsvpManagerPage() {
       // Check ownership (bypass for admin)
       const userId = session.user.id
       const isOwner = invite.id.startsWith(userId + '__')
-      const isAdmin = session.user.email === 'admin@vowseoul.com'
+      const isAdmin = session.user.email === 'vovvseoul@gmail.com'
 
       if (!isOwner && !isAdmin) {
         toast.error('해당 청첩장의 관리 권한이 없습니다.')
