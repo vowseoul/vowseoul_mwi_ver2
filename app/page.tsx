@@ -369,8 +369,6 @@ export default function LuxuryLandingPage() {
             <span className="tracking-widest">MWI SYSTEM VER 2.0</span>
           </div>
           <div className="flex gap-8">
-            <Link href="/faq" className="hover:text-[#c4a574] transition-colors">자주 묻는 질문</Link>
-            <Link href="/notice" className="hover:text-[#c4a574] transition-colors">공지사항</Link>
             <a href="mailto:support@vowseoul.com" className="hover:text-[#c4a574] transition-colors">고객 지원</a>
           </div>
           <div>

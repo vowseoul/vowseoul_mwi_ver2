@@ -120,6 +120,101 @@ export interface Notice {
   createdAt: string
 }
 
+// Helper to map DB record to WeddingInvitation (unpack content_data)
+export function mapFromDb(dbRecord: any): WeddingInvitation {
+  if (!dbRecord) return null as any
+  const content = dbRecord.content_data || {}
+  return {
+    id: dbRecord.id,
+    themeId: dbRecord.theme_version_id || 'classic-white',
+    colorSet: dbRecord.customization_overrides?.colorSet || 'default',
+    fontSet: dbRecord.customization_overrides?.fontSet || 'default',
+    status: dbRecord.status,
+    createdAt: dbRecord.created_at,
+    publishedUrl: dbRecord.published_at ? `${dbRecord.public_slug}` : null,
+    
+    // content_data fields
+    groomName: content.groomName || '',
+    groomNameEn: content.groomNameEn || '',
+    groomParentRelation: content.groomParentRelation || '',
+    brideName: content.brideName || '',
+    brideNameEn: content.brideNameEn || '',
+    brideParentRelation: content.brideParentRelation || '',
+    weddingDate: content.weddingDate || '',
+    weddingTime: content.weddingTime || '',
+    venueName: content.venueName || '',
+    venueHall: content.venueHall || '',
+    venueAddress: content.venueAddress || '',
+    invitationMessage: content.invitationMessage || '',
+    galleryImages: content.galleryImages || [],
+    galleryViewType: content.galleryViewType || 'slide',
+    trafficInfo: content.trafficInfo || '',
+    parkingInfo: content.parkingInfo || '',
+    rsvpEnabled: content.rsvpEnabled !== false,
+    rsvpMealEnabled: content.rsvpMealEnabled !== false,
+    rsvpCommentEnabled: content.rsvpCommentEnabled !== false,
+    guestbookType: content.guestbookType || 'text',
+    bgmId: content.bgmId || null,
+    kakaoThumbnail: content.kakaoThumbnail || null,
+    kakaoTitle: content.kakaoTitle || '',
+    kakaoDescription: content.kakaoDescription || '',
+    bankAccounts: content.bankAccounts || [],
+    contacts: content.contacts || [],
+    customStyles: content.customStyles || {},
+  }
+}
+
+// Helper to map WeddingInvitation to DB record (pack content_data)
+export function mapToDb(inv: any) {
+  if (!inv) return null as any
+  return {
+    id: inv.id,
+    customer_id: inv.customerId || inv.customer_id || '00000000-0000-0000-0000-000000000000',
+    theme_version_id: inv.themeId || inv.theme_version_id || null,
+    public_slug: inv.public_slug || inv.publicSlug || inv.id || 'slug',
+    dashboard_slug: inv.dashboard_slug || `dash-${inv.public_slug || inv.id || 'slug'}`,
+    dashboard_password: inv.dashboard_password || '1234',
+    status: inv.status || 'draft',
+    expires_at: inv.expires_at || new Date(Date.now() + 30*24*60*60*1000).toISOString(),
+    block_order: inv.block_order || ["cover", "greeting", "couple-info", "event-info", "gallery", "map", "account", "rsvp", "guestbook"],
+    
+    // Packed JSONB fields
+    customization_overrides: {
+      colorSet: inv.colorSet || 'default',
+      fontSet: inv.fontSet || 'default',
+    },
+    content_data: {
+      groomName: inv.groomName || '',
+      groomNameEn: inv.groomNameEn || '',
+      groomParentRelation: inv.groomParentRelation || '',
+      brideName: inv.brideName || '',
+      brideNameEn: inv.brideNameEn || '',
+      brideParentRelation: inv.brideParentRelation || '',
+      weddingDate: inv.weddingDate || '',
+      weddingTime: inv.weddingTime || '',
+      venueName: inv.venueName || '',
+      venueHall: inv.venueHall || '',
+      venueAddress: inv.venueAddress || '',
+      invitationMessage: inv.invitationMessage || '',
+      galleryImages: inv.galleryImages || [],
+      galleryViewType: inv.galleryViewType || 'slide',
+      trafficInfo: inv.trafficInfo || '',
+      parkingInfo: inv.parkingInfo || '',
+      rsvpEnabled: inv.rsvpEnabled !== false,
+      rsvpMealEnabled: inv.rsvpMealEnabled !== false,
+      rsvpCommentEnabled: inv.rsvpCommentEnabled !== false,
+      guestbookType: inv.guestbookType || 'text',
+      bgmId: inv.bgmId || null,
+      kakaoThumbnail: inv.kakaoThumbnail || null,
+      kakaoTitle: inv.kakaoTitle || '',
+      kakaoDescription: inv.kakaoDescription || '',
+      bankAccounts: inv.bankAccounts || [],
+      contacts: inv.contacts || [],
+      customStyles: inv.customStyles || {},
+    }
+  }
+}
+
 interface AppState {
   // Data fetching
   fetchData: () => Promise<void>
@@ -246,7 +341,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (error) throw error
 
       if (data) {
-        set({ currentInvitation: data })
+        const mapped = mapFromDb(data)
+        set({ currentInvitation: mapped })
       }
     } catch (e) {
       console.error('Error loading invitation from Supabase:', e)
@@ -270,23 +366,23 @@ export const useAppStore = create<AppState>((set, get) => ({
         id = userId ? `${userId}__${randId}` : randId
       }
 
-      const invitationData = {
+      const flatInvitation = {
         ...current,
         id,
       } as any
 
+      const dbPayload = mapToDb(flatInvitation)
+
       if (isNew) {
-        invitationData.createdAt = new Date().toISOString()
-        invitationData.status = invitationData.status || 'draft'
-        const { error } = await supabase.from('invitations').insert(invitationData)
+        const { error } = await supabase.from('invitations').insert(dbPayload)
         if (error) throw error
       } else {
-        const { error } = await supabase.from('invitations').update(invitationData).eq('id', id)
+        const { error } = await supabase.from('invitations').update(dbPayload).eq('id', id)
         if (error) throw error
       }
 
       set((state) => {
-        const updatedInvitation = { ...current, ...invitationData } as WeddingInvitation
+        const updatedInvitation = { ...current, id } as WeddingInvitation
         const updatedList = isNew 
           ? [...state.invitations, updatedInvitation]
           : state.invitations.map(inv => inv.id === id ? updatedInvitation : inv)
@@ -409,7 +505,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const { data, error } = await supabase.from('invitations').select('*')
       if (data) {
-        const userInvites = data.filter((inv: any) => inv.id.startsWith(userId + '__'))
+        const userInvites = data
+          .filter((inv: any) => inv.id.startsWith(userId + '__'))
+          .map(mapFromDb)
         set({ invitations: userInvites })
       }
     } catch (err) {

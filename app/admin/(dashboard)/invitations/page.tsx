@@ -68,10 +68,8 @@ export default function InvitationsListPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!customerId || customerId === 'none') {
-      toast.error('고객을 선택해주세요.')
-      return
-    }
+    const finalCustomerId = (!customerId || customerId === 'none') ? 'mock' : customerId
+
     if (!themeId || themeId === 'none') {
       toast.error('디자인 테마를 선택해주세요.')
       return
@@ -90,7 +88,7 @@ export default function InvitationsListPage() {
     setIsCreating(true)
     try {
       const created = await createMutation.mutateAsync({
-        customerId,
+        customerId: finalCustomerId,
         themeId,
         publicSlug,
       })
@@ -162,13 +160,13 @@ export default function InvitationsListPage() {
               <FieldGroup className="space-y-4">
                 {/* Customer selection */}
                 <Field>
-                  <FieldLabel htmlFor="customerSelect">정보 입력 완료 고객 *</FieldLabel>
+                  <FieldLabel htmlFor="customerSelect">정보 입력 완료 고객 (선택)</FieldLabel>
                   <Select value={customerId} onValueChange={setCustomerId}>
                     <SelectTrigger id="customerSelect">
-                      <SelectValue placeholder="제작을 시작할 고객 선택" />
+                      <SelectValue placeholder="고객 선택 없음 (임시 초안 생성)" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">고객 선택</SelectItem>
+                      <SelectItem value="none">임시 고객으로 생성 (고객 선택 없음)</SelectItem>
                       {availableCustomers.map((c) => (
                         <SelectItem key={c.id} value={c.id}>
                           {c.groom_name} & {c.bride_name} (예식일: {c.wedding_date})

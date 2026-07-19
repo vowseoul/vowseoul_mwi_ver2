@@ -37,8 +37,6 @@ const navItems = [
   { href: '/admin/invitations', label: '청첩장 관리', icon: Sparkles },
   { href: '/admin/orders', label: '주문 관리', icon: ShoppingCart },
   { href: '/admin/assets', label: '에셋 관리', icon: Palette },
-  { href: '/admin/faq', label: 'FAQ 관리', icon: HelpCircle },
-  { href: '/admin/notice', label: '공지사항 관리', icon: Megaphone },
   { href: '/admin/statistics', label: '통계', icon: BarChart3 },
   { href: '/admin/settings', label: '시스템 설정', icon: Settings },
 ]

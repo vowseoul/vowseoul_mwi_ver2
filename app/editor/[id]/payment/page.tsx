@@ -74,7 +74,6 @@ export default function PaymentPage() {
   const params = useParams()
   const { currentInvitation, updateCurrentInvitation, saveInvitation, user } = useAppStore()
   const invitationId = params.id as string
-  const [isPaymentOpen, setIsPaymentOpen] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [isPaid, setIsPaid] = useState(false)
   const [isSuccessDialogOpen, setIsSuccessDialogOpen] = useState(false)
@@ -174,27 +173,36 @@ export default function PaymentPage() {
         </CardContent>
       </Card>
 
-      {/* Payment Info */}
+      {/* Publish Info */}
       {!isPaid ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">결제 정보</CardTitle>
-            <CardDescription>청첩장 발행을 위해 결제를 진행해주세요.</CardDescription>
+            <CardTitle className="text-lg">발행 정보</CardTitle>
+            <CardDescription>최종 모바일 청첩장을 온라인에 즉시 발행합니다.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="rounded-lg bg-muted/50 p-4">
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">모바일 청첩장</span>
-                <span className="font-medium">50,000원</span>
+                <span className="text-muted-foreground">모바일 청첩장 발행 서비스</span>
+                <span className="font-medium text-green-600">무료 (관리자 제어)</span>
               </div>
               <div className="mt-2 flex items-center justify-between border-t border-border pt-2">
                 <span className="font-medium">총 결제금액</span>
-                <span className="text-xl font-semibold">50,000원</span>
+                <span className="text-xl font-semibold text-green-700">0원</span>
               </div>
             </div>
-            <Button className="mt-4 w-full" size="lg" onClick={() => setIsPaymentOpen(true)}>
-              <CreditCard className="mr-2 h-4 w-4" />
-              결제하기
+            <Button className="mt-4 w-full" size="lg" onClick={handlePayment} disabled={isProcessing}>
+              {isProcessing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  발행 처리 중...
+                </>
+              ) : (
+                <>
+                  <Check className="mr-2 h-4 w-4" />
+                  청첩장 즉시 발행하기
+                </>
+              )}
             </Button>
           </CardContent>
         </Card>
@@ -251,63 +259,6 @@ export default function PaymentPage() {
         )}
       </div>
 
-      {/* Payment Modal */}
-      <Dialog open={isPaymentOpen} onOpenChange={setIsPaymentOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>결제하기</DialogTitle>
-            <DialogDescription>
-              결제 수단을 선택해주세요.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="mt-4 space-y-3">
-            <button
-              className="flex w-full items-center gap-4 rounded-lg border border-border p-4 transition-colors hover:bg-muted"
-              onClick={handlePayment}
-              disabled={isProcessing}
-            >
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                <CreditCard className="h-5 w-5" />
-              </div>
-              <div className="text-left">
-                <p className="font-medium">신용/체크카드</p>
-                <p className="text-sm text-muted-foreground">모든 카드 결제 가능</p>
-              </div>
-            </button>
-            <button
-              className="flex w-full items-center gap-4 rounded-lg border border-border p-4 transition-colors hover:bg-muted"
-              onClick={handlePayment}
-              disabled={isProcessing}
-            >
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#FEE500]">
-                <span className="text-lg font-bold">K</span>
-              </div>
-              <div className="text-left">
-                <p className="font-medium">카카오페이</p>
-                <p className="text-sm text-muted-foreground">간편결제</p>
-              </div>
-            </button>
-            <button
-              className="flex w-full items-center gap-4 rounded-lg border border-border p-4 transition-colors hover:bg-muted"
-              onClick={handlePayment}
-              disabled={isProcessing}
-            >
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#03C75A]">
-                <span className="text-lg font-bold text-white">N</span>
-              </div>
-              <div className="text-left">
-                <p className="font-medium">네이버페이</p>
-                <p className="text-sm text-muted-foreground">간편결제</p>
-              </div>
-            </button>
-          </div>
-          {isProcessing && (
-            <div className="mt-4 text-center text-sm text-muted-foreground">
-              결제 처리 중...
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
 
       {/* Success Dialog */}
       <Dialog open={isSuccessDialogOpen} onOpenChange={setIsSuccessDialogOpen}>

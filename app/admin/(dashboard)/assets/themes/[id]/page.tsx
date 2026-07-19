@@ -390,15 +390,83 @@ export default function ThemeEditorPage() {
     reader.onload = (event) => {
       try {
         const json = JSON.parse(event.target?.result as string)
+        
+        // 1. Detect if it's the nested Guide format and map to flat fields
+        const mappedTheme: any = {}
+        if (json.colors) {
+          mappedTheme.backgroundColor = json.colors.background || json.backgroundColor
+          mappedTheme.primaryColor = json.colors.primary || json.primaryColor
+          mappedTheme.secondaryColor = json.colors.secondary || json.secondaryColor
+          mappedTheme.textColor = json.colors.text || json.textColor
+          mappedTheme.secondaryTextColor = json.colors.textMuted || json.secondaryTextColor
+        }
+        if (json.typography) {
+          const headingFont = json.typography.heading?.fontFamily || ''
+          const bodyFont = json.typography.body?.fontFamily || ''
+          mappedTheme.fontKr = headingFont.toLowerCase().includes('serif') || headingFont.toLowerCase().includes('myeongjo') ? 'font-serif' : 'font-sans'
+          mappedTheme.fontEn = bodyFont.toLowerCase().includes('serif') || bodyFont.toLowerCase().includes('playfair') ? 'font-serif' : 'font-sans'
+        }
+        if (json.border) {
+          mappedTheme.borderRadius = json.border.radius?.toString().replace('px', '') || json.borderRadius
+        }
+        if (json.spacing) {
+          mappedTheme.sectionSpacing = json.spacing.sectionGap || json.sectionSpacing
+        }
+
+        // Merge flat keys
+        const mergedJson = {
+          ...json,
+          ...mappedTheme
+        }
+
+        // 2. Update theme state
         setTheme(prev => ({
           ...prev,
-          ...json,
-          name: json.name || prev.name,
-          sectionOrder: Array.isArray(json.sectionOrder) ? json.sectionOrder : prev.sectionOrder,
-          recommendedBgms: Array.isArray(json.recommendedBgms) ? json.recommendedBgms : prev.recommendedBgms,
+          ...mergedJson,
+          name: mergedJson.name || prev.name,
+          sectionOrder: Array.isArray(mergedJson.sectionOrder) ? mergedJson.sectionOrder : prev.sectionOrder,
+          recommendedBgms: Array.isArray(mergedJson.recommendedBgms) ? mergedJson.recommendedBgms : prev.recommendedBgms,
         }))
-        toast.success('JSON 토큰 값을 성공적으로 불러와 편집기에 적용했습니다!')
+
+        // 3. Update colorSets state to trigger real-time color changes
+        const finalBg = mergedJson.backgroundColor || '#FFF8F0'
+        const finalPrimary = mergedJson.primaryColor || '#E8A87C'
+        const finalTextColor = mergedJson.textColor || '#3A3A3A'
+        
+        setColorSets(prev => {
+          const updated = [...prev]
+          const defIdx = updated.findIndex(c => c.id === 'default')
+          const colors = [finalBg, finalPrimary, finalTextColor]
+          if (defIdx > -1) {
+            updated[defIdx] = { ...updated[defIdx], colors }
+          } else if (updated.length > 0) {
+            updated[0] = { ...updated[0], colors }
+          } else {
+            updated.push({ id: 'default', name: '기본 색상', colors })
+          }
+          return updated
+        })
+
+        // 4. Update fontSets state to trigger real-time font changes
+        const finalFontKr = mergedJson.fontKr || 'font-serif'
+        const finalFontEn = mergedJson.fontEn || 'font-serif'
+        setFontSets(prev => {
+          const updated = [...prev]
+          const defIdx = updated.findIndex(f => f.id === 'default')
+          const fonts = [finalFontKr, finalFontEn]
+          if (defIdx > -1) {
+            updated[defIdx] = { ...updated[defIdx], fonts }
+          } else if (updated.length > 0) {
+            updated[0] = { ...updated[0], fonts }
+          } else {
+            updated.push({ id: 'default', name: '기본 폰트', fonts })
+          }
+          return updated
+        })
+
+        toast.success('JSON 토큰 값을 성공적으로 불러와 편집기 및 미리보기에 적용했습니다!')
       } catch (err) {
+        console.error(err)
         toast.error('올바르지 않은 JSON 파일 규격입니다.')
       }
     }

@@ -25,39 +25,45 @@ export default function NewCustomerPage() {
   const { data: profiles, isLoading: isLoadingProfiles } = useProfilesQuery()
 
   // Form State
-  const [groomName, setGroomName] = useState('')
-  const [brideName, setBrideName] = useState('')
+  const [orderer, setOrderer] = useState('')
+  const [ordererType, setOrdererType] = useState<'groom' | 'bride'>('groom')
   const [phone, setPhone] = useState('')
-  const [weddingDate, setWeddingDate] = useState('')
-  const [weddingTime, setWeddingTime] = useState('')
-  const [venueName, setVenueName] = useState('')
-  const [venueAddress, setVenueAddress] = useState('')
   const [assignedTo, setAssignedTo] = useState('none')
+  const [paperType, setPaperType] = useState('클래식 화이트')
+  const [mobileYn, setMobileYn] = useState('O')
   const [memo, setMemo] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!groomName.trim() || !brideName.trim() || !weddingDate || !venueName.trim() || !venueAddress.trim()) {
-      toast.error('필수 항목을 모두 입력해주세요.')
+    if (!orderer.trim()) {
+      toast.error('주문자 이름을 입력해주세요.')
       return
     }
 
     setIsSubmitting(true)
 
     try {
+      // Calculate dummy wedding date (90 days from now)
+      const dummyDate = new Date()
+      dummyDate.setDate(dummyDate.getDate() + 90)
+      const weddingDateString = dummyDate.toISOString().slice(0, 10)
+
+      const isGroom = ordererType === 'groom'
+      const formattedMemo = `[주문자: ${orderer} (${isGroom ? '신랑' : '신부'}) | 연락처: ${phone} | 지류: ${paperType} | 모바일: ${mobileYn}]${memo ? ` / 메모: ${memo}` : ''}`
+
       await createMutation.mutateAsync({
-        groom_name: groomName,
-        bride_name: brideName,
-        phone: phone || null,
-        wedding_date: weddingDate,
-        venue_name: venueName,
-        venue_address: venueAddress,
+        groom_name: isGroom ? orderer.trim() : '미지정',
+        bride_name: isGroom ? '미지정' : orderer.trim(),
+        phone: phone.trim() || null,
+        wedding_date: weddingDateString,
+        venue_name: '미지정',
+        venue_address: '미지정',
         venue_coordinates: null,
         transportation_info: null,
         status: 'registered',
-        memo: memo || null,
+        memo: formattedMemo,
         assigned_to: assignedTo === 'none' ? null : assignedTo,
       })
 
@@ -81,7 +87,7 @@ export default function NewCustomerPage() {
         </Button>
         <div>
           <h1 className="text-2xl font-semibold text-foreground">신규 고객 등록</h1>
-          <p className="text-sm text-muted-foreground mt-1">지류 및 모바일 청첩장 제작을 위한 기본 정보를 수집할 고객을 등록합니다</p>
+          <p className="text-sm text-muted-foreground mt-1">지류 및 모바일 청첩장 계약 내용에 맞춰 신규 고객을 등록합니다.</p>
         </div>
       </div>
 
@@ -95,30 +101,29 @@ export default function NewCustomerPage() {
           </CardHeader>
           <CardContent>
             <FieldGroup className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Field>
-                  <FieldLabel htmlFor="groomName">신랑 이름 *</FieldLabel>
+                  <FieldLabel htmlFor="orderer">주문자 이름 *</FieldLabel>
                   <Input
-                    id="groomName"
-                    value={groomName}
-                    onChange={(e) => setGroomName(e.target.value)}
-                    placeholder="신랑 이름 입력"
+                    id="orderer"
+                    value={orderer}
+                    onChange={(e) => setOrderer(e.target.value)}
+                    placeholder="주문자 이름 입력"
                     required
                   />
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="brideName">신부 이름 *</FieldLabel>
-                  <Input
-                    id="brideName"
-                    value={brideName}
-                    onChange={(e) => setBrideName(e.target.value)}
-                    placeholder="신부 이름 입력"
-                    required
-                  />
+                  <FieldLabel htmlFor="ordererType">주문자 구분 *</FieldLabel>
+                  <Select value={ordererType} onValueChange={(val: any) => setOrdererType(val)}>
+                    <SelectTrigger id="ordererType">
+                      <SelectValue placeholder="구분 선택" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="groom">신랑</SelectItem>
+                      <SelectItem value="bride">신부</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </Field>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Field>
                   <FieldLabel htmlFor="phone">연락처</FieldLabel>
                   <Input
@@ -128,7 +133,9 @@ export default function NewCustomerPage() {
                     placeholder="010-XXXX-XXXX"
                   />
                 </Field>
+              </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Field>
                   <FieldLabel htmlFor="assignedTo">담당자 지정</FieldLabel>
                   <Select value={assignedTo} onValueChange={setAssignedTo}>
@@ -137,59 +144,47 @@ export default function NewCustomerPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">없음</SelectItem>
-                      {!isLoadingProfiles && profiles?.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name} ({p.role === 'ADMIN' ? '운영자' : '디자이너'})
-                        </SelectItem>
-                      ))}
+                      {!isLoadingProfiles && profiles?.map((p) => {
+                        const [namePart, phonePart] = (p.name || '').split('|').map((s: string) => s.trim())
+                        return (
+                          <SelectItem key={p.id} value={p.id}>
+                            {namePart} {phonePart ? `(${phonePart})` : ''} ({p.role === 'ADMIN' ? '운영자' : '디자이너'})
+                          </SelectItem>
+                        )
+                      })}
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="paperType">지류 청첩장</FieldLabel>
+                  <Select value={paperType} onValueChange={setPaperType}>
+                    <SelectTrigger id="paperType">
+                      <SelectValue placeholder="지류 종류 선택" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="클래식 화이트">클래식 화이트</SelectItem>
+                      <SelectItem value="시그니처 레더">시그니처 레더</SelectItem>
+                      <SelectItem value="럭스 골드">럭스 골드</SelectItem>
+                      <SelectItem value="오가닉 린넨">오가닉 린넨</SelectItem>
+                      <SelectItem value="선택 안 함 (지류 없음)">선택 안 함 (지류 없음)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="mobileYn">모바일 청첩장 여부</FieldLabel>
+                  <Select value={mobileYn} onValueChange={setMobileYn}>
+                    <SelectTrigger id="mobileYn">
+                      <SelectValue placeholder="모바일 여부 선택" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="O">O (예)</SelectItem>
+                      <SelectItem value="X">X (아니오)</SelectItem>
                     </SelectContent>
                   </Select>
                 </Field>
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field>
-                  <FieldLabel htmlFor="weddingDate">예식 일자 *</FieldLabel>
-                  <Input
-                    id="weddingDate"
-                    type="date"
-                    value={weddingDate}
-                    onChange={(e) => setWeddingDate(e.target.value)}
-                    required
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="weddingTime">예식 시간</FieldLabel>
-                  <Input
-                    id="weddingTime"
-                    type="time"
-                    value={weddingTime}
-                    onChange={(e) => setWeddingTime(e.target.value)}
-                  />
-                </Field>
-              </div>
-
-              <Field>
-                <FieldLabel htmlFor="venueName">예식장 이름 (식장/홀) *</FieldLabel>
-                <Input
-                  id="venueName"
-                  value={venueName}
-                  onChange={(e) => setVenueName(e.target.value)}
-                  placeholder="예: 더채플앳청담 3층 커스티 홀"
-                  required
-                />
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="venueAddress">도로명 주소 *</FieldLabel>
-                <Input
-                  id="venueAddress"
-                  value={venueAddress}
-                  onChange={(e) => setVenueAddress(e.target.value)}
-                  placeholder="예: 서울특별시 강남구 학동로 1212"
-                  required
-                />
-              </Field>
 
               <Field>
                 <FieldLabel htmlFor="memo">상세 메모</FieldLabel>
@@ -197,7 +192,7 @@ export default function NewCustomerPage() {
                   id="memo"
                   value={memo}
                   onChange={(e) => setMemo(e.target.value)}
-                  placeholder="지류 청첩장 수량, 특이사항 등을 기록합니다."
+                  placeholder="특이사항이나 추가 요청 사항을 기입하세요."
                   rows={4}
                 />
               </Field>

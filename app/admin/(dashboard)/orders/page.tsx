@@ -83,23 +83,45 @@ export default function OrdersPage() {
       const invitationIds = orders.map(o => o.invitationId).filter(Boolean)
       if (invitationIds.length === 0) return
 
-      const { data, error } = await supabase
+      // Step 1: Fetch invitations to get theme_version_id
+      const { data: invs, error: invsError } = await supabase
         .from('invitations')
-        .select('id, themeId')
+        .select('id, theme_version_id')
         .in('id', invitationIds)
 
-      if (error) {
-        console.error('Error fetching invitation themes:', error)
+      if (invsError) {
+        console.error('Error fetching invitations:', invsError)
         return
       }
 
-      if (data) {
-        const themeMap: Record<string, string> = {}
-        data.forEach(item => {
-          themeMap[item.id] = item.themeId
-        })
-        setInvitationThemes(themeMap)
+      if (!invs || invs.length === 0) return
+
+      // Step 2: Fetch theme_versions to map theme_version_id -> theme_id
+      const versionIds = invs.map(i => i.theme_version_id).filter(Boolean)
+      
+      const themeIdMap: Record<string, string> = {}
+      if (versionIds.length > 0) {
+        const { data: versions, error: versionsError } = await supabase
+          .from('theme_versions')
+          .select('id, theme_id')
+          .in('id', versionIds)
+
+        if (versionsError) {
+          console.error('Error fetching theme versions:', versionsError)
+        } else if (versions) {
+          versions.forEach((v: any) => {
+            themeIdMap[v.id] = v.theme_id
+          })
+        }
       }
+
+      // Step 3: Construct the final map of invitationId -> theme_id
+      const themeMap: Record<string, string> = {}
+      invs.forEach((item: any) => {
+        const versionId = item.theme_version_id
+        themeMap[item.id] = (versionId ? themeIdMap[versionId] : null) || 'classic-white'
+      })
+      setInvitationThemes(themeMap)
     }
 
     fetchInvitationThemes()

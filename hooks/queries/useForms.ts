@@ -81,10 +81,36 @@ export function useFieldsQuery() {
 export function useCreateFieldMutation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (newField: Omit<FieldLibraryItem, 'id' | 'created_at' | 'is_system'>) => {
+    mutationFn: async (newField: Omit<FieldLibraryItem, 'id' | 'created_at'>) => {
       const { data, error } = await supabase
         .from('field_library')
-        .insert([{ ...newField, is_system: false }])
+        .insert([newField])
+        .select()
+        .single()
+
+      if (error) throw error
+      return data as FieldLibraryItem
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fields'] })
+    },
+  })
+}
+
+export function useUpdateFieldMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      fieldId,
+      updates,
+    }: {
+      fieldId: string
+      updates: Partial<Omit<FieldLibraryItem, 'id' | 'created_at'>>
+    }) => {
+      const { data, error } = await supabase
+        .from('field_library')
+        .update(updates)
+        .eq('id', fieldId)
         .select()
         .single()
 
@@ -148,6 +174,43 @@ export function useCreateFormTemplateMutation() {
 
       if (error) throw error
       return data as FormTemplate
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['form-templates'] })
+    },
+  })
+}
+export function useUpdateFormTemplateMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ templateId, updates }: { templateId: string; updates: Partial<FormTemplate> }) => {
+      const { data, error } = await supabase
+        .from('form_templates')
+        .update(updates)
+        .eq('id', templateId)
+        .select()
+        .single()
+
+      if (error) throw error
+      return data as FormTemplate
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['form-templates'] })
+    },
+  })
+}
+
+export function useDeleteFormTemplateMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (templateId: string) => {
+      const { error } = await supabase
+        .from('form_templates')
+        .delete()
+        .eq('id', templateId)
+
+      if (error) throw error
+      return true
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['form-templates'] })
@@ -364,10 +427,19 @@ export function useSubmitFormMutation() {
 
         if (instanceError) throw instanceError
 
-        // 3. Update customer status to 'form_completed'
+        // 3. Update customer details using the submitted form fields
+        const customerUpdates: any = {
+          status: 'form_completed'
+        }
+        if (data.groom_name) customerUpdates.groom_name = data.groom_name
+        if (data.bride_name) customerUpdates.bride_name = data.bride_name
+        if (data.wedding_date) customerUpdates.wedding_date = data.wedding_date
+        if (data.venue_name) customerUpdates.venue_name = data.venue_name
+        if (data.venue_address) customerUpdates.venue_address = data.venue_address
+
         const { error: customerError } = await supabase
           .from('customers')
-          .update({ status: 'form_completed' })
+          .update(customerUpdates)
           .eq('id', customerId)
 
         if (customerError) throw customerError

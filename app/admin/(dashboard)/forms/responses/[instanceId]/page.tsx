@@ -16,8 +16,20 @@ import {
 } from '@/components/ui/select'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { useFormSubmissionQuery, useUpdateSubmissionMutation } from '@/hooks/queries/useForms'
-import { ArrowLeft, Save, Loader2, FileCheck } from 'lucide-react'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Calendar } from '@/components/ui/calendar'
+import { Calendar as CalendarIcon, Clock, ArrowLeft, Save, Loader2, FileCheck } from 'lucide-react'
+import { format } from 'date-fns'
+import { ko } from 'date-fns/locale'
+import { cn } from '@/lib/utils'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { toast } from 'sonner'
+
+const parseLocalDate = (dateStr: string) => {
+  if (!dateStr) return undefined
+  const [year, month, day] = dateStr.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
 
 export default function FormResponsePage({ params }: { params: Promise<{ instanceId: string }> }) {
   const { instanceId } = use(params)
@@ -96,24 +108,104 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
             className="text-xs bg-muted/10"
           />
         )
-      case 'date':
+      case 'date': {
+        const localDate = parseLocalDate(value)
         return (
-          <Input
-            type="date"
-            value={value}
-            onChange={(e) => handleInputChange(field.field_key, e.target.value)}
-            className="h-8 text-xs bg-muted/10"
-          />
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                className={cn(
+                  "w-full justify-start text-left font-normal h-8 text-xs px-3 bg-muted/10",
+                  !value && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                {value && localDate ? format(localDate, 'yyyy년 MM월 dd일') : '날짜 선택'}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={localDate}
+                onSelect={(date) => {
+                  handleInputChange(field.field_key, date ? format(date, 'yyyy-MM-dd') : '')
+                }}
+                locale={ko}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
         )
-      case 'time':
+      }
+      case 'time': {
+        const [h, m] = value ? value.split(':') : ['', '']
+        const hoursList = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
+        const minutesList = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'))
+
         return (
-          <Input
-            type="time"
-            value={value}
-            onChange={(e) => handleInputChange(field.field_key, e.target.value)}
-            className="h-8 text-xs bg-muted/10"
-          />
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                className={cn(
+                  "w-full justify-start text-left font-normal h-8 text-xs px-3 bg-muted/10",
+                  !value && "text-muted-foreground"
+                )}
+              >
+                <Clock className="mr-2 h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                {value ? `${h}시 ${m}분` : '시간 선택'}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-52 p-3" align="start">
+              <div className="flex gap-3 justify-center">
+                <div className="flex flex-col text-center flex-1">
+                  <span className="text-[10px] font-semibold text-muted-foreground mb-1">시</span>
+                  <ScrollArea className="h-44 border rounded-md">
+                    <div className="flex flex-col divide-y divide-border/40">
+                      {hoursList.map(hr => (
+                        <button
+                          key={hr}
+                          type="button"
+                          className={cn(
+                            "w-full py-1 text-[11px] hover:bg-muted text-center transition-colors",
+                            h === hr && "bg-primary text-primary-foreground font-semibold hover:bg-primary"
+                          )}
+                          onClick={() => handleInputChange(field.field_key, `${hr}:${m || '00'}`)}
+                        >
+                          {hr}시
+                        </button>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+                <div className="flex flex-col text-center flex-1">
+                  <span className="text-[10px] font-semibold text-muted-foreground mb-1">분</span>
+                  <ScrollArea className="h-44 border rounded-md">
+                    <div className="flex flex-col divide-y divide-border/40">
+                      {minutesList.map(min => (
+                        <button
+                          key={min}
+                          type="button"
+                          className={cn(
+                            "w-full py-1 text-[11px] hover:bg-muted text-center transition-colors",
+                            m === min && "bg-primary text-primary-foreground font-semibold hover:bg-primary"
+                          )}
+                          onClick={() => handleInputChange(field.field_key, `${h || '12'}:${min}`)}
+                        >
+                          {min}분
+                        </button>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         )
+      }
       case 'select':
         return (
           <Select 
@@ -203,20 +295,54 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
           </CardHeader>
           <CardContent className="p-6">
             <FieldGroup className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {fields.map((field: any) => (
-                <div key={field.field_key} className="space-y-1">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[11px] font-semibold text-slate-700">
-                      {field.label}
-                      {field.is_required && <span className="text-red-500 ml-0.5">*</span>}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground font-mono">
-                      {field.field_key}
-                    </span>
-                  </div>
-                  {renderInputField(field)}
-                </div>
-              ))}
+              {(() => {
+                let lastSectionTitle = ''
+                return fields.map((field: any) => {
+                  let currentSection = ''
+                  if (field.options) {
+                    if (typeof field.options === 'string') {
+                      try {
+                        const parsed = JSON.parse(field.options)
+                        currentSection = parsed.section_title || ''
+                      } catch {
+                        currentSection = ''
+                      }
+                    } else {
+                      currentSection = field.options.section_title || ''
+                    }
+                  }
+
+                  const showSectionHeader = currentSection && currentSection !== lastSectionTitle
+                  if (showSectionHeader) {
+                    lastSectionTitle = currentSection
+                  }
+
+                  return (
+                    <React.Fragment key={field.field_key}>
+                      {showSectionHeader && (
+                        <div className="col-span-1 md:col-span-2 pt-4 pb-1 border-b border-border mt-3 first:mt-0">
+                          <h3 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                            <span className="w-1.5 h-3 bg-primary rounded-full" />
+                            {currentSection}
+                          </h3>
+                        </div>
+                      )}
+                      <div className="space-y-1">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[11px] font-semibold text-slate-700">
+                            {field.label_override || field.label}
+                            {field.is_required && <span className="text-red-500 ml-0.5">*</span>}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            {field.field_key}
+                          </span>
+                        </div>
+                        {renderInputField(field)}
+                      </div>
+                    </React.Fragment>
+                  )
+                })
+              })()}
             </FieldGroup>
 
             <div className="flex justify-end gap-3 mt-6 pt-6 border-t border-border">

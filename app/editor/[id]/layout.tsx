@@ -118,7 +118,7 @@ export default function EditorLayout({
         <div className="flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" asChild>
-              <Link href="/">
+              <Link href={invitationId === 'new' ? '/' : `/invitation/${invitationId}/dashboard`}>
                 <ArrowLeft className="h-5 w-5" />
                 <span className="sr-only">뒤로가기</span>
               </Link>

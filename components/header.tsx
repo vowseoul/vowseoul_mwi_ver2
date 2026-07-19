@@ -44,18 +44,7 @@ export function Header() {
           >
             템플릿 갤러리
           </Link>
-          <Link 
-            href="/notice" 
-            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            공지사항
-          </Link>
-          <Link 
-            href="/faq" 
-            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            FAQ
-          </Link>
+
           <a 
             href="https://mkt.shopping.naver.com/link/6a20207aa4d80c5688e963db" 
             target="_blank"
@@ -104,12 +93,7 @@ export function Header() {
               <DropdownMenuItem asChild>
                 <Link href="/templates">템플릿 갤러리</Link>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/notice">공지사항</Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/faq">FAQ</Link>
-              </DropdownMenuItem>
+
               <DropdownMenuItem asChild>
                 <a 
                   href="https://mkt.shopping.naver.com/link/6a20207aa4d80c5688e963db" 

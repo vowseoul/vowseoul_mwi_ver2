@@ -194,7 +194,10 @@ export function useCustomerFormInstanceQuery(customerId: string) {
       if (!customerId) return null
       const { data, error } = await supabase
         .from('form_instances')
-        .select('*')
+        .select(`
+          *,
+          form_submissions(updated_at, is_complete)
+        `)
         .eq('customer_id', customerId)
         .order('created_at', { ascending: false })
         .limit(1)

@@ -16,14 +16,122 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
-import { Save, Globe, Mail, CreditCard, Bell, Shield, Image as ImageIcon, Upload, Loader2, Check } from "lucide-react"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
+import { Save, Globe, Mail, CreditCard, Bell, Shield, Image as ImageIcon, Upload, Loader2, Check, Users, Trash2, Plus } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
+import { useProfilesQuery } from "@/hooks/queries/useCustomers"
+import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
 export default function AdminSettingsPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [isFeatureOpen, setIsFeatureOpen] = useState(true)
+
+  const queryClient = useQueryClient()
+  const { data: profiles, isLoading: isLoadingProfiles } = useProfilesQuery()
+  
+  const [isStaffModalOpen, setIsStaffModalOpen] = useState(false)
+  const [staffEmail, setStaffEmail] = useState("")
+  const [staffPassword, setStaffPassword] = useState("")
+  const [staffName, setStaffName] = useState("")
+  const [staffPhone, setStaffPhone] = useState("")
+  const [staffRole, setStaffRole] = useState("DESIGNER")
+  const [isCreatingStaff, setIsCreatingStaff] = useState(false)
+
+  const handleCreateStaff = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!staffEmail.trim() || !staffPassword.trim() || !staffName.trim() || !staffPhone.trim()) {
+      toast.error("모든 정보를 올바르게 기입해 주세요.")
+      return
+    }
+
+    if (staffPassword.length < 6) {
+      toast.error("비밀번호는 최소 6글자 이상이어야 합니다.")
+      return
+    }
+
+    setIsCreatingStaff(true)
+
+    try {
+      // 1. Create a non-session-persisting temp client to sign up the user
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+      const tempClient = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: { persistSession: false }
+      })
+
+      const { data: authData, error: authError } = await tempClient.auth.signUp({
+        email: staffEmail,
+        password: staffPassword,
+        options: {
+          data: {
+            name: staffName,
+          }
+        }
+      })
+
+      if (authError) throw authError
+      if (!authData.user) throw new Error("계정 생성 실패")
+
+      // 2. Insert into public.profiles
+      const formattedName = `${staffName.trim()} | ${staffPhone.trim()}`
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .insert([{
+          id: authData.user.id,
+          email: staffEmail.trim(),
+          role: staffRole,
+          name: formattedName
+        }])
+
+      if (profileError) {
+        throw profileError
+      }
+
+      toast.success("신규 직원 계정이 정상적으로 생성되었습니다.")
+      setIsStaffModalOpen(false)
+      setStaffEmail("")
+      setStaffPassword("")
+      setStaffName("")
+      setStaffPhone("")
+      setStaffRole("DESIGNER")
+      
+      queryClient.invalidateQueries({ queryKey: ["profiles"] })
+    } catch (err: any) {
+      console.error(err)
+      toast.error(err.message || "직원 계정 생성 중 오류가 발생했습니다.")
+    } finally {
+      setIsCreatingStaff(false)
+    }
+  }
+
+  const handleDeleteStaff = async (profileId: string, email: string) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user && user.email === email) {
+      toast.error("현재 로그인된 계정은 삭제할 수 없습니다.")
+      return
+    }
+
+    if (!confirm("이 직원 계정을 정말 삭제하시겠습니까? 관련 담당자 매핑이 해제될 수 있습니다.")) {
+      return
+    }
+
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .delete()
+        .eq("id", profileId)
+
+      if (error) throw error
+
+      toast.success("직원 계정이 정상적으로 삭제되었습니다.")
+      queryClient.invalidateQueries({ queryKey: ["profiles"] })
+    } catch (err: any) {
+      console.error(err)
+      toast.error(err.message || "직원 계정 삭제에 실패했습니다.")
+    }
+  }
 
   const [heroContent, setHeroContent] = useState({
     title: "소중한 서약을 담아드립니다",
@@ -227,6 +335,7 @@ export default function AdminSettingsPage() {
           <TabsTrigger value="payment">결제</TabsTrigger>
           <TabsTrigger value="notification">알림</TabsTrigger>
           <TabsTrigger value="security">보안</TabsTrigger>
+          <TabsTrigger value="staff">직원 관리</TabsTrigger>
         </TabsList>
 
         {/* General Settings */}
@@ -805,6 +914,164 @@ export default function AdminSettingsPage() {
                   <Save className="w-4 h-4 mr-2" />
                   {isSaving ? "저장 중..." : "저장"}
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Staff Management Settings */}
+        <TabsContent value="staff">
+          <Card>
+            <CardHeader className="flex flex-row justify-between items-center bg-muted/10 border-b border-border py-4">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                  <Users className="w-5 h-5 text-primary" />
+                  직원 계정 관리
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  서비스를 함께 운영할 디자이너 및 운영진 계정을 생성하고 연락처를 지정합니다.
+                </CardDescription>
+              </div>
+              <Dialog open={isStaffModalOpen} onOpenChange={setIsStaffModalOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="gap-1.5 h-8">
+                    <Plus className="w-3.5 h-3.5" /> 직원 등록
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md font-sans text-xs">
+                  <DialogHeader>
+                    <DialogTitle className="text-base font-semibold">신규 직원 계정 생성</DialogTitle>
+                    <DialogDescription className="text-xs">
+                      새로운 운영진이나 디자이너 계정을 생성하고 프로필을 등록합니다.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleCreateStaff} className="space-y-4 pt-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="staffName">이름 *</Label>
+                      <Input
+                        id="staffName"
+                        value={staffName}
+                        onChange={(e) => setStaffName(e.target.value)}
+                        placeholder="이름 입력"
+                        className="h-8 text-xs"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="staffPhone">연락처 *</Label>
+                      <Input
+                        id="staffPhone"
+                        value={staffPhone}
+                        onChange={(e) => setStaffPhone(e.target.value)}
+                        placeholder="예: 010-1234-5678"
+                        className="h-8 text-xs"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="staffEmail">로그인용 이메일 *</Label>
+                      <Input
+                        id="staffEmail"
+                        type="email"
+                        value={staffEmail}
+                        onChange={(e) => setStaffEmail(e.target.value)}
+                        placeholder="staff@vowseoul.com"
+                        className="h-8 text-xs"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="staffPassword">임시 비밀번호 *</Label>
+                      <Input
+                        id="staffPassword"
+                        type="password"
+                        value={staffPassword}
+                        onChange={(e) => setStaffPassword(e.target.value)}
+                        placeholder="6자리 이상"
+                        className="h-8 text-xs"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="staffRole">권한 역할 *</Label>
+                      <Select value={staffRole} onValueChange={setStaffRole}>
+                        <SelectTrigger className="h-8 text-xs bg-muted/10">
+                          <SelectValue placeholder="역할 선택" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="DESIGNER">디자이너 (DESIGNER)</SelectItem>
+                          <SelectItem value="ADMIN">운영자 (ADMIN)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <DialogFooter className="pt-4 border-t border-border">
+                      <Button type="button" variant="outline" size="sm" onClick={() => setIsStaffModalOpen(false)} disabled={isCreatingStaff}>
+                        취소
+                      </Button>
+                      <Button type="submit" size="sm" disabled={isCreatingStaff} className="gap-2">
+                        {isCreatingStaff ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                        생성 및 등록
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left border-collapse">
+                  <thead>
+                    <tr className="bg-muted/30 border-b border-border text-muted-foreground font-medium">
+                      <th className="p-3.5">이름</th>
+                      <th className="p-3.5">연락처</th>
+                      <th className="p-3.5">이메일</th>
+                      <th className="p-3.5">권한</th>
+                      <th className="p-3.5 text-right w-16">관리</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {isLoadingProfiles ? (
+                      <tr>
+                        <td colSpan={5} className="p-8 text-center text-muted-foreground">
+                          <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-primary" />
+                          직원 목록을 불러오는 중입니다...
+                        </td>
+                      </tr>
+                    ) : profiles?.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="p-8 text-center text-muted-foreground">
+                          등록된 직원 계정이 없습니다.
+                        </td>
+                      </tr>
+                    ) : (
+                      profiles?.map((profile: any) => {
+                        const [namePart, phonePart] = (profile.name || "").split("|").map((s: string) => s.trim())
+                        return (
+                          <tr key={profile.id} className="border-b border-border hover:bg-muted/10 transition-colors">
+                            <td className="p-3.5 font-medium">{namePart || "이름 없음"}</td>
+                            <td className="p-3.5 text-muted-foreground">{phonePart || "-"}</td>
+                            <td className="p-3.5 font-mono">{profile.email}</td>
+                            <td className="p-3.5">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${profile.role === 'ADMIN' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-950/30 dark:text-blue-300'}`}>
+                                {profile.role === 'ADMIN' ? '운영자' : '디자이너'}
+                              </span>
+                            </td>
+                            <td className="p-3.5 text-right">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDeleteStaff(profile.id, profile.email)}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </td>
+                          </tr>
+                        )
+                      })
+                    )}
+                  </tbody>
+                </table>
               </div>
             </CardContent>
           </Card>

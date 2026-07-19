@@ -262,7 +262,13 @@ export default function CustomersPage() {
                 customersList.map((customer) => (
                   <TableRow key={customer.id} className="hover:bg-muted/10">
                     <TableCell className="font-medium">
-                      {customer.groom_name} & {customer.bride_name}
+                      {customer.groom_name !== '미지정' && customer.bride_name && customer.bride_name !== '미지정' ? (
+                        `${customer.groom_name} & ${customer.bride_name}`
+                      ) : customer.groom_name !== '미지정' ? (
+                        <span className="text-foreground font-semibold">{customer.groom_name} (주문자)</span>
+                      ) : (
+                        <span className="text-foreground font-semibold">{customer.bride_name} (주문자)</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-sm">{customer.phone || '-'}</TableCell>
                     <TableCell className="text-sm">

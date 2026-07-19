@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -16,6 +17,13 @@ import {
 } from '@/components/ui/select'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { useFormInstanceBySlugQuery, useSubmitFormMutation } from '@/hooks/queries/useForms'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Calendar } from '@/components/ui/calendar'
+import { Calendar as CalendarIcon, Clock } from 'lucide-react'
+import { format } from 'date-fns'
+import { ko } from 'date-fns/locale'
+import { cn } from '@/lib/utils'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { 
   Lock, 
   Send, 
@@ -28,6 +36,12 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Logo } from '@/components/logo'
+
+const parseLocalDate = (dateStr: string) => {
+  if (!dateStr) return undefined
+  const [year, month, day] = dateStr.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
 
 function PublicFormContent({ slug }: { slug: string }) {
   const router = useRouter()
@@ -44,6 +58,7 @@ function PublicFormContent({ slug }: { slug: string }) {
   const [currentStep, setCurrentStep] = useState(0)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [savingDraft, setSavingDraft] = useState(false)
 
   // Initialize password lock & form values
   useEffect(() => {
@@ -199,36 +214,84 @@ function PublicFormContent({ slug }: { slug: string }) {
     )
   }
 
-  // Organize fields by category steps
+  // Helper to parse options
+  const parseOptions = (field: any) => {
+    if (!field.options) return {}
+    if (typeof field.options === 'string') {
+      try {
+        return JSON.parse(field.options)
+      } catch {
+        return {}
+      }
+    }
+    return field.options
+  }
+
+  // Organize fields by custom page_title or category steps
+  // Organize fields by custom page_title or category steps
   const stepsMap: Record<string, any[]> = {}
   instance.fields_snapshot.forEach((field: any) => {
-    const cat = field.category || '기타 정보'
-    if (!stepsMap[cat]) {
-      stepsMap[cat] = []
+    const opts = parseOptions(field)
+    const pageName = opts.page_title?.trim() || field.category || '기타 정보'
+    if (!stepsMap[pageName]) {
+      stepsMap[pageName] = []
     }
-    stepsMap[cat].push(field)
+    stepsMap[pageName].push(field)
   })
 
-  const stepKeys = Object.keys(stepsMap)
-  const currentStepKey = stepKeys[currentStep]
+  const fieldStepKeys = Object.keys(stepsMap)
+  const allStepKeys = [...fieldStepKeys, '최종 확인']
+  const currentStepKey = allStepKeys[currentStep]
   const currentFields = stepsMap[currentStepKey] || []
 
   const handleInputChange = (key: string, val: any) => {
     setFormValues((prev) => ({ ...prev, [key]: val }))
   }
 
+  const handleSaveDraft = async () => {
+    setSavingDraft(true)
+    try {
+      await submitMutation.mutateAsync({
+        instanceId: instance.id,
+        customerId: instance.customer_id,
+        data: formValues,
+        isComplete: false,
+      })
+      toast.success('입력하신 내용이 임시 저장되었습니다! 나중에 이어서 입력할 수 있습니다.')
+    } catch (err: any) {
+      console.error(err)
+      toast.error('임시 저장 중 문제가 발생했습니다.')
+    } finally {
+      setSavingDraft(false)
+    }
+  }
+
   const handleNext = () => {
     // Validate current step fields
-    const missingFields = currentFields.filter(
-      (f) => f.is_required && (!formValues[f.field_key] || formValues[f.field_key].toString().trim() === '')
-    )
+    const missingFields = currentFields.filter((f) => {
+      if (!f.is_required) return false
+      
+      // If it is a child field, check if its parent is triggered. If not triggered, ignore it.
+      const opts = parseOptions(f)
+      if (opts.parent_field_key) {
+        let parentVal = (formValues[opts.parent_field_key] || '').toString().trim()
+        if (parentVal === 'true') parentVal = '예'
+        if (parentVal === 'false') parentVal = '아니오'
+        const triggerVal = (opts.parent_trigger_option || '').toString().trim()
+        if (parentVal !== triggerVal) {
+          return false // Not triggered, ignore
+        }
+      }
+      
+      return !formValues[f.field_key] || formValues[f.field_key].toString().trim() === ''
+    })
 
     if (missingFields.length > 0) {
       toast.error(`필수 항목을 입력해주세요: ${missingFields.map((f) => f.label).join(', ')}`)
       return
     }
 
-    if (currentStep < stepKeys.length - 1) {
+    if (currentStep < allStepKeys.length - 1) {
       setCurrentStep((c) => c + 1)
       window.scrollTo(0, 0)
     }
@@ -245,7 +308,20 @@ function PublicFormContent({ slug }: { slug: string }) {
     // Final check for all fields
     const allMissing: string[] = []
     instance.fields_snapshot.forEach((f: any) => {
-      if (f.is_required && (!formValues[f.field_key] || formValues[f.field_key].toString().trim() === '')) {
+      if (!f.is_required) return
+      
+      const opts = parseOptions(f)
+      if (opts.parent_field_key) {
+        let parentVal = (formValues[opts.parent_field_key] || '').toString().trim()
+        if (parentVal === 'true') parentVal = '예'
+        if (parentVal === 'false') parentVal = '아니오'
+        const triggerVal = (opts.parent_trigger_option || '').toString().trim()
+        if (parentVal !== triggerVal) {
+          return // Parent is not triggered, skip
+        }
+      }
+      
+      if (!formValues[f.field_key] || formValues[f.field_key].toString().trim() === '') {
         allMissing.push(f.label)
       }
     })
@@ -286,24 +362,104 @@ function PublicFormContent({ slug }: { slug: string }) {
             required={field.is_required}
           />
         )
-      case 'date':
+      case 'date': {
+        const localDate = parseLocalDate(value)
         return (
-          <Input
-            type="date"
-            value={value}
-            onChange={(e) => handleInputChange(field.field_key, e.target.value)}
-            required={field.is_required}
-          />
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                className={cn(
+                  "w-full justify-start text-left font-normal h-10 px-3",
+                  !value && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground shrink-0" />
+                {value && localDate ? format(localDate, 'yyyy년 MM월 dd일') : (field.help_text || '날짜를 선택하세요.')}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={localDate}
+                onSelect={(date) => {
+                  handleInputChange(field.field_key, date ? format(date, 'yyyy-MM-dd') : '')
+                }}
+                locale={ko}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
         )
-      case 'time':
+      }
+      case 'time': {
+        const [h, m] = value ? value.split(':') : ['', '']
+        const hoursList = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
+        const minutesList = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'))
+
         return (
-          <Input
-            type="time"
-            value={value}
-            onChange={(e) => handleInputChange(field.field_key, e.target.value)}
-            required={field.is_required}
-          />
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                className={cn(
+                  "w-full justify-start text-left font-normal h-10 px-3",
+                  !value && "text-muted-foreground"
+                )}
+              >
+                <Clock className="mr-2 h-4 w-4 text-muted-foreground shrink-0" />
+                {value ? `${h}시 ${m}분` : (field.help_text || '시간을 선택하세요.')}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-52 p-3" align="start">
+              <div className="flex gap-3 justify-center">
+                <div className="flex flex-col text-center flex-1">
+                  <span className="text-[10px] font-semibold text-muted-foreground mb-1">시</span>
+                  <ScrollArea className="h-44 border rounded-md">
+                    <div className="flex flex-col divide-y divide-border/40">
+                      {hoursList.map(hr => (
+                        <button
+                          key={hr}
+                          type="button"
+                          className={cn(
+                            "w-full py-1.5 text-xs hover:bg-muted text-center transition-colors",
+                            h === hr && "bg-primary text-primary-foreground font-semibold hover:bg-primary"
+                          )}
+                          onClick={() => handleInputChange(field.field_key, `${hr}:${m || '00'}`)}
+                        >
+                          {hr}시
+                        </button>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+                <div className="flex flex-col text-center flex-1">
+                  <span className="text-[10px] font-semibold text-muted-foreground mb-1">분</span>
+                  <ScrollArea className="h-44 border rounded-md">
+                    <div className="flex flex-col divide-y divide-border/40">
+                      {minutesList.map(min => (
+                        <button
+                          key={min}
+                          type="button"
+                          className={cn(
+                            "w-full py-1.5 text-xs hover:bg-muted text-center transition-colors",
+                            m === min && "bg-primary text-primary-foreground font-semibold hover:bg-primary"
+                          )}
+                          onClick={() => handleInputChange(field.field_key, `${h || '12'}:${min}`)}
+                        >
+                          {min}분
+                        </button>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         )
+      }
       case 'select':
         return (
           <Select 
@@ -314,11 +470,15 @@ function PublicFormContent({ slug }: { slug: string }) {
               <SelectValue placeholder="선택하세요" />
             </SelectTrigger>
             <SelectContent>
-              {field.options?.map((opt: string) => (
+              {field.options?.choices?.map((opt: string) => (
                 <SelectItem key={opt} value={opt}>
                   {opt}
                 </SelectItem>
-              )) || (
+              )) || (Array.isArray(field.options) ? field.options.map((opt: string) => (
+                <SelectItem key={opt} value={opt}>
+                  {opt}
+                </SelectItem>
+              )) : null) || (
                 <>
                   <SelectItem value="선택 A">선택 A</SelectItem>
                   <SelectItem value="선택 B">선택 B</SelectItem>
@@ -327,6 +487,42 @@ function PublicFormContent({ slug }: { slug: string }) {
             </SelectContent>
           </Select>
         )
+      case 'rselect': {
+        const choices = field.options?.choices || []
+        return (
+          <div className="flex flex-col gap-2 pt-1.5">
+            {choices.map((opt: string) => {
+              const id = `${field.field_key}-${opt}`
+              const isChecked = value === opt
+              return (
+                <label
+                  key={opt}
+                  htmlFor={id}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border text-xs font-medium cursor-pointer transition-all ${
+                    isChecked
+                      ? 'border-primary bg-primary/5 text-primary'
+                      : 'border-border bg-card hover:bg-muted/10'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    id={id}
+                    name={field.field_key}
+                    value={opt}
+                    checked={isChecked}
+                    onChange={() => handleInputChange(field.field_key, opt)}
+                    className="w-4 h-4 text-primary focus:ring-primary border-slate-300"
+                  />
+                  <span>{opt}</span>
+                </label>
+              )
+            })}
+            {choices.length === 0 && (
+              <p className="text-xs text-muted-foreground italic">선택할 수 있는 항목이 없습니다.</p>
+            )}
+          </div>
+        )
+      }
       case 'image':
         return (
           <div className="space-y-2">
@@ -351,6 +547,77 @@ function PublicFormContent({ slug }: { slug: string }) {
             )}
           </div>
         )
+      case 'toggle': {
+        const isToggled = value === true || value === 'true' || value === 'on' || value === '예'
+        return (
+          <div className="flex items-center gap-3 pt-1">
+            <Switch
+              checked={isToggled}
+              onCheckedChange={(checked) => handleInputChange(field.field_key, checked ? '예' : '아니오')}
+            />
+            <span className="text-xs font-medium text-slate-700">
+              {isToggled ? '예' : '아니오'}
+            </span>
+          </div>
+        )
+      }
+      case 'images': {
+        const imageArray = Array.isArray(value) ? value : (value ? [value] : [])
+        
+        const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+          const files = e.target.files
+          if (!files) return
+          
+          const newImages = [...imageArray]
+          let loadedCount = 0
+          
+          Array.from(files).forEach((file) => {
+            const reader = new FileReader()
+            reader.onloadend = () => {
+              newImages.push(reader.result as string)
+              loadedCount++
+              if (loadedCount === files.length) {
+                handleInputChange(field.field_key, newImages)
+              }
+            }
+            reader.readAsDataURL(file)
+          })
+        }
+
+        const handleRemoveImage = (index: number) => {
+          const updated = imageArray.filter((_, i) => i !== index)
+          handleInputChange(field.field_key, updated)
+        }
+
+        return (
+          <div className="space-y-3">
+            <Input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleFileChange}
+              required={field.is_required && imageArray.length === 0}
+            />
+            {imageArray.length > 0 && (
+              <div className="grid grid-cols-3 gap-2">
+                {imageArray.map((imgUrl: string, idx: number) => (
+                  <div key={idx} className="relative aspect-square border border-border rounded-lg overflow-hidden group">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={imgUrl} alt={`Uploaded ${idx + 1}`} className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveImage(idx)}
+                      className="absolute top-1 right-1 w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-[10px] shadow opacity-80 hover:opacity-100 transition-opacity"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      }
       default:
         return (
           <Input
@@ -364,70 +631,167 @@ function PublicFormContent({ slug }: { slug: string }) {
     }
   }
 
-  const progressPercent = Math.round(((currentStep + 1) / stepKeys.length) * 100)
+  const progressPercent = Math.round(((currentStep + 1) / allStepKeys.length) * 100)
 
   return (
     <div className="min-h-screen bg-slate-50/50 flex flex-col font-sans">
       {/* Public Header */}
-      <header className="bg-white border-b border-border py-4 px-6 flex justify-between items-center shadow-sm">
+      <header className="bg-white border-b border-border py-3 px-6 flex justify-between items-center shadow-sm sticky top-0 z-50">
         <Logo className="h-5 w-auto" />
-        <div className="text-right">
-          <span className="text-xs font-semibold text-primary block">
-            {instance.customer?.groom_name} & {instance.customer?.bride_name}
-          </span>
-          <span className="text-[10px] text-muted-foreground block">
-            결혼식 정보 입력 양식
-          </span>
+        <div className="flex items-center gap-3">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={handleSaveDraft}
+            disabled={savingDraft}
+            className="h-8 text-xs text-slate-500 hover:text-slate-800"
+          >
+            {savingDraft ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
+            나중에 이어쓰기 (임시저장)
+          </Button>
+          <div className="text-right border-l border-slate-200 pl-3">
+            <span className="text-xs font-semibold text-primary block">
+              {instance.customer?.groom_name} & {instance.customer?.bride_name}
+            </span>
+            <span className="text-[10px] text-muted-foreground block">
+              결혼식 정보 입력 양식
+            </span>
+          </div>
         </div>
       </header>
 
       {/* Main Container */}
       <main className="flex-1 max-w-xl w-full mx-auto px-4 py-8 space-y-6">
-        {/* Progress Bar */}
-        <div className="space-y-1.5">
-          <div className="flex justify-between items-center text-xs text-muted-foreground">
-            <span>단계 {currentStep + 1} / {stepKeys.length} ({currentStepKey})</span>
-            <span>{progressPercent}% 완료</span>
+        {/* Step Indicator Map */}
+        <div className="bg-white border border-border rounded-xl p-3.5 shadow-sm space-y-3">
+          <div className="flex items-center justify-between gap-1 select-none overflow-x-auto py-1 scrollbar-hide">
+            {allStepKeys.map((stepKey, idx) => (
+              <React.Fragment key={stepKey}>
+                <button
+                  type="button"
+                  disabled={idx > currentStep}
+                  onClick={() => setCurrentStep(idx)}
+                  className="flex flex-col items-center gap-1 shrink-0"
+                >
+                  <div className={cn(
+                    "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all border",
+                    idx === currentStep ? "bg-primary border-primary text-white scale-110 shadow-xs" :
+                    idx < currentStep ? "bg-primary/10 border-primary/20 text-primary" : "bg-muted/30 border-muted text-muted-foreground"
+                  )}>
+                    {idx === allStepKeys.length - 1 ? '✓' : idx + 1}
+                  </div>
+                  <span className={cn(
+                    "text-[9px] font-semibold tracking-tight transition-colors",
+                    idx === currentStep ? "text-primary" : "text-muted-foreground"
+                  )}>
+                    {stepKey}
+                  </span>
+                </button>
+                {idx < allStepKeys.length - 1 && (
+                  <div className={cn(
+                    "h-[1px] flex-1 min-w-[12px] bg-slate-200",
+                    idx < currentStep && "bg-primary/30"
+                  )} />
+                )}
+              </React.Fragment>
+            ))}
           </div>
-          <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-            <div className="bg-primary h-full transition-all duration-300" style={{ width: `${progressPercent}%` }} />
+
+          <div className="space-y-1">
+            <div className="flex justify-between items-center text-[10px] text-muted-foreground">
+              <span>진행단계: {currentStepKey}</span>
+              <span>{progressPercent}% 완료</span>
+            </div>
+            <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden">
+              <div className="bg-primary h-full transition-all duration-300" style={{ width: `${progressPercent}%` }} />
+            </div>
           </div>
         </div>
 
-        {/* Card for Current Step Fields */}
-        <Card className="shadow-lg border-border">
-          <CardHeader className="bg-muted/10 border-b border-border pb-4">
-            <CardTitle className="text-base font-semibold">{currentStepKey} 작성</CardTitle>
-            <CardDescription className="text-xs">
-              결혼식 및 초대장 제작에 필요한 세부 내용을 입력해주세요.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-5">
-            <FieldGroup className="space-y-5">
-              {currentFields.map((field) => (
-                <Field key={field.field_key}>
-                  <FieldLabel htmlFor={field.field_key}>
-                    {field.label}
-                    {field.is_required && <span className="text-red-500 ml-1">*</span>}
-                  </FieldLabel>
-                  {renderInputField(field)}
-                </Field>
-              ))}
-            </FieldGroup>
+        {/* Summary (Review Step) OR Fields Form Card */}
+        {currentStepKey === '최종 확인' ? (
+          <Card className="shadow-lg border-border">
+            <CardHeader className="bg-muted/10 border-b border-border pb-4">
+              <CardTitle className="text-base font-semibold">입력 내용 최종 확인</CardTitle>
+              <CardDescription className="text-xs">
+                제출하시기 전에 입력하신 정보가 정확한지 확인해주세요.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-5 space-y-6">
+              {fieldStepKeys.map((stepKey, sIdx) => {
+                const stepFields = stepsMap[stepKey] || []
+                const filledFields = stepFields.filter(f => {
+                  const opts = parseOptions(f)
+                  if (opts.parent_field_key) {
+                    let parentVal = (formValues[opts.parent_field_key] || '').toString().trim()
+                    if (parentVal === 'true') parentVal = '예'
+                    if (parentVal === 'false') parentVal = '아니오'
+                    const triggerVal = (opts.parent_trigger_option || '').toString().trim()
+                    if (parentVal !== triggerVal) {
+                      return false
+                    }
+                  }
+                  return true
+                })
 
-            {/* Navigation Buttons */}
-            <div className="flex justify-between items-center gap-3 mt-8 pt-6 border-t border-border">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handlePrev}
-                disabled={currentStep === 0}
-                className="gap-1.5 text-xs h-9 px-3.5"
-              >
-                <ChevronLeft className="w-4 h-4" /> 이전
-              </Button>
+                if (filledFields.length === 0) return null
 
-              {currentStep === stepKeys.length - 1 ? (
+                return (
+                  <div key={stepKey} className="space-y-2 border-b border-slate-100 pb-4 last:border-b-0 last:pb-0">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                        <span className="w-1.5 h-3 bg-primary rounded-full" />
+                        {stepKey}
+                      </h3>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setCurrentStep(sIdx)}
+                        className="h-6 text-[10px] text-primary"
+                      >
+                        수정
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-1.5 text-xs bg-slate-50/50 p-2.5 rounded-lg border border-slate-100">
+                      {filledFields.map(f => {
+                        const val = formValues[f.field_key]
+                        let displayVal = val ? val.toString() : ''
+                        if (displayVal === 'true') displayVal = '예'
+                        if (displayVal === 'false') displayVal = '아니오'
+                        if (f.field_type === 'image' || f.field_type === 'images') {
+                          displayVal = val ? '이미지 첨부됨' : ''
+                        }
+                        
+                        return (
+                          <div key={f.field_key} className="flex justify-between items-start gap-4">
+                            <span className="text-muted-foreground font-medium shrink-0">{f.label}:</span>
+                            <span className={cn(
+                              "text-right truncate max-w-[250px]",
+                              displayVal ? "text-slate-800 font-semibold" : "text-amber-500 italic font-medium"
+                            )}>
+                              {displayVal || (f.is_required ? "필수 입력 누락" : "선택 안 함")}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
+
+              {/* Navigation Buttons for Review Page */}
+              <div className="flex justify-between items-center gap-3 mt-8 pt-6 border-t border-border">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handlePrev}
+                  className="gap-1.5 text-xs h-9 px-3.5"
+                >
+                  <ChevronLeft className="w-4 h-4" /> 이전
+                </Button>
+
                 <Button
                   type="button"
                   onClick={handleSubmit}
@@ -437,18 +801,145 @@ function PublicFormContent({ slug }: { slug: string }) {
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                   제출 완료하기
                 </Button>
-              ) : (
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="shadow-lg border-border">
+            <CardHeader className="bg-muted/10 border-b border-border pb-4">
+              <CardTitle className="text-base font-semibold">{currentStepKey} 작성</CardTitle>
+              <CardDescription className="text-xs">
+                결혼식 및 초대장 제작에 필요한 세부 내용을 입력해주세요.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-5">
+              <FieldGroup className="space-y-5">
+                {(() => {
+                  let lastSectionTitle = ''
+                  const rootFields = currentFields.filter((f) => !parseOptions(f).parent_field_key)
+
+                  return rootFields.map((field) => {
+                    let currentSection = ''
+                    if (field.options) {
+                      if (typeof field.options === 'string') {
+                        try {
+                          const parsed = JSON.parse(field.options)
+                          currentSection = parsed.section_title || ''
+                        } catch {
+                          currentSection = ''
+                        }
+                      } else {
+                        currentSection = field.options.section_title || ''
+                      }
+                    }
+
+                    const showSectionHeader = currentSection && currentSection !== lastSectionTitle
+                    if (showSectionHeader) {
+                      lastSectionTitle = currentSection
+                    }
+
+                    const children = currentFields.filter(
+                      (c) => parseOptions(c).parent_field_key === field.field_key
+                    )
+
+                    return (
+                      <React.Fragment key={field.field_key}>
+                        {showSectionHeader && (
+                          <div className="pt-4 pb-2 border-b border-slate-200 mt-6 first:mt-0">
+                            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                              <span className="w-1.5 h-3.5 bg-primary rounded-full" />
+                              {currentSection}
+                            </h3>
+                          </div>
+                        )}
+                        
+                        <div className="space-y-3">
+                          <Field>
+                            <FieldLabel htmlFor={field.field_key}>
+                              {field.label}
+                              {field.is_required && <span className="text-red-500 ml-1">*</span>}
+                            </FieldLabel>
+                            {parseOptions(field).attached_images?.length > 0 && (
+                              <div className="grid grid-cols-2 gap-2 my-1.5">
+                                {parseOptions(field).attached_images.map((img: string, idx: number) => (
+                                  <div key={idx} className="relative aspect-video rounded-lg overflow-hidden border border-border shadow-sm">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={img} alt="Reference Attachment" className="w-full h-full object-cover" />
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {renderInputField(field)}
+                          </Field>
+
+                          {/* Child fields accordion wrapper */}
+                          {children.map((childField) => {
+                            const childOpts = parseOptions(childField)
+                            let parentVal = (formValues[field.field_key] || '').toString().trim()
+                            if (parentVal === 'true') parentVal = '예'
+                            if (parentVal === 'false') parentVal = '아니오'
+                            const triggerVal = (childOpts.parent_trigger_option || '').toString().trim()
+                            const isTriggered = parentVal === triggerVal && parentVal !== ''
+
+                            return (
+                              <div
+                                key={childField.field_key}
+                                className={`transition-all duration-300 ease-in-out overflow-hidden border-l-2 border-primary/30 pl-4 ml-1 mt-1 ${
+                                  isTriggered 
+                                    ? 'max-h-[500px] opacity-100 py-2' 
+                                    : 'max-h-0 opacity-0 py-0 pointer-events-none'
+                                }`}
+                              >
+                                 <Field>
+                                   <FieldLabel htmlFor={childField.field_key} className="text-xs font-semibold text-slate-600">
+                                     {childField.label}
+                                     {childField.is_required && <span className="text-red-500 ml-1">*</span>}
+                                   </FieldLabel>
+                                   {childOpts.attached_images?.length > 0 && (
+                                     <div className="grid grid-cols-2 gap-2 my-1.5">
+                                       {childOpts.attached_images.map((img: string, idx: number) => (
+                                         <div key={idx} className="relative aspect-video rounded-lg overflow-hidden border border-border shadow-sm">
+                                           {/* eslint-disable-next-line @next/next/no-img-element */}
+                                           <img src={img} alt="Reference Attachment" className="w-full h-full object-cover" />
+                                         </div>
+                                       ))}
+                                     </div>
+                                   )}
+                                   {renderInputField(childField)}
+                                 </Field>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </React.Fragment>
+                    )
+                  })
+                })()}
+              </FieldGroup>
+
+              {/* Navigation Buttons */}
+              <div className="flex justify-between items-center gap-3 mt-8 pt-6 border-t border-border">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handlePrev}
+                  disabled={currentStep === 0}
+                  className="gap-1.5 text-xs h-9 px-3.5"
+                >
+                  <ChevronLeft className="w-4 h-4" /> 이전
+                </Button>
+
                 <Button
                   type="button"
                   onClick={handleNext}
-                  className="gap-1.5 text-xs h-9 px-3.5"
+                  className="gap-1.5 text-xs h-9 px-3.5 animate-pulse"
                 >
                   다음 <ChevronRight className="w-4 h-4" />
                 </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </main>
     </div>
   )

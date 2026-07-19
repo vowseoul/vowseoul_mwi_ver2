@@ -45,9 +45,9 @@ CREATE TABLE IF NOT EXISTS public.field_library (
   field_key text UNIQUE NOT NULL,
   label text NOT NULL,
   help_text text,
-  field_type text NOT NULL CHECK (field_type IN ('text', 'date', 'time', 'select', 'address', 'phone', 'image', 'textarea', 'number')),
+  field_type text NOT NULL CHECK (field_type IN ('text', 'date', 'time', 'select', 'address', 'phone', 'image', 'textarea', 'number', 'rselect', 'toggle', 'images')),
   validation_rules jsonb,
-  category text NOT NULL CHECK (category IN ('신랑 정보', '신부 정보', '예식 정보', '혼주 정보', '계좌 정보', '이미지', 'BGM', 'RSVP 설정', '카카오 공유', '영상', '지류 전용')),
+  category text NOT NULL,
   is_system boolean DEFAULT true NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL
 );

@@ -28,22 +28,12 @@ export function Footer() {
                   요금 안내
                 </Link>
               </li>
-              <li>
-                <Link href="/faq" className="text-sm text-muted-foreground hover:text-foreground">
-                  자주 묻는 질문
-                </Link>
-              </li>
             </ul>
           </div>
 
           <div>
             <h4 className="text-sm font-semibold">고객지원</h4>
             <ul className="mt-4 space-y-2">
-              <li>
-                <Link href="/notice" className="text-sm text-muted-foreground hover:text-foreground">
-                  공지사항
-                </Link>
-              </li>
               <li>
                 <Link href="/contact" className="text-sm text-muted-foreground hover:text-foreground">
                   문의하기

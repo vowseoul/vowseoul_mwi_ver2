@@ -30,13 +30,6 @@ function FormPublishContent() {
   const customerIdParam = searchParams.get('customerId') || ''
   const templateIdParam = searchParams.get('templateId') || ''
 
-  // Queries
-  const { data: customerData } = useCustomersQuery({ status: 'registered' }, 1, 100)
-  const { data: selectedCustomer } = useCustomerQuery(customerIdParam)
-  const { data: templates } = useFormTemplatesQuery()
-  const createInstanceMutation = useCreateFormInstanceMutation()
-  const updateCustomerMutation = useUpdateCustomerMutation()
-
   // Form States
   const [customerId, setCustomerId] = useState('')
   const [templateId, setTemplateId] = useState('')
@@ -48,8 +41,20 @@ function FormPublishContent() {
   const [publishedSlug, setPublishedSlug] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
+  // Queries
+  const { data: customerData } = useCustomersQuery({ status: 'all' }, 1, 100)
+  const { data: selectedCustomer } = useCustomerQuery(customerId || customerIdParam)
+  const { data: templates } = useFormTemplatesQuery()
+  const createInstanceMutation = useCreateFormInstanceMutation()
+  const updateCustomerMutation = useUpdateCustomerMutation()
+
   // Fetch the fields snapshot for the selected template
   const { data: templateFields, isLoading: isLoadingFields } = useFormTemplateFieldsQuery(templateId)
+
+  // Mobile inclusion check variables
+  const selectedTemplate = templates?.find((t) => t.id === templateId)
+  const isMobileRequested = selectedCustomer?.memo?.includes('모바일: O')
+  const templateIncludesMobile = selectedTemplate?.description?.includes('[모바일포함]')
 
   useEffect(() => {
     if (customerIdParam) setCustomerId(customerIdParam)
@@ -79,6 +84,13 @@ function FormPublishContent() {
     if (!templateFields || templateFields.length === 0) {
       toast.error('선택한 템플릿에 배치된 필드가 없습니다. 먼저 폼 빌더에서 필드를 구성해주세요.')
       return
+    }
+
+    if (isMobileRequested && !templateIncludesMobile) {
+      const ok = confirm('이 고객은 모바일 청첩장 제작 대상(O)이나, 선택한 양식은 모바일 필드가 없는 [지류 단독형]입니다. 그래도 발행하시겠습니까?')
+      if (!ok) {
+        return
+      }
     }
 
     setIsSubmitting(true)
@@ -277,6 +289,20 @@ function FormPublishContent() {
                       ))}
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Warning Banner for Mobile Inclusion Mismatch */}
+              {isMobileRequested && !templateIncludesMobile && templateId && templateId !== 'none' && (
+                <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg p-3.5 flex gap-2.5 text-amber-800 dark:text-amber-300 text-xs">
+                  <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-amber-900 dark:text-amber-200">⚠️ 모바일 청첩장 양식 미포함 경고</p>
+                    <p className="mt-1 text-muted-foreground leading-relaxed text-[11px]">
+                      선택된 고객은 <strong>모바일 청첩장 제작(O)</strong> 대상입니다. 그러나 현재 선택한 폼 템플릿(<strong>{selectedTemplate?.name}</strong>)은 모바일 청첩장 수집 필드가 제외된 <strong>지류 단독</strong> 양식입니다. 
+                      이대로 발행할 경우 모바일 청첩장 제작 정보(영문명, 계좌번호, 오시는 길 등)를 수집할 수 없습니다. 모바일 포함 양식으로 변경할 것을 권장합니다.
+                    </p>
+                  </div>
                 </div>
               )}
 
