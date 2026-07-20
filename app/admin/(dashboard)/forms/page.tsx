@@ -23,6 +23,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
@@ -35,8 +42,13 @@ import {
 } from '@/hooks/queries/useForms'
 import { FileText, Plus, Search, Edit2, Copy, Trash2, ArrowLeft, Settings, LayoutGrid, Eye, Edit, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useQueryClient } from '@tanstack/react-query'
+import { supabase } from '@/lib/supabase'
+import { cn } from '@/lib/utils'
+
 
 export default function FormTemplatesPage() {
+  const queryClient = useQueryClient()
   const { data: templates, isLoading, error } = useFormTemplatesQuery()
   const createMutation = useCreateFormTemplateMutation()
   const updateMutation = useUpdateFormTemplateMutation()
@@ -49,7 +61,86 @@ export default function FormTemplatesPage() {
   const [category, setCategory] = useState('클래식 화이트 라인')
   const [includesMobile, setIncludesMobile] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isCopying, setIsCopying] = useState<string | null>(null)
+  const [customSelectTexts, setCustomSelectTexts] = useState<Record<string, boolean>>({})
+  const [playingAudioId, setPlayingAudioId] = useState<string | null>(null)
 
+  const handlePlayPause = (audioId: string) => {
+    const aud = document.getElementById(audioId) as HTMLAudioElement
+    if (!aud) return
+
+    if (playingAudioId === audioId) {
+      aud.pause()
+      setPlayingAudioId(null)
+    } else {
+      if (playingAudioId) {
+        const prevAud = document.getElementById(playingAudioId) as HTMLAudioElement
+        if (prevAud) prevAud.pause()
+      }
+      aud.play()
+      setPlayingAudioId(audioId)
+      aud.onended = () => {
+        setPlayingAudioId(null)
+      }
+    }
+  }
+
+
+  const handleCopyTemplate = async (template: any) => {
+    if (!confirm(`"${template.name}" 템플릿을 복사하시겠습니까?`)) {
+      return
+    }
+
+    setIsCopying(template.id)
+    try {
+      const { data: newTemplate, error: templateError } = await supabase
+        .from('form_templates')
+        .insert([{
+          name: `${template.name} - 복사본`,
+          description: template.description,
+          category: template.category,
+          is_active: template.is_active,
+        }])
+        .select()
+        .single()
+
+      if (templateError) throw templateError
+      if (!newTemplate) throw new Error('템플릿을 복사하지 못했습니다.')
+
+      const { data: sourceFields, error: fieldsError } = await supabase
+        .from('form_template_fields')
+        .select('*')
+        .eq('template_id', template.id)
+
+      if (fieldsError) throw fieldsError
+
+      if (sourceFields && sourceFields.length > 0) {
+        const fieldsToInsert = sourceFields.map((f: any) => ({
+          template_id: newTemplate.id,
+          field_library_id: f.field_library_id,
+          label_override: f.label_override,
+          help_text_override: f.help_text_override,
+          is_required: f.is_required,
+          sort_order: f.sort_order,
+          options: f.options
+        }))
+
+        const { error: insertError } = await supabase
+          .from('form_template_fields')
+          .insert(fieldsToInsert)
+
+        if (insertError) throw insertError
+      }
+
+      toast.success('템플릿이 성공적으로 복사되었습니다.')
+      queryClient.invalidateQueries({ queryKey: ['form-templates'] })
+    } catch (err: any) {
+      console.error(err)
+      toast.error(err.message || '템플릿 복사에 실패했습니다.')
+    } finally {
+      setIsCopying(null)
+    }
+  }
   // Edit Template States
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<any>(null)
@@ -63,6 +154,14 @@ export default function FormTemplatesPage() {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [previewStep, setPreviewStep] = useState(0)
   const [previewValues, setPreviewValues] = useState<Record<string, any>>({})
+
+  React.useEffect(() => {
+    if (!isPreviewOpen && playingAudioId) {
+      const aud = document.getElementById(playingAudioId) as HTMLAudioElement
+      if (aud) aud.pause()
+      setPlayingAudioId(null)
+    }
+  }, [isPreviewOpen])
 
   // Fetch fields for preview
   const { data: previewFields, isLoading: isLoadingPreviewFields } = useFormTemplateFieldsQuery(previewTemplateId || '')
@@ -165,6 +264,246 @@ export default function FormTemplatesPage() {
             className="text-xs"
           />
         )
+      case 'music': {
+        const opts = parseOptions(field)
+        const musicFiles = opts.music_files || []
+        if (musicFiles.length === 0) {
+          return <div className="text-xs text-muted-foreground italic">업로드된 음원이 없습니다.</div>
+        }
+        return (
+          <div className="space-y-3">
+            <div className="bg-slate-50 border border-slate-200/50 p-3 rounded-xl flex items-start gap-2">
+              <span className="text-sm">🎵</span>
+              <div>
+                <p className="text-xs font-bold text-slate-800">배경음악(BGM) 선택 (미리보기)</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5 leading-relaxed">
+                  모바일 청첩장에 사용할 BGM을 미리 들어보고 선택해 보세요.
+                </p>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              {musicFiles.map((file: any, idx: number) => {
+                const audioId = `audio-preview-${field.field_key}-${idx}`
+                const isSelected = value === file.name
+                const isPlaying = playingAudioId === audioId
+                const displayTitle = file.title || file.name.replace(/\.[^/.]+$/, "")
+                const tags = file.tags ? file.tags.split(/\s+/).filter(Boolean) : []
+
+                return (
+                  <div 
+                    key={idx} 
+                    className={cn(
+                      "flex items-center justify-between p-2.5 rounded-xl border transition-all duration-200 select-none text-xs",
+                      isSelected 
+                        ? "bg-primary/5 border-primary shadow-xs font-semibold" 
+                        : "bg-white border-slate-200 hover:border-slate-300"
+                    )}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <audio id={audioId} src={file.url} className="hidden" />
+                      <button
+                        type="button"
+                        onClick={() => handlePlayPause(audioId)}
+                        className={cn(
+                          "w-7 h-7 rounded-full flex items-center justify-center transition-colors shrink-0 shadow-xs",
+                          isPlaying ? "bg-primary text-white" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                        )}
+                      >
+                        {isPlaying ? (
+                          <div className="flex items-end gap-0.5 h-2.5">
+                            <span className="w-0.5 bg-current rounded-full animate-bounce h-1.5" style={{ animationDelay: '0.1s', animationDuration: '0.6s' }} />
+                            <span className="w-0.5 bg-current rounded-full animate-bounce h-2.5" style={{ animationDelay: '0.3s', animationDuration: '0.5s' }} />
+                            <span className="w-0.5 bg-current rounded-full animate-bounce h-1" style={{ animationDelay: '0.5s', animationDuration: '0.7s' }} />
+                          </div>
+                        ) : (
+                          <svg className="w-2.5 h-2.5 fill-current ml-0.5" viewBox="0 0 24 24">
+                            <path d="M8 5v14l11-7z" />
+                          </svg>
+                        )}
+                      </button>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-semibold text-slate-800 truncate">{displayTitle}</span>
+                          {isPlaying && (
+                            <span className="text-[8px] font-bold text-primary animate-pulse shrink-0 bg-primary/10 px-1.5 py-0.5 rounded">
+                              재생 중
+                            </span>
+                          )}
+                        </div>
+                        {tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {tags.map((tag: string, tIdx: number) => (
+                              <span key={tIdx} className="bg-slate-100 text-slate-500 border border-slate-200/60 text-[8px] px-1 rounded">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant={isSelected ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handlePreviewInputChange(field.field_key, file.name)}
+                      className="h-7 text-[10px] px-3 shrink-0 rounded-full"
+                    >
+                      {isSelected ? "선택됨" : "선택"}
+                    </Button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      }
+      case 'select_text': {
+        const opts = parseOptions(field)
+        const choices = opts.choices || []
+        const isCustomActive = customSelectTexts[field.field_key] || (value && !choices.includes(value))
+        
+        return (
+          <div className="space-y-2">
+            <Select 
+              value={isCustomActive ? '__direct_input__' : value} 
+              onValueChange={(selectedVal) => {
+                if (selectedVal === '__direct_input__') {
+                  setCustomSelectTexts(prev => ({ ...prev, [field.field_key]: true }))
+                  handlePreviewInputChange(field.field_key, '')
+                } else {
+                  setCustomSelectTexts(prev => ({ ...prev, [field.field_key]: false }))
+                  handlePreviewInputChange(field.field_key, selectedVal)
+                }
+              }}
+            >
+              <SelectTrigger className="w-full text-xs">
+                <SelectValue placeholder="선택하거나 직접 입력 선택" />
+              </SelectTrigger>
+              <SelectContent>
+                {choices.map((opt: string) => (
+                  <SelectItem key={opt} value={opt} className="text-xs">
+                    {opt}
+                  </SelectItem>
+                ))}
+                <SelectItem value="__direct_input__" className="text-primary font-semibold text-xs">
+                  + 직접 입력
+                </SelectItem>
+              </SelectContent>
+            </Select>
+
+            {isCustomActive && (
+              <Input
+                value={value}
+                onChange={(e) => handlePreviewInputChange(field.field_key, e.target.value)}
+                placeholder="직접 내용을 입력하세요."
+                className="text-xs mt-1.5"
+                required={field.is_required}
+              />
+            )}
+          </div>
+        )
+      }
+      case 'imageselect': {
+        const opts = parseOptions(field)
+        const choices = opts.image_choices || []
+        if (choices.length === 0) {
+          return <div className="text-xs text-muted-foreground italic">설정된 이미지 선택지가 없습니다.</div>
+        }
+        return (
+          <div className="grid grid-cols-2 gap-3 pt-1.5">
+            {choices.map((choice: any, idx: number) => {
+              const isSelected = value === choice.text
+              return (
+                <div
+                  key={idx}
+                  onClick={() => handlePreviewInputChange(field.field_key, choice.text)}
+                  className={cn(
+                    "relative flex flex-col rounded-xl border-2 overflow-hidden cursor-pointer transition-all duration-200 select-none group text-xs",
+                    isSelected
+                      ? "border-primary bg-primary/5 shadow-xs scale-[1.01]"
+                      : "border-slate-200 bg-white hover:border-slate-300"
+                  )}
+                >
+                  <div className="aspect-[4/3] w-full overflow-hidden bg-slate-100 relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={choice.image}
+                      alt={choice.text}
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                    {isSelected && (
+                      <div className="absolute top-1.5 right-1.5 bg-primary text-white w-4.5 h-4.5 rounded-full flex items-center justify-center shadow-xs">
+                        <svg className="w-2.5 h-2.5 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-2 text-center border-t border-slate-100 bg-slate-50/50">
+                    <span className={cn(
+                      "text-[11px] transition-colors",
+                      isSelected ? "text-primary font-bold" : "text-slate-600"
+                    )}>
+                      {choice.text}
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )
+      }
+      case 'mselect': {
+        const opts = parseOptions(field)
+        const choices = opts.choices || []
+        const currentValues = Array.isArray(value) ? value : (value ? value.split(',').map((s: string) => s.trim()) : [])
+        
+        const handleCheckboxChange = (opt: string, checked: boolean) => {
+          let updated: string[] = [...currentValues]
+          if (checked) {
+            if (!updated.includes(opt)) {
+              updated.push(opt)
+            }
+          } else {
+            updated = updated.filter(val => val !== opt)
+          }
+          handlePreviewInputChange(field.field_key, updated.join(', '))
+        }
+
+        return (
+          <div className="grid grid-cols-2 gap-2">
+            {choices.map((opt: string) => {
+              const id = `preview-${field.field_key}-${opt}`
+              const isChecked = currentValues.includes(opt)
+              return (
+                <label
+                  key={opt}
+                  htmlFor={id}
+                  className={`flex items-center gap-2.5 p-3 rounded-lg border text-xs cursor-pointer transition-all ${
+                    isChecked
+                      ? 'border-primary bg-primary/5 font-semibold text-primary'
+                      : 'border-border bg-card hover:bg-muted/10'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    id={id}
+                    checked={isChecked}
+                    onChange={(e) => handleCheckboxChange(opt, e.target.checked)}
+                    className="w-4 h-4 text-primary focus:ring-primary border-slate-300 rounded"
+                  />
+                  <span>{opt}</span>
+                </label>
+              )
+            })}
+            {choices.length === 0 && (
+              <p className="text-xs text-muted-foreground italic">선택할 수 있는 항목이 없습니다.</p>
+            )}
+          </div>
+        )
+      }
       case 'select': {
         const opts = parseOptions(field)
         const choices = opts.choices || []
@@ -540,17 +879,18 @@ export default function FormTemplatesPage() {
       {/* Templates List */}
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="min-w-[200px]">템플릿 정보</TableHead>
-                <TableHead className="w-[180px]">제품군 카테고리</TableHead>
-                <TableHead className="w-[80px] text-center">버전</TableHead>
-                <TableHead className="w-[100px]">상태</TableHead>
-                <TableHead className="w-[120px] text-right">등록일</TableHead>
-                <TableHead className="w-[320px] text-right pr-6">관리 작업</TableHead>
-              </TableRow>
-            </TableHeader>
+          <div className="max-h-[calc(100vh-280px)] overflow-y-auto relative">
+            <Table>
+              <TableHeader className="sticky top-0 bg-background z-10 shadow-xs">
+                <TableRow>
+                  <TableHead className="min-w-[200px] bg-background">템플릿 정보</TableHead>
+                  <TableHead className="w-[180px] bg-background">제품군 카테고리</TableHead>
+                  <TableHead className="w-[80px] text-center bg-background">버전</TableHead>
+                  <TableHead className="w-[100px] bg-background">상태</TableHead>
+                  <TableHead className="w-[120px] text-right bg-background">등록일</TableHead>
+                  <TableHead className="w-[320px] text-right pr-6 bg-background">관리 작업</TableHead>
+                </TableRow>
+              </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
@@ -635,6 +975,20 @@ export default function FormTemplatesPage() {
                         >
                           <Edit className="w-3.5 h-3.5" /> 수정
                         </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={isCopying === template.id}
+                          onClick={() => handleCopyTemplate(template)}
+                          className="gap-1 h-8 text-xs px-2.5 shrink-0"
+                        >
+                          {isCopying === template.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                          복사
+                        </Button>
                         <Button variant="default" size="sm" asChild className="h-8 text-xs px-2.5 shrink-0">
                           <Link href={`/admin/forms/builder/${template.id}`} className="gap-1 flex items-center">
                             <Edit2 className="w-3.5 h-3.5" /> 폼 빌더
@@ -654,7 +1008,8 @@ export default function FormTemplatesPage() {
                 ))
               )}
             </TableBody>
-          </Table>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 

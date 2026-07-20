@@ -23,6 +23,7 @@ import {
   useSaveTemplateFieldsMutation 
 } from '@/hooks/queries/useForms'
 import { supabase } from '@/lib/supabase'
+import { uploadFile } from '@/lib/storage'
 import { 
   ArrowLeft, 
   Save, 
@@ -96,6 +97,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
   const [selectedFields, setSelectedFields] = useState<any[]>([])
   const [isSaving, setIsSaving] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [choicesInputs, setChoicesInputs] = useState<Record<string, string>>({})
 
   // Predefined blocks states
   const [activeTab, setActiveTab] = useState<'fields' | 'blocks'>('fields')
@@ -116,12 +118,12 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
   useEffect(() => {
     if (templateFields && templateFields.length > 0) {
       const fields = templateFields.map((tf: any) => {
-        const defaultChoices = (tf.field_library?.field_type === 'select' || tf.field_library?.field_type === 'rselect')
+        const defaultChoices = (tf.field_library?.field_type === 'select' || tf.field_library?.field_type === 'rselect' || tf.field_library?.field_type === 'select_text' || tf.field_library?.field_type === 'mselect')
           ? (tf.field_library?.validation_rules?.choices || [])
           : null
         
         let mergedOptions = tf.options || null
-        if (tf.field_library?.field_type === 'select' || tf.field_library?.field_type === 'rselect') {
+        if (tf.field_library?.field_type === 'select' || tf.field_library?.field_type === 'rselect' || tf.field_library?.field_type === 'select_text' || tf.field_library?.field_type === 'mselect') {
           if (!mergedOptions) {
             mergedOptions = { choices: defaultChoices || [] }
           } else if (!mergedOptions.choices) {
@@ -242,7 +244,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
         return
       }
 
-      const defaultChoices = (libField.field_type === 'select' || libField.field_type === 'rselect')
+      const defaultChoices = (libField.field_type === 'select' || libField.field_type === 'rselect' || libField.field_type === 'select_text' || libField.field_type === 'mselect')
         ? (libField.validation_rules?.choices || [])
         : null
 
@@ -285,7 +287,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
       return
     }
 
-    const defaultChoices = (field.field_type === 'select' || field.field_type === 'rselect')
+    const defaultChoices = (field.field_type === 'select' || field.field_type === 'rselect' || field.field_type === 'select_text' || field.field_type === 'mselect')
       ? (field.validation_rules?.choices || [])
       : null
 
@@ -793,15 +795,22 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                 </div>
               ) : (
                 getPagesAndSections().map((page, pIdx) => (
-                  <div key={page.title} className="bg-card rounded-xl border border-border/80 shadow-sm overflow-hidden">
+                  <div key={`page-${pIdx}`} className="bg-card rounded-xl border border-border/80 shadow-sm overflow-hidden">
                     {/* Page Header */}
                     <div className="bg-slate-100/80 px-4 py-3 border-b border-border flex items-center justify-between">
                       <div className="flex items-center gap-2 flex-1 max-w-md">
                         <span className="text-xs font-bold text-slate-500 shrink-0">단계 {pIdx + 1}:</span>
                         <input
+                          key={`page-input-${page.title}`}
                           type="text"
-                          value={page.title}
-                          onChange={(e) => handleRenamePage(page.title, e.target.value)}
+                          defaultValue={page.title}
+                          onBlur={(e) => handleRenamePage(page.title, e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handleRenamePage(page.title, e.currentTarget.value);
+                              e.currentTarget.blur();
+                            }
+                          }}
                           className="font-bold text-sm text-foreground bg-transparent border-b border-transparent hover:border-slate-300 focus:border-primary focus:outline-none px-1"
                         />
                       </div>
@@ -831,7 +840,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                     <div className="p-4 space-y-4">
                       {page.sections.map((section, sIdx) => (
                         <div
-                          key={section.title}
+                          key={`section-${sIdx}`}
                           onDragOver={(e) => {
                             e.preventDefault()
                             setDragOverSection({ page: page.title, section: section.title })
@@ -852,9 +861,16 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                             <div className="flex items-center gap-2 flex-1 max-w-sm">
                               <span className="text-[10px] font-bold text-slate-400">📂</span>
                               <input
+                                key={`section-input-${page.title}-${section.title}`}
                                 type="text"
-                                value={section.title}
-                                onChange={(e) => handleRenameSection(page.title, section.title, e.target.value)}
+                                defaultValue={section.title}
+                                onBlur={(e) => handleRenameSection(page.title, section.title, e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    handleRenameSection(page.title, section.title, e.currentTarget.value);
+                                    e.currentTarget.blur();
+                                  }
+                                }}
                                 className="font-semibold text-xs text-slate-700 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-primary focus:outline-none px-1"
                               />
                             </div>
@@ -1025,22 +1041,254 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                           </Label>
                                         </div>
 
-                                        {/* Options config for Select/Rselect fields */}
-                                        {(field.field_type === 'select' || field.field_type === 'rselect') && (
+                                        {/* Options config for Select/Rselect/SelectText fields */}
+                                        {(field.field_type === 'select' || field.field_type === 'rselect' || field.field_type === 'select_text' || field.field_type === 'mselect') && (
                                           <div className="flex items-center gap-1.5 min-w-[200px] flex-1">
                                             <span className="text-[10px] font-medium text-primary shrink-0 font-semibold">선택지 설정:</span>
                                             <Input
                                               placeholder="쉼표(,)로 구분 예시: 옵션1, 옵션2, 옵션3"
-                                              value={Array.isArray(field.options?.choices) ? field.options.choices.join(', ') : ''}
+                                              value={choicesInputs[field.field_library_id] !== undefined ? choicesInputs[field.field_library_id] : (Array.isArray(field.options?.choices) ? field.options.choices.join(', ') : '')}
                                               onChange={(e) => {
-                                                const currentOpts = typeof field.options === 'string' ? JSON.parse(field.options || '{}') : (field.options || {})
-                                                const choices = e.target.value.split(',').map((s) => s.trim()).filter(Boolean)
-                                                const updatedOptions = { ...currentOpts, choices }
-                                                handleUpdateFieldProperty(field.field_library_id, 'options', updatedOptions)
+                                                const val = e.target.value;
+                                                setChoicesInputs(prev => ({ ...prev, [field.field_library_id]: val }));
+                                                const currentOpts = typeof field.options === 'string' ? JSON.parse(field.options || '{}') : (field.options || {});
+                                                const choices = val.split(',').map((s) => s.trim()).filter(Boolean);
+                                                const updatedOptions = { ...currentOpts, choices };
+                                                handleUpdateFieldProperty(field.field_library_id, 'options', updatedOptions);
+                                              }}
+                                              onBlur={() => {
+                                                if (Array.isArray(field.options?.choices)) {
+                                                  setChoicesInputs(prev => ({ ...prev, [field.field_library_id]: field.options.choices.join(', ') }));
+                                                }
                                               }}
                                               className="h-7 text-xs bg-background px-2 border border-border flex-1"
                                               maxLength={1000}
                                             />
+                                          </div>
+                                        )}
+
+                                        {/* ImageSelect options config for ImageSelect fields */}
+                                        {field.field_type === 'imageselect' && (
+                                          <div className="flex flex-col gap-2 min-w-[200px] flex-1">
+                                            <span className="text-[10px] font-semibold text-primary">이미지 선택지 설정:</span>
+                                            
+                                            {/* List of current image choices */}
+                                            {field.options?.image_choices?.length > 0 && (
+                                              <div className="grid grid-cols-2 gap-2 bg-background p-2 rounded border border-border max-h-48 overflow-y-auto">
+                                                {field.options.image_choices.map((choice: any, idx: number) => (
+                                                  <div key={idx} className="relative flex flex-col items-center p-1.5 rounded bg-slate-50 border border-slate-100 group">
+                                                    <img src={choice.image} alt={choice.text} className="w-full h-16 object-cover rounded" />
+                                                    <span className="text-[9px] text-slate-600 font-semibold truncate max-w-full mt-1">{choice.text}</span>
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => {
+                                                        const currentOpts = typeof field.options === 'string' ? JSON.parse(field.options || '{}') : (field.options || {})
+                                                        const updated = (currentOpts.image_choices || []).filter((_: any, i: number) => i !== idx)
+                                                        handleUpdateFieldProperty(field.field_library_id, 'options', { ...currentOpts, image_choices: updated })
+                                                      }}
+                                                      className="absolute top-1 right-1 w-4 h-4 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-[9px] shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    >
+                                                      ✕
+                                                    </button>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
+
+                                            {/* Form to add a new image choice */}
+                                            <div className="flex flex-col gap-1.5 border border-dashed border-border/80 p-2 rounded bg-slate-50/50 mt-1">
+                                              <span className="text-[9px] font-bold text-slate-500">새 선택지 추가</span>
+                                              <div className="flex gap-2 items-center">
+                                                <input
+                                                  type="file"
+                                                  accept="image/*"
+                                                  id={`new-img-choice-file-${field.field_library_id}`}
+                                                  className="hidden"
+                                                  onChange={async (e) => {
+                                                    const file = e.target.files?.[0]
+                                                    if (!file) return
+                                                    toast.loading('이미지 업로드 중...', { id: 'imgchoice-upload' })
+                                                    try {
+                                                      const publicUrl = await uploadFile(file, 'forms/imageselect')
+                                                      const btn = document.getElementById(`new-img-choice-file-${field.field_library_id}`)
+                                                      if (btn) btn.setAttribute('data-temp-url', publicUrl)
+                                                      toast.success('이미지가 업로드되었습니다.', { id: 'imgchoice-upload' })
+                                                    } catch (err) {
+                                                      console.error(err)
+                                                      toast.error('이미지 업로드에 실패했습니다.', { id: 'imgchoice-upload' })
+                                                    }
+                                                  }}
+                                                />
+                                                <Button
+                                                  type="button"
+                                                  variant="outline"
+                                                  size="sm"
+                                                  onClick={() => {
+                                                    document.getElementById(`new-img-choice-file-${field.field_library_id}`)?.click()
+                                                  }}
+                                                  className="h-6 text-[9px] px-2"
+                                                >
+                                                  이미지 선택
+                                                </Button>
+                                                <Input
+                                                  id={`new-img-choice-text-${field.field_library_id}`}
+                                                  placeholder="설명 텍스트"
+                                                  className="h-6 text-[10px] bg-background px-2 border border-border flex-1"
+                                                />
+                                                <Button
+                                                  type="button"
+                                                  size="sm"
+                                                  onClick={() => {
+                                                    const fileInput = document.getElementById(`new-img-choice-file-${field.field_library_id}`) as HTMLInputElement
+                                                    const textInput = document.getElementById(`new-img-choice-text-${field.field_library_id}`) as HTMLInputElement
+                                                    const imgUrl = fileInput?.getAttribute('data-temp-url')
+                                                    const text = textInput?.value?.trim()
+
+                                                    if (!imgUrl) {
+                                                      toast.error('선택지 이미지를 먼저 업로드해 주세요.')
+                                                      return
+                                                    }
+                                                    if (!text) {
+                                                      toast.error('선택지 설명 텍스트를 입력해 주세요.')
+                                                      return
+                                                    }
+
+                                                    const currentOpts = typeof field.options === 'string' ? JSON.parse(field.options || '{}') : (field.options || {})
+                                                    const existing = currentOpts.image_choices || []
+                                                    const updated = [...existing, { image: imgUrl, text }]
+
+                                                    handleUpdateFieldProperty(field.field_library_id, 'options', { ...currentOpts, image_choices: updated })
+
+                                                    if (fileInput) {
+                                                      fileInput.value = ''
+                                                      fileInput.removeAttribute('data-temp-url')
+                                                    }
+                                                    if (textInput) textInput.value = ''
+                                                    toast.success('선택지가 추가되었습니다.')
+                                                  }}
+                                                  className="h-6 text-[9px] bg-primary text-primary-foreground font-semibold px-2.5"
+                                                >
+                                                  추가
+                                                </Button>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )}
+
+                                        {/* Music files config for Music fields */}
+                                        {field.field_type === 'music' && (
+                                          <div className="flex flex-col gap-1.5 min-w-[200px] flex-1">
+                                            <div className="flex items-center justify-between">
+                                              <span className="text-[10px] font-medium text-primary font-semibold">음원 파일 업로드 (여러 개 가능):</span>
+                                              <label className="cursor-pointer bg-primary/10 hover:bg-primary/20 text-primary text-[9px] font-semibold px-2 py-0.5 rounded transition-colors shrink-0">
+                                                음원 추가 (MP3)
+                                                <input
+                                                  type="file"
+                                                  accept="audio/mp3,audio/*"
+                                                  multiple
+                                                  className="hidden"
+                                                  onChange={async (e) => {
+                                                    const files = e.target.files
+                                                    if (!files) return
+                                                    const currentOpts = typeof field.options === 'string' ? JSON.parse(field.options || '{}') : (field.options || {})
+                                                    const existing = currentOpts.music_files || []
+                                                    const newMusic = [...existing]
+                                                    
+                                                    toast.loading('음원 파일을 업로드 중입니다...', { id: 'music-upload' })
+                                                    try {
+                                                      for (let i = 0; i < files.length; i++) {
+                                                        const file = files[i]
+                                                        const publicUrl = await uploadFile(file, 'forms/music')
+                                                        newMusic.push({
+                                                          name: file.name,
+                                                          url: publicUrl,
+                                                          title: file.name.replace(/\.[^/.]+$/, ""),
+                                                          tags: "#잔잔한 #행복한"
+                                                        })
+                                                      }
+                                                      handleUpdateFieldProperty(field.field_library_id, 'options', { ...currentOpts, music_files: newMusic })
+                                                      toast.success('음원이 성공적으로 업로드되었습니다.', { id: 'music-upload' })
+                                                    } catch (err) {
+                                                      console.error(err)
+                                                      toast.error('음원 업로드에 실패했습니다.', { id: 'music-upload' })
+                                                    }
+                                                  }}
+                                                />
+                                              </label>
+                                            </div>
+                                            {field.options?.music_files?.length > 0 && (
+                                              <div className="flex flex-col gap-2 bg-background p-2 rounded border border-border mt-1 max-h-60 overflow-y-auto">
+                                                {field.options.music_files.map((file: any, idx: number) => (
+                                                  <div key={idx} className="flex flex-col gap-2 text-[10px] bg-slate-50 p-2.5 rounded-lg border border-slate-100 relative">
+                                                    <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5">
+                                                      <span className="font-semibold text-slate-700 truncate max-w-[150px]">{file.name}</span>
+                                                      <div className="flex items-center gap-2">
+                                                        <audio className="hidden" src={file.url} id={`audio-preview-${field.field_library_id}-${idx}`} />
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => {
+                                                            const aud = document.getElementById(`audio-preview-${field.field_library_id}-${idx}`) as HTMLAudioElement
+                                                            if (aud) {
+                                                              if (aud.paused) {
+                                                                aud.play()
+                                                              } else {
+                                                                aud.pause()
+                                                              }
+                                                            }
+                                                          }}
+                                                          className="text-primary hover:underline text-[9px] font-bold"
+                                                        >
+                                                          듣기/정지
+                                                        </button>
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => {
+                                                            const currentOpts = typeof field.options === 'string' ? JSON.parse(field.options || '{}') : (field.options || {})
+                                                            const updated = (currentOpts.music_files || []).filter((_: any, i: number) => i !== idx)
+                                                            handleUpdateFieldProperty(field.field_library_id, 'options', { ...currentOpts, music_files: updated })
+                                                          }}
+                                                          className="text-red-500 hover:text-red-700 font-semibold"
+                                                        >
+                                                          ✕
+                                                        </button>
+                                                      </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                      <div className="flex flex-col gap-0.5">
+                                                        <span className="text-[8px] font-medium text-slate-400">곡 제목 (화면 표시용)</span>
+                                                        <input
+                                                          type="text"
+                                                          value={file.title !== undefined ? file.title : file.name.replace(/\.[^/.]+$/, "")}
+                                                          onChange={(e) => {
+                                                            const currentOpts = typeof field.options === 'string' ? JSON.parse(field.options || '{}') : (field.options || {})
+                                                            const updated = [...(currentOpts.music_files || [])]
+                                                            updated[idx] = { ...updated[idx], title: e.target.value }
+                                                            handleUpdateFieldProperty(field.field_library_id, 'options', { ...currentOpts, music_files: updated })
+                                                          }}
+                                                          placeholder="곡 제목"
+                                                          className="h-6 text-[9px] bg-white px-1.5 border border-border rounded"
+                                                        />
+                                                      </div>
+                                                      <div className="flex flex-col gap-0.5">
+                                                        <span className="text-[8px] font-medium text-slate-400">무드 태그 (#태그)</span>
+                                                        <input
+                                                          type="text"
+                                                          value={file.tags || ''}
+                                                          onChange={(e) => {
+                                                            const currentOpts = typeof field.options === 'string' ? JSON.parse(field.options || '{}') : (field.options || {})
+                                                            const updated = [...(currentOpts.music_files || [])]
+                                                            updated[idx] = { ...updated[idx], tags: e.target.value }
+                                                            handleUpdateFieldProperty(field.field_library_id, 'options', { ...currentOpts, music_files: updated })
+                                                          }}
+                                                          placeholder="#로맨틱 #잔잔한"
+                                                          className="h-6 text-[9px] bg-white px-1.5 border border-border rounded"
+                                                        />
+                                                      </div>
+                                                    </div>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
                                           </div>
                                         )}
                                       </div>
@@ -1139,24 +1387,26 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                               accept="image/*"
                                               multiple
                                               className="hidden"
-                                              onChange={(e) => {
+                                              onChange={async (e) => {
                                                 const files = e.target.files
                                                 if (!files) return
                                                 const currentOpts = typeof field.options === 'string' ? JSON.parse(field.options || '{}') : (field.options || {})
                                                 const existing = currentOpts.attached_images || []
                                                 const newImgs = [...existing]
-                                                let loaded = 0
-                                                Array.from(files).forEach((file) => {
-                                                  const reader = new FileReader()
-                                                  reader.onloadend = () => {
-                                                    newImgs.push(reader.result as string)
-                                                    loaded++
-                                                    if (loaded === files.length) {
-                                                      handleUpdateFieldProperty(field.field_library_id, 'options', { ...currentOpts, attached_images: newImgs })
-                                                    }
+                                                
+                                                toast.loading('안내 이미지를 업로드 중입니다...', { id: 'attached-upload' })
+                                                try {
+                                                  for (let i = 0; i < files.length; i++) {
+                                                    const file = files[i]
+                                                    const publicUrl = await uploadFile(file, 'forms/attached')
+                                                    newImgs.push(publicUrl)
                                                   }
-                                                  reader.readAsDataURL(file)
-                                                })
+                                                  handleUpdateFieldProperty(field.field_library_id, 'options', { ...currentOpts, attached_images: newImgs })
+                                                  toast.success('이미지가 성공적으로 업로드되었습니다.', { id: 'attached-upload' })
+                                                } catch (err) {
+                                                  console.error(err)
+                                                  toast.error('이미지 업로드에 실패했습니다.', { id: 'attached-upload' })
+                                                }
                                               }}
                                             />
                                           </label>

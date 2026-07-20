@@ -56,12 +56,30 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
   const isNewVersionAvailable = React.useMemo(() => {
     if (!formInstance || !latestFields || latestFields.length === 0) return false
     
-    const latestSnapshotKeys = latestFields.map((lf: any) => lf.field_library?.field_key).filter(Boolean)
-    const currentSnapshotKeys = (formInstance.fields_snapshot || []).map((f: any) => f.field_key).filter(Boolean)
+    const normalizeLatest = (f: any) => ({
+      field_library_id: f.field_library_id || '',
+      field_key: f.field_library?.field_key || '',
+      label: f.label_override || f.field_library?.label || '',
+      help_text: f.help_text_override || f.field_library?.help_text || '',
+      field_type: f.field_library?.field_type || '',
+      is_required: !!f.is_required,
+      options: JSON.stringify(f.options || {})
+    })
 
-    if (latestSnapshotKeys.length !== currentSnapshotKeys.length) return true
-    
-    return latestSnapshotKeys.some((key, idx) => key !== currentSnapshotKeys[idx])
+    const normalizeCurrent = (f: any) => ({
+      field_library_id: f.field_library_id || '',
+      field_key: f.field_key || '',
+      label: f.label || '',
+      help_text: f.help_text || '',
+      field_type: f.field_type || '',
+      is_required: !!f.is_required,
+      options: JSON.stringify(f.options || {})
+    })
+
+    const latestNormalized = latestFields.map(normalizeLatest)
+    const currentNormalized = (formInstance.fields_snapshot || []).map(normalizeCurrent)
+
+    return JSON.stringify(latestNormalized) !== JSON.stringify(currentNormalized)
   }, [formInstance, latestFields])
 
   const handleUpdateFormVersion = async () => {

@@ -123,6 +123,23 @@ export function useUpdateFieldMutation() {
   })
 }
 
+export function useDeleteFieldMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (fieldId: string) => {
+      const { error } = await supabase
+        .from('field_library')
+        .delete()
+        .eq('id', fieldId)
+
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fields'] })
+    },
+  })
+}
+
 // =========================================================================
 // 2. Form Template Hooks
 // =========================================================================

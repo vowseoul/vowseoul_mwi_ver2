@@ -41,6 +41,28 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
   // Local state to manage editable form data
   const [formData, setFormData] = useState<Record<string, any>>({})
   const [isSaving, setIsSaving] = useState(false)
+  const [customSelectTexts, setCustomSelectTexts] = useState<Record<string, boolean>>({})
+  const [playingAudioId, setPlayingAudioId] = useState<string | null>(null)
+
+  const handlePlayPause = (audioId: string) => {
+    const aud = document.getElementById(audioId) as HTMLAudioElement
+    if (!aud) return
+
+    if (playingAudioId === audioId) {
+      aud.pause()
+      setPlayingAudioId(null)
+    } else {
+      if (playingAudioId) {
+        const prevAud = document.getElementById(playingAudioId) as HTMLAudioElement
+        if (prevAud) prevAud.pause()
+      }
+      aud.play()
+      setPlayingAudioId(audioId)
+      aud.onended = () => {
+        setPlayingAudioId(null)
+      }
+    }
+  }
 
   // Populate data
   useEffect(() => {
@@ -204,6 +226,181 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
               </div>
             </PopoverContent>
           </Popover>
+        )
+      }
+      case 'music': {
+        const musicFiles = field.options?.music_files || []
+        if (musicFiles.length === 0) {
+          return <div className="text-xs text-muted-foreground italic">업로드된 음원이 없습니다.</div>
+        }
+        return (
+          <div className="space-y-2 flex-1">
+            {musicFiles.map((file: any, idx: number) => {
+              const audioId = `audio-${field.field_key}-${idx}`
+              const isSelected = value === file.name
+              const isPlaying = playingAudioId === audioId
+              const displayTitle = file.title || file.name.replace(/\.[^/.]+$/, "")
+              const tags = file.tags ? file.tags.split(/\s+/).filter(Boolean) : []
+
+              return (
+                <div 
+                  key={idx} 
+                  className={cn(
+                    "flex items-center justify-between p-2.5 rounded-xl border transition-all text-xs",
+                    isSelected 
+                      ? "bg-primary/5 border-primary shadow-xs font-semibold" 
+                      : "bg-white border-border hover:bg-slate-50/50"
+                  )}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <audio id={audioId} src={file.url} className="hidden" />
+                    <button
+                      type="button"
+                      onClick={() => handlePlayPause(audioId)}
+                      className={cn(
+                        "w-7 h-7 rounded-full flex items-center justify-center transition-colors shrink-0",
+                        isPlaying ? "bg-primary text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                      )}
+                    >
+                      {isPlaying ? (
+                        <div className="flex items-end gap-0.5 h-2.5">
+                          <span className="w-0.5 bg-current rounded-full animate-bounce h-1.5" style={{ animationDelay: '0.1s', animationDuration: '0.6s' }} />
+                          <span className="w-0.5 bg-current rounded-full animate-bounce h-2.5" style={{ animationDelay: '0.3s', animationDuration: '0.5s' }} />
+                          <span className="w-0.5 bg-current rounded-full animate-bounce h-1" style={{ animationDelay: '0.5s', animationDuration: '0.7s' }} />
+                        </div>
+                      ) : (
+                        <svg className="w-2.5 h-2.5 fill-current ml-0.5" viewBox="0 0 24 24">
+                          <path d="M8 5v14l11-7z" />
+                        </svg>
+                      )}
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium text-slate-700 truncate">{displayTitle}</span>
+                        {isPlaying && (
+                          <span className="text-[8px] font-bold text-primary animate-pulse shrink-0 bg-primary/10 px-1 rounded">
+                            재생 중
+                          </span>
+                        )}
+                      </div>
+                      {tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-0.5">
+                          {tags.map((tag: string, tIdx: number) => (
+                            <span key={tIdx} className="bg-slate-100 text-slate-500 border border-slate-200/60 text-[8px] font-medium px-1 rounded">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant={isSelected ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handleInputChange(field.field_key, file.name)}
+                    className="h-7 text-[10px] px-3 shrink-0 rounded-full"
+                  >
+                    {isSelected ? "선택됨" : "선택"}
+                  </Button>
+                </div>
+              )
+            })}
+          </div>
+        )
+      }
+      case 'select_text': {
+        const choices = field.options?.choices || []
+        const isCustomActive = customSelectTexts[field.field_key] || (value && !choices.includes(value))
+        
+        return (
+          <div className="space-y-2 flex-1">
+            <Select 
+              value={isCustomActive ? '__direct_input__' : value} 
+              onValueChange={(selectedVal) => {
+                if (selectedVal === '__direct_input__') {
+                  setCustomSelectTexts(prev => ({ ...prev, [field.field_key]: true }))
+                  handleInputChange(field.field_key, '')
+                } else {
+                  setCustomSelectTexts(prev => ({ ...prev, [field.field_key]: false }))
+                  handleInputChange(field.field_key, selectedVal)
+                }
+              }}
+            >
+              <SelectTrigger className="h-8 text-xs bg-muted/10">
+                <SelectValue placeholder="선택하거나 직접 입력 선택" />
+              </SelectTrigger>
+              <SelectContent>
+                {choices.map((opt: string) => (
+                  <SelectItem key={opt} value={opt}>
+                    {opt}
+                  </SelectItem>
+                ))}
+                <SelectItem value="__direct_input__" className="text-primary font-semibold">
+                  + 직접 입력
+                </SelectItem>
+              </SelectContent>
+            </Select>
+
+            {isCustomActive && (
+              <Input
+                value={value}
+                onChange={(e) => handleInputChange(field.field_key, e.target.value)}
+                placeholder="직접 내용을 입력하세요."
+                className="h-8 text-xs mt-1 bg-muted/10"
+              />
+            )}
+          </div>
+        )
+      }
+      case 'imageselect': {
+        const choices = field.options?.image_choices || []
+        if (choices.length === 0) {
+          return <div className="text-xs text-muted-foreground italic">설정된 이미지 선택지가 없습니다.</div>
+        }
+        return (
+          <div className="grid grid-cols-2 gap-3 pt-1.5 flex-1">
+            {choices.map((choice: any, idx: number) => {
+              const isSelected = value === choice.text
+              return (
+                <div
+                  key={idx}
+                  onClick={() => handleInputChange(field.field_key, choice.text)}
+                  className={cn(
+                    "relative flex flex-col rounded-xl border overflow-hidden cursor-pointer transition-all text-xs group",
+                    isSelected
+                      ? "border-primary bg-primary/5 shadow-xs font-semibold"
+                      : "border-border bg-white hover:border-slate-300"
+                  )}
+                >
+                  <div className="aspect-[4/3] w-full overflow-hidden bg-slate-100 relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={choice.image}
+                      alt={choice.text}
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                    {isSelected && (
+                      <div className="absolute top-1.5 right-1.5 bg-primary text-white w-4.5 h-4.5 rounded-full flex items-center justify-center shadow-xs">
+                        <svg className="w-2.5 h-2.5 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-2 text-center border-t border-slate-100 bg-slate-50/50">
+                    <span className={cn(
+                      "text-[11px] transition-colors",
+                      isSelected ? "text-primary font-bold" : "text-slate-600"
+                    )}>
+                      {choice.text}
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         )
       }
       case 'select':

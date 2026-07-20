@@ -59,6 +59,36 @@ function PublicFormContent({ slug }: { slug: string }) {
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [savingDraft, setSavingDraft] = useState(false)
+  const [customSelectTexts, setCustomSelectTexts] = useState<Record<string, boolean>>({})
+  const [playingAudioId, setPlayingAudioId] = useState<string | null>(null)
+
+  const handlePlayPause = (audioId: string) => {
+    const aud = document.getElementById(audioId) as HTMLAudioElement
+    if (!aud) return
+
+    if (playingAudioId === audioId) {
+      aud.pause()
+      setPlayingAudioId(null)
+    } else {
+      if (playingAudioId) {
+        const prevAud = document.getElementById(playingAudioId) as HTMLAudioElement
+        if (prevAud) prevAud.pause()
+      }
+      aud.play()
+      setPlayingAudioId(audioId)
+      aud.onended = () => {
+        setPlayingAudioId(null)
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (playingAudioId) {
+      const aud = document.getElementById(playingAudioId) as HTMLAudioElement
+      if (aud) aud.pause()
+      setPlayingAudioId(null)
+    }
+  }, [currentStep])
 
   // Initialize password lock & form values
   useEffect(() => {
@@ -460,6 +490,196 @@ function PublicFormContent({ slug }: { slug: string }) {
           </Popover>
         )
       }
+      case 'music': {
+        const musicFiles = field.options?.music_files || []
+        if (musicFiles.length === 0) {
+          return <div className="text-xs text-muted-foreground italic">업로드된 음원이 없습니다.</div>
+        }
+        return (
+          <div className="space-y-3">
+            <div className="bg-slate-50 border border-slate-200/50 p-3.5 rounded-2xl flex items-start gap-2.5">
+              <span className="text-lg">🎵</span>
+              <div>
+                <p className="text-xs font-bold text-slate-800">배경음악(BGM) 선택</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5 leading-relaxed">
+                  모바일 청첩장에 감성을 더해줄 BGM 곡을 선택해 주세요. 각 음원을 재생해보고 마음에 드는 음악을 고르실 수 있습니다.
+                </p>
+              </div>
+            </div>
+            
+            <div className="space-y-2.5">
+              {musicFiles.map((file: any, idx: number) => {
+                const audioId = `audio-${field.field_key}-${idx}`
+                const isSelected = value === file.name
+                const isPlaying = playingAudioId === audioId
+                const displayTitle = file.title || file.name.replace(/\.[^/.]+$/, "")
+                const tags = file.tags ? file.tags.split(/\s+/).filter(Boolean) : []
+
+                return (
+                  <div 
+                    key={idx} 
+                    className={cn(
+                      "flex items-center justify-between p-3.5 rounded-2xl border transition-all duration-300 select-none",
+                      isSelected 
+                        ? "bg-primary/5 border-primary shadow-sm scale-[1.01]" 
+                        : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
+                    )}
+                  >
+                    <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                      <audio id={audioId} src={file.url} className="hidden" />
+                      <button
+                        type="button"
+                        onClick={() => handlePlayPause(audioId)}
+                        className={cn(
+                          "w-9 h-9 rounded-full flex items-center justify-center transition-colors shrink-0 shadow-xs",
+                          isPlaying ? "bg-primary text-white" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                        )}
+                      >
+                        {isPlaying ? (
+                          <div className="flex items-end gap-0.5 h-3">
+                            <span className="w-0.5 bg-current rounded-full animate-bounce h-2" style={{ animationDelay: '0.1s', animationDuration: '0.6s' }} />
+                            <span className="w-0.5 bg-current rounded-full animate-bounce h-3" style={{ animationDelay: '0.3s', animationDuration: '0.5s' }} />
+                            <span className="w-0.5 bg-current rounded-full animate-bounce h-1.5" style={{ animationDelay: '0.5s', animationDuration: '0.7s' }} />
+                          </div>
+                        ) : (
+                          <svg className="w-3.5 h-3.5 fill-current ml-0.5" viewBox="0 0 24 24">
+                            <path d="M8 5v14l11-7z" />
+                          </svg>
+                        )}
+                      </button>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-800 truncate">{displayTitle}</span>
+                          {isPlaying && (
+                            <span className="text-[9px] font-bold text-primary animate-pulse shrink-0 bg-primary/10 px-1.5 py-0.5 rounded">
+                              재생 중
+                            </span>
+                          )}
+                        </div>
+                        {tags.length > 0 ? (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {tags.map((tag: string, tIdx: number) => (
+                              <span key={tIdx} className="bg-slate-100 text-slate-500 border border-slate-200/60 text-[9px] font-medium px-1.5 py-0.2 rounded-full">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-[9px] text-muted-foreground mt-0.5">클래식 연주곡 BGM</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant={isSelected ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handleInputChange(field.field_key, file.name)}
+                      className="h-8 text-xs font-bold px-4 shrink-0 rounded-full"
+                    >
+                      {isSelected ? "선택됨" : "선택"}
+                    </Button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      }
+      case 'select_text': {
+        const choices = field.options?.choices || []
+        const isCustomActive = customSelectTexts[field.field_key] || (value && !choices.includes(value))
+        
+        return (
+          <div className="space-y-2">
+            <Select 
+              value={isCustomActive ? '__direct_input__' : value} 
+              onValueChange={(selectedVal) => {
+                if (selectedVal === '__direct_input__') {
+                  setCustomSelectTexts(prev => ({ ...prev, [field.field_key]: true }))
+                  handleInputChange(field.field_key, '')
+                } else {
+                  setCustomSelectTexts(prev => ({ ...prev, [field.field_key]: false }))
+                  handleInputChange(field.field_key, selectedVal)
+                }
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="선택하거나 직접 입력 선택" />
+              </SelectTrigger>
+              <SelectContent>
+                {choices.map((opt: string) => (
+                  <SelectItem key={opt} value={opt}>
+                    {opt}
+                  </SelectItem>
+                ))}
+                <SelectItem value="__direct_input__" className="text-primary font-semibold">
+                  + 직접 입력
+                </SelectItem>
+              </SelectContent>
+            </Select>
+
+            {isCustomActive && (
+              <Input
+                value={value}
+                onChange={(e) => handleInputChange(field.field_key, e.target.value)}
+                placeholder="직접 내용을 입력하세요."
+                className="text-xs mt-1.5"
+                required={field.is_required}
+              />
+            )}
+          </div>
+        )
+      }
+      case 'imageselect': {
+        const choices = field.options?.image_choices || []
+        if (choices.length === 0) {
+          return <div className="text-xs text-muted-foreground italic">설정된 이미지 선택지가 없습니다.</div>
+        }
+        return (
+          <div className="grid grid-cols-2 gap-3.5 pt-1.5">
+            {choices.map((choice: any, idx: number) => {
+              const isSelected = value === choice.text
+              return (
+                <div
+                  key={idx}
+                  onClick={() => handleInputChange(field.field_key, choice.text)}
+                  className={cn(
+                    "relative flex flex-col rounded-2xl border-2 overflow-hidden cursor-pointer transition-all duration-300 select-none group",
+                    isSelected
+                      ? "border-primary bg-primary/5 shadow-md scale-[1.02]"
+                      : "border-slate-200 bg-white hover:border-slate-300 hover:scale-[1.01]"
+                  )}
+                >
+                  <div className="aspect-[4/3] w-full overflow-hidden bg-slate-100 relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={choice.image}
+                      alt={choice.text}
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                    {isSelected && (
+                      <div className="absolute top-2 right-2 bg-primary text-white w-5 h-5 rounded-full flex items-center justify-center shadow-md">
+                        <svg className="w-3 h-3 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-3 text-center border-t border-slate-100 bg-slate-50/50">
+                    <span className={cn(
+                      "text-xs font-bold transition-colors",
+                      isSelected ? "text-primary font-black" : "text-slate-700"
+                    )}>
+                      {choice.text}
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )
+      }
       case 'select':
         return (
           <Select 
@@ -487,6 +707,54 @@ function PublicFormContent({ slug }: { slug: string }) {
             </SelectContent>
           </Select>
         )
+      case 'mselect': {
+        const choices = field.options?.choices || []
+        const currentValues = Array.isArray(value) ? value : (value ? value.split(',').map((s: string) => s.trim()) : [])
+        
+        const handleCheckboxChange = (opt: string, checked: boolean) => {
+          let updated: string[] = [...currentValues]
+          if (checked) {
+            if (!updated.includes(opt)) {
+              updated.push(opt)
+            }
+          } else {
+            updated = updated.filter(val => val !== opt)
+          }
+          handleInputChange(field.field_key, updated.join(', '))
+        }
+
+        return (
+          <div className="flex flex-col gap-2 pt-1.5">
+            {choices.map((opt: string) => {
+              const id = `${field.field_key}-${opt}`
+              const isChecked = currentValues.includes(opt)
+              return (
+                <label
+                  key={opt}
+                  htmlFor={id}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border text-xs font-medium cursor-pointer transition-all ${
+                    isChecked
+                      ? 'border-primary bg-primary/5 text-primary'
+                      : 'border-border bg-card hover:bg-muted/10'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    id={id}
+                    checked={isChecked}
+                    onChange={(e) => handleCheckboxChange(opt, e.target.checked)}
+                    className="w-4 h-4 text-primary focus:ring-primary border-slate-300 rounded"
+                  />
+                  <span>{opt}</span>
+                </label>
+              )
+            })}
+            {choices.length === 0 && (
+              <p className="text-xs text-muted-foreground italic">선택할 수 있는 항목이 없습니다.</p>
+            )}
+          </div>
+        )
+      }
       case 'rselect': {
         const choices = field.options?.choices || []
         return (
@@ -815,10 +1083,11 @@ function PublicFormContent({ slug }: { slug: string }) {
             <CardContent className="p-5">
               <FieldGroup className="space-y-5">
                 {(() => {
-                  let lastSectionTitle = ''
+                  // 1. Group fields by section dynamically to prevent duplication & ordering bugs
+                  const sections: { title: string; fields: any[] }[] = []
                   const rootFields = currentFields.filter((f) => !parseOptions(f).parent_field_key)
 
-                  return rootFields.map((field) => {
+                  rootFields.forEach((field) => {
                     let currentSection = ''
                     if (field.options) {
                       if (typeof field.options === 'string') {
@@ -832,88 +1101,96 @@ function PublicFormContent({ slug }: { slug: string }) {
                         currentSection = field.options.section_title || ''
                       }
                     }
+                    currentSection = currentSection.trim()
 
-                    const showSectionHeader = currentSection && currentSection !== lastSectionTitle
-                    if (showSectionHeader) {
-                      lastSectionTitle = currentSection
+                    let sec = sections.find(s => s.title === currentSection)
+                    if (!sec) {
+                      sec = { title: currentSection, fields: [] }
+                      sections.push(sec)
                     }
-
-                    const children = currentFields.filter(
-                      (c) => parseOptions(c).parent_field_key === field.field_key
-                    )
-
-                    return (
-                      <React.Fragment key={field.field_key}>
-                        {showSectionHeader && (
-                          <div className="pt-4 pb-2 border-b border-slate-200 mt-6 first:mt-0">
-                            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
-                              <span className="w-1.5 h-3.5 bg-primary rounded-full" />
-                              {currentSection}
-                            </h3>
-                          </div>
-                        )}
-                        
-                        <div className="space-y-3">
-                          <Field>
-                            <FieldLabel htmlFor={field.field_key}>
-                              {field.label}
-                              {field.is_required && <span className="text-red-500 ml-1">*</span>}
-                            </FieldLabel>
-                            {parseOptions(field).attached_images?.length > 0 && (
-                              <div className="grid grid-cols-2 gap-2 my-1.5">
-                                {parseOptions(field).attached_images.map((img: string, idx: number) => (
-                                  <div key={idx} className="relative aspect-video rounded-lg overflow-hidden border border-border shadow-sm">
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img src={img} alt="Reference Attachment" className="w-full h-full object-cover" />
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            {renderInputField(field)}
-                          </Field>
-
-                          {/* Child fields accordion wrapper */}
-                          {children.map((childField) => {
-                            const childOpts = parseOptions(childField)
-                            let parentVal = (formValues[field.field_key] || '').toString().trim()
-                            if (parentVal === 'true') parentVal = '예'
-                            if (parentVal === 'false') parentVal = '아니오'
-                            const triggerVal = (childOpts.parent_trigger_option || '').toString().trim()
-                            const isTriggered = parentVal === triggerVal && parentVal !== ''
-
-                            return (
-                              <div
-                                key={childField.field_key}
-                                className={`transition-all duration-300 ease-in-out overflow-hidden border-l-2 border-primary/30 pl-4 ml-1 mt-1 ${
-                                  isTriggered 
-                                    ? 'max-h-[500px] opacity-100 py-2' 
-                                    : 'max-h-0 opacity-0 py-0 pointer-events-none'
-                                }`}
-                              >
-                                 <Field>
-                                   <FieldLabel htmlFor={childField.field_key} className="text-xs font-semibold text-slate-600">
-                                     {childField.label}
-                                     {childField.is_required && <span className="text-red-500 ml-1">*</span>}
-                                   </FieldLabel>
-                                   {childOpts.attached_images?.length > 0 && (
-                                     <div className="grid grid-cols-2 gap-2 my-1.5">
-                                       {childOpts.attached_images.map((img: string, idx: number) => (
-                                         <div key={idx} className="relative aspect-video rounded-lg overflow-hidden border border-border shadow-sm">
-                                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                                           <img src={img} alt="Reference Attachment" className="w-full h-full object-cover" />
-                                         </div>
-                                       ))}
-                                     </div>
-                                   )}
-                                   {renderInputField(childField)}
-                                 </Field>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </React.Fragment>
-                    )
+                    sec.fields.push(field)
                   })
+
+                  // 2. Render grouped sections and fields
+                  return sections.map((sec, secIdx) => (
+                    <div key={`section-${secIdx}`} className="space-y-5">
+                      {sec.title && (
+                        <div className="pt-4 pb-2 border-b border-slate-200 mt-6 first:mt-0">
+                          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                            <span className="w-1.5 h-3.5 bg-primary rounded-full" />
+                            {sec.title}
+                          </h3>
+                        </div>
+                      )}
+                      
+                      {sec.fields.map((field) => {
+                        const children = currentFields.filter(
+                          (c) => parseOptions(c).parent_field_key === field.field_key
+                        )
+
+                        return (
+                          <div key={field.field_key} className="space-y-3">
+                            <Field>
+                              <FieldLabel htmlFor={field.field_key}>
+                                {field.label}
+                                {field.is_required && <span className="text-red-500 ml-1">*</span>}
+                              </FieldLabel>
+                              {parseOptions(field).attached_images?.length > 0 && (
+                                <div className="grid grid-cols-2 gap-2 my-1.5">
+                                  {parseOptions(field).attached_images.map((img: string, idx: number) => (
+                                    <div key={idx} className="relative aspect-video rounded-lg overflow-hidden border border-border shadow-sm">
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      <img src={img} alt="Reference Attachment" className="w-full h-full object-cover" />
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {renderInputField(field)}
+                            </Field>
+
+                            {/* Child fields accordion wrapper */}
+                            {children.map((childField) => {
+                              const childOpts = parseOptions(childField)
+                              let parentVal = (formValues[field.field_key] || '').toString().trim()
+                              if (parentVal === 'true') parentVal = '예'
+                              if (parentVal === 'false') parentVal = '아니오'
+                              const triggerVal = (childOpts.parent_trigger_option || '').toString().trim()
+                              const isTriggered = parentVal === triggerVal && parentVal !== ''
+
+                              return (
+                                <div
+                                  key={childField.field_key}
+                                  className={`transition-all duration-300 ease-in-out overflow-hidden border-l-2 border-primary/30 pl-4 ml-1 mt-1 ${
+                                    isTriggered 
+                                      ? 'max-h-[500px] opacity-100 py-2' 
+                                      : 'max-h-0 opacity-0 py-0 pointer-events-none'
+                                  }`}
+                                >
+                                   <Field>
+                                     <FieldLabel htmlFor={childField.field_key} className="text-xs font-semibold text-slate-600">
+                                       {childField.label}
+                                       {childField.is_required && <span className="text-red-500 ml-1">*</span>}
+                                     </FieldLabel>
+                                     {childOpts.attached_images?.length > 0 && (
+                                       <div className="grid grid-cols-2 gap-2 my-1.5">
+                                         {childOpts.attached_images.map((img: string, idx: number) => (
+                                           <div key={idx} className="relative aspect-video rounded-lg overflow-hidden border border-border shadow-sm">
+                                             {/* eslint-disable-next-line @next/next/no-img-element */}
+                                             <img src={img} alt="Reference Attachment" className="w-full h-full object-cover" />
+                                           </div>
+                                         ))}
+                                       </div>
+                                     )}
+                                     {renderInputField(childField)}
+                                   </Field>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ))
                 })()}
               </FieldGroup>
 

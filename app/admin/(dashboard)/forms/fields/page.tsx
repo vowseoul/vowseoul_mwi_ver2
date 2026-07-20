@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/select'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
-import { useFieldsQuery, useCreateFieldMutation, useUpdateFieldMutation } from '@/hooks/queries/useForms'
+import { useFieldsQuery, useCreateFieldMutation, useUpdateFieldMutation, useDeleteFieldMutation } from '@/hooks/queries/useForms'
 import { Plus, Search, ArrowLeft, Shield, FileCode2, Loader2, Save, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Settings, Sparkles, Link2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog'
@@ -77,6 +77,7 @@ export default function FieldLibraryPage() {
   const { data: fields, isLoading, error } = useFieldsQuery()
   const createMutation = useCreateFieldMutation()
   const updateMutation = useUpdateFieldMutation()
+  const deleteMutation = useDeleteFieldMutation()
 
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('all')
@@ -354,6 +355,34 @@ export default function FieldLibraryPage() {
       toast.error('블록 삭제에 실패했습니다.')
     }
   }
+  const handleDelete = async (fieldId: string) => {
+    if (!confirm('정말로 이 필드를 삭제하시겠습니까? 이 동작은 되돌릴 수 없습니다.')) {
+      return
+    }
+
+    try {
+      toast.loading('사용 여부 확인 중...', { id: 'field-delete' })
+      const { data: usage, error: usageError } = await supabase
+        .from('form_template_fields')
+        .select('id, form_templates(name)')
+        .eq('field_library_id', fieldId)
+
+      if (usageError) throw usageError
+
+      if (usage && usage.length > 0) {
+        const templates = Array.from(new Set(usage.map((u: any) => u.form_templates?.name).filter(Boolean)))
+        toast.error(`이 필드는 현재 다음 폼 템플릿에서 사용 중이므로 삭제할 수 없습니다:\n${templates.join(', ')}`, { id: 'field-delete' })
+        return
+      }
+
+      toast.loading('필드 라이브러리에서 삭제 중...', { id: 'field-delete' })
+      await deleteMutation.mutateAsync(fieldId)
+      toast.success('필드가 성공적으로 삭제되었습니다.', { id: 'field-delete' })
+    } catch (err: any) {
+      console.error(err)
+      toast.error(err.message || '필드 삭제에 실패했습니다.', { id: 'field-delete' })
+    }
+  }
 
   const handleUpdateField = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -364,7 +393,7 @@ export default function FieldLibraryPage() {
 
     setIsUpdating(true)
     try {
-      const choices = (editingField.field_type === 'select' || editingField.field_type === 'rselect')
+      const choices = (editingField.field_type === 'select' || editingField.field_type === 'rselect' || editingField.field_type === 'select_text' || editingField.field_type === 'mselect')
         ? editChoices.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean)
         : []
 
@@ -405,7 +434,7 @@ export default function FieldLibraryPage() {
 
     setIsSubmitting(true)
     try {
-      const choices = (newType === 'select' || newType === 'rselect')
+      const choices = (newType === 'select' || newType === 'rselect' || newType === 'select_text' || newType === 'mselect')
         ? newChoices.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean)
         : []
 
@@ -897,6 +926,10 @@ export default function FieldLibraryPage() {
                           <SelectItem value="rselect">라디오 선택 (rselect)</SelectItem>
                           <SelectItem value="toggle">토글 스위치 (toggle)</SelectItem>
                           <SelectItem value="images">다중 이미지 업로드 (images)</SelectItem>
+                          <SelectItem value="music">음원 선택 (music)</SelectItem>
+                          <SelectItem value="select_text">선택지 또는 직접입력 (select_text)</SelectItem>
+                          <SelectItem value="imageselect">이미지 선택형 (imageselect)</SelectItem>
+                          <SelectItem value="mselect">다중 선택형 (mselect)</SelectItem>
                         </SelectContent>
                       </Select>
                     </Field>
@@ -972,7 +1005,7 @@ export default function FieldLibraryPage() {
                       </Select>
                     </Field>
                   </div>
-                  {(newType === 'select' || newType === 'rselect') && (
+                  {(newType === 'select' || newType === 'rselect' || newType === 'select_text' || newType === 'mselect') && (
                     <Field className="mt-2">
                       <FieldLabel htmlFor="newChoices">선택지 목록 설정 *</FieldLabel>
                       <Textarea
@@ -1063,8 +1096,9 @@ export default function FieldLibraryPage() {
           {/* Fields Table */}
           <Card>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
+              <div className="max-h-[calc(100vh-280px)] overflow-y-auto relative">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-background z-10 shadow-xs">
                   <TableRow>
                     <TableHead 
                       className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
@@ -1188,7 +1222,8 @@ export default function FieldLibraryPage() {
                   )}
                 </TableBody>
               </Table>
-            </CardContent>
+            </div>
+          </CardContent>
           </Card>
 
           {/* Edit Dialog */}
@@ -1298,7 +1333,7 @@ export default function FieldLibraryPage() {
                         </Select>
                       </Field>
                     </div>
-                    {editingField && (editingField.field_type === 'select' || editingField.field_type === 'rselect') && (
+                    {editingField && (editingField.field_type === 'select' || editingField.field_type === 'rselect' || editingField.field_type === 'select_text' || editingField.field_type === 'mselect') && (
                       <Field className="mt-2">
                         <FieldLabel htmlFor="editChoices">선택지 목록 설정 *</FieldLabel>
                         <Textarea
@@ -1333,14 +1368,15 @@ export default function FieldLibraryPage() {
           {/* Blocks Table */}
           <Card>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>블록 이름 / 설명</TableHead>
-                    <TableHead>포함된 필드 구성</TableHead>
-                    <TableHead className="w-24 text-right">관리</TableHead>
-                  </TableRow>
-                </TableHeader>
+              <div className="max-h-[calc(100vh-280px)] overflow-y-auto relative">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-background z-10 shadow-xs">
+                    <TableRow>
+                      <TableHead className="bg-background">블록 이름 / 설명</TableHead>
+                      <TableHead className="bg-background">포함된 필드 구성</TableHead>
+                      <TableHead className="w-24 text-right bg-background">관리</TableHead>
+                    </TableRow>
+                  </TableHeader>
                 <TableBody>
                   {isLoadingBlocks ? (
                     <TableRow>
@@ -1403,7 +1439,8 @@ export default function FieldLibraryPage() {
                   )}
                 </TableBody>
               </Table>
-            </CardContent>
+            </div>
+          </CardContent>
           </Card>
 
 
