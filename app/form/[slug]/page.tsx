@@ -309,8 +309,75 @@ function PublicFormContent({ slug }: { slug: string }) {
     setFormValues((prev) => ({ ...prev, [key]: val }))
   }
 
+  // 1. Load draft from Supabase & localStorage on init
+  useEffect(() => {
+    if (!instance?.id) return
+    const draftKey = `vowseoul_draft_${instance.slug || instance.id}`
+
+    let initialValues: Record<string, any> = {}
+
+    if (submission?.data) {
+      initialValues = { ...submission.data }
+    }
+
+    try {
+      const localData = localStorage.getItem(draftKey)
+      if (localData) {
+        const parsed = JSON.parse(localData)
+        if (parsed.values && typeof parsed.values === 'object') {
+          initialValues = { ...initialValues, ...parsed.values }
+          if (typeof parsed.currentStep === 'number') {
+            setCurrentStep(parsed.currentStep)
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error reading localStorage draft:', e)
+    }
+
+    if (Object.keys(initialValues).length > 0) {
+      setFormValues(initialValues)
+    }
+  }, [instance, submission])
+
+  // 2. Auto-save to localStorage as user types
+  useEffect(() => {
+    if (!instance?.id || Object.keys(formValues).length === 0) return
+    const draftKey = `vowseoul_draft_${instance.slug || instance.id}`
+    try {
+      localStorage.setItem(
+        draftKey,
+        JSON.stringify({
+          values: formValues,
+          currentStep,
+          updatedAt: new Date().toISOString(),
+        })
+      )
+    } catch (e) {
+      // Ignore quota errors
+    }
+  }, [formValues, instance, currentStep])
+
+  // 3. Manual Draft Save Handler
   const handleSaveDraft = async () => {
     setSavingDraft(true)
+    const draftKey = `vowseoul_draft_${instance.slug || instance.id}`
+
+    // Immediate Local Storage write
+    try {
+      localStorage.setItem(
+        draftKey,
+        JSON.stringify({
+          values: formValues,
+          currentStep,
+          updatedAt: new Date().toISOString(),
+        })
+      )
+    } catch (e) {
+      console.error('Failed to write to localStorage:', e)
+    }
+
+    // Server DB save
     try {
       await submitMutation.mutateAsync({
         instanceId: instance.id,
@@ -318,10 +385,10 @@ function PublicFormContent({ slug }: { slug: string }) {
         data: formValues,
         isComplete: false,
       })
-      toast.success('입력하신 내용이 임시 저장되었습니다! 나중에 이어서 입력할 수 있습니다.')
+      toast.success('입력하신 내용이 임시 저장되었습니다! (이 기기 및 서버에 안전하게 보관됨)')
     } catch (err: any) {
-      console.error(err)
-      toast.error('임시 저장 중 문제가 발생했습니다.')
+      console.warn('Server draft save failed, saved locally:', err)
+      toast.success('이 기기에 입력 내용이 임시 저장되었습니다!')
     } finally {
       setSavingDraft(false)
     }

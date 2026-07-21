@@ -18,7 +18,7 @@ import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { useFormSubmissionQuery, useUpdateSubmissionMutation } from '@/hooks/queries/useForms'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
-import { Calendar as CalendarIcon, Clock, ArrowLeft, Save, Loader2, FileCheck } from 'lucide-react'
+import { Calendar as CalendarIcon, Clock, ArrowLeft, Save, Loader2, FileCheck, Edit2, Download, X } from 'lucide-react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
@@ -40,6 +40,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
 
   // Local state to manage editable form data
   const [formData, setFormData] = useState<Record<string, any>>({})
+  const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [customSelectTexts, setCustomSelectTexts] = useState<Record<string, boolean>>({})
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null)
@@ -116,6 +117,74 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
 
   const customer = submission.form_instance?.customer
   const fields = submission.form_instance?.fields_snapshot || []
+
+  const downloadOriginalImage = async (imgUrl: string, fileName: string) => {
+    try {
+      const response = await fetch(imgUrl)
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = fileName || `vowseoul_attached_image_${Date.now()}.png`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+      toast.success('원본 화질 이미지를 다운로드하였습니다.')
+    } catch (err) {
+      console.error(err)
+      window.open(imgUrl, '_blank')
+    }
+  }
+
+  const renderResponseView = (field: any) => {
+    const rawVal = formData[field.field_key]
+    let displayVal = rawVal !== undefined && rawVal !== null ? rawVal.toString() : ''
+    if (displayVal === 'true') displayVal = '예'
+    if (displayVal === 'false') displayVal = '아니오'
+
+    if (field.field_type === 'image' || field.field_type === 'images' || Array.isArray(rawVal)) {
+      const imageList: string[] = Array.isArray(rawVal) ? rawVal : (typeof rawVal === 'string' && rawVal.startsWith('http') ? [rawVal] : (rawVal ? [rawVal] : []))
+      
+      if (imageList.length === 0) {
+        return <div className="text-xs text-muted-foreground italic bg-slate-50 p-2.5 rounded-lg border border-slate-200/60">(첨부된 이미지 없음)</div>
+      }
+
+      return (
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+            {imageList.map((imgUrl, idx) => (
+              <div key={idx} className="relative group rounded-xl overflow-hidden border border-slate-200 bg-slate-50 shadow-2xs">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={imgUrl} alt={`첨부 이미지 ${idx + 1}`} className="w-full h-32 object-cover" />
+                <button
+                  type="button"
+                  onClick={() => downloadOriginalImage(imgUrl, `${field.label}_${idx + 1}.png`)}
+                  className="absolute bottom-1.5 right-1.5 bg-slate-900/85 hover:bg-slate-950 text-white text-[10px] font-medium px-2 py-1 rounded-md flex items-center gap-1 shadow-sm transition-opacity"
+                >
+                  <Download className="w-3 h-3 text-primary-foreground" /> 원본 다운로드
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )
+    }
+
+    if (!displayVal) {
+      return (
+        <div className="text-xs text-slate-400 italic bg-slate-50/60 p-2.5 rounded-lg border border-slate-200/50">
+          (미입력 항목)
+        </div>
+      )
+    }
+
+    return (
+      <div className="text-xs font-semibold text-slate-800 leading-relaxed bg-slate-50 p-2.5 rounded-lg border border-slate-200/80 whitespace-pre-wrap select-text cursor-text">
+        {displayVal}
+      </div>
+    )
+  }
 
   const renderInputField = (field: any) => {
     const value = formData[field.field_key] || ''
@@ -471,24 +540,47 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
           </Button>
           <div>
             <h1 className="text-2xl font-semibold text-foreground">
-              폼 응답 확인 및 수정 ({customer?.groom_name} & {customer?.bride_name})
+              고객 제출 응답 상세 ({customer?.groom_name || '신랑'} & {customer?.bride_name || '신부'})
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              고객이 직접 제출한 설문 원본 정보를 확인하고, 필요 시 관리자가 강제 수정/정규화합니다
+              드래그하여 텍스트를 자유롭게 복사할 수 있으며, 필요 시 [수정하기] 버튼을 눌러 수정합니다.
             </p>
           </div>
+        </div>
+
+        <div>
+          {!isEditing ? (
+            <Button
+              type="button"
+              onClick={() => setIsEditing(true)}
+              className="gap-2 bg-primary hover:bg-primary/90 text-white text-xs px-4 h-9 shadow-sm"
+            >
+              <Edit2 className="w-3.5 h-3.5" /> 수정하기
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsEditing(false)}
+              className="gap-1.5 text-xs h-9 px-3.5"
+            >
+              <X className="w-3.5 h-3.5" /> 수정 취소
+            </Button>
+          )}
         </div>
       </div>
 
       <form onSubmit={handleSave}>
         <Card>
-          <CardHeader className="bg-muted/10 border-b border-border pb-4">
-            <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <FileCheck className="w-4 h-4 text-green-600" /> 제출 응답 상세 데이터
-            </CardTitle>
-            <CardDescription className="text-xs">
-              예식 및 지류 연동에 누락된 필드가 없는지 확인 후 변경 사항을 저장하세요.
-            </CardDescription>
+          <CardHeader className="bg-muted/10 border-b border-border pb-4 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <FileCheck className="w-4 h-4 text-green-600" /> 제출 응답 상세 데이터 {isEditing ? '(수정 모드)' : '(조회 및 복사 모드)'}
+              </CardTitle>
+              <CardDescription className="text-xs">
+                {isEditing ? '필요한 정보를 수정 후 하단의 저장하기 버튼을 누르세요.' : '텍스트 드래그 및 원본 이미지 다운로드가 가능합니다.'}
+              </CardDescription>
+            </div>
           </CardHeader>
           <CardContent className="p-6">
             <FieldGroup className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -534,7 +626,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
                             {field.field_key}
                           </span>
                         </div>
-                        {renderInputField(field)}
+                        {isEditing ? renderInputField(field) : renderResponseView(field)}
                       </div>
                     </React.Fragment>
                   )
@@ -542,15 +634,17 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
               })()}
             </FieldGroup>
 
-            <div className="flex justify-end gap-3 mt-6 pt-6 border-t border-border">
-              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSaving}>
-                취소
-              </Button>
-              <Button type="submit" className="gap-2" disabled={isSaving}>
-                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                저장 후 업데이트
-              </Button>
-            </div>
+            {isEditing && (
+              <div className="flex justify-end gap-3 mt-6 pt-6 border-t border-border animate-in fade-in-0 duration-200">
+                <Button type="button" variant="outline" onClick={() => setIsEditing(false)} disabled={isSaving}>
+                  수정 취소
+                </Button>
+                <Button type="submit" className="gap-2 bg-primary hover:bg-primary/90" disabled={isSaving}>
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  수정 내용 저장하기
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </form>
