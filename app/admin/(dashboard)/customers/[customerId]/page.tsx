@@ -137,6 +137,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
   const [selectedThemeId, setSelectedThemeId] = useState('')
   const [publicSlug, setPublicSlug] = useState('')
   const [isCreatingInvite, setIsCreatingInvite] = useState(false)
+  const [isSyncingInvite, setIsSyncingInvite] = useState(false)
 
   // Populate publicSlug and selectedThemeId when modal opens
   useEffect(() => {
@@ -203,6 +204,82 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
       toast.error(err.message || '정보 수정 중 오류가 발생했습니다.')
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const handleSyncFormToInvitation = async () => {
+    if (!invitation?.id) return
+    setIsSyncingInvite(true)
+
+    try {
+      // Fetch latest form submission for this customer
+      const { data: subData, error: subErr } = await supabase
+        .from('form_submissions')
+        .select('*')
+        .eq('customer_id', customerId)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+
+      if (subErr || !subData || subData.length === 0) {
+        toast.error('업데이트할 고객의 폼 제출 내역을 찾을 수 없습니다.')
+        setIsSyncingInvite(false)
+        return
+      }
+
+      const rawData = subData[0].data || {}
+      const existingContent = invitation.content_data || {}
+
+      const getVal = (...keys: string[]) => {
+        for (const k of keys) {
+          if (rawData[k] !== undefined && rawData[k] !== null && rawData[k] !== '') {
+            return rawData[k]
+          }
+        }
+        return null
+      }
+
+      const updatedContentData = {
+        ...existingContent,
+        groomName: getVal('groom_name', 'groomName', 'groom_name_kr') || customer?.groom_name || existingContent.groomName || '',
+        brideName: getVal('bride_name', 'brideName', 'bride_name_kr') || customer?.bride_name || existingContent.brideName || '',
+        weddingDate: getVal('wedding_date', 'weddingDate', 'date') || customer?.wedding_date || existingContent.weddingDate || '',
+        weddingTime: getVal('wedding_time', 'weddingTime', 'time') || existingContent.weddingTime || '',
+        venueName: getVal('venue_name', 'venueName', 'hall_name') || customer?.venue_name || existingContent.venueName || '',
+        venueAddress: getVal('venue_address', 'venueAddress', 'address') || customer?.venue_address || existingContent.venueAddress || '',
+        venueHall: getVal('venue_hall', 'venueHall', 'hall') || existingContent.venueHall || '',
+        invitationMessage: getVal('invitation_message', 'greeting_message', 'greeting', 'invitationMessage', 'select_text') || existingContent.invitationMessage || '',
+        galleryImages: getVal('gallery_images', 'galleryImages', 'photos', 'images') || existingContent.galleryImages || [],
+        galleryViewType: getVal('gallery_view_type', 'galleryViewType', 'gallery_type') || existingContent.galleryViewType || 'slide',
+        trafficInfo: getVal('traffic_info', 'trafficInfo') || existingContent.trafficInfo || '',
+        parkingInfo: getVal('parking_info', 'parkingInfo') || existingContent.parkingInfo || '',
+        bgmId: getVal('bgm', 'music', 'bgmId') || existingContent.bgmId || null,
+        kakaoTitle: getVal('kakao_title', 'kakaoTitle') || existingContent.kakaoTitle || '',
+        kakaoDescription: getVal('kakao_description', 'kakaoDescription') || existingContent.kakaoDescription || '',
+        kakaoThumbnail: getVal('kakao_thumbnail', 'kakaoThumbnail') || existingContent.kakaoThumbnail || null,
+      }
+
+      const bgmUrl = getVal('bgm_url', 'music_url', 'bgm') || invitation.bgm_url
+
+      const { error: updateErr } = await supabase
+        .from('invitations')
+        .update({
+          content_data: updatedContentData,
+          bgm_url: bgmUrl,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', invitation.id)
+
+      if (updateErr) throw updateErr
+
+      queryClient.invalidateQueries({ queryKey: ['customer-invitation', customerId] })
+      queryClient.invalidateQueries({ queryKey: ['invitation', invitation.id] })
+
+      toast.success('모바일 청첩장의 내용이 최신 폼 제출 데이터로 성공적으로 업데이트되었습니다!')
+    } catch (err: any) {
+      console.error('Error syncing form to invitation:', err)
+      toast.error(err.message || '청첩장 내용 업데이트 중 오류가 발생했습니다.')
+    } finally {
+      setIsSyncingInvite(false)
     }
   }
 
@@ -642,6 +719,17 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                     <span className="text-muted-foreground">대시보드 패스워드:</span>
                     <span className="font-mono font-bold tracking-wider">{invitation.dashboard_password}</span>
                   </div>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleSyncFormToInvitation}
+                    disabled={isSyncingInvite}
+                    className="w-full text-xs h-9 gap-1.5 border-primary/40 text-primary hover:bg-primary/5 font-semibold"
+                  >
+                    {isSyncingInvite ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                    최신 폼 제출 내용으로 청첩장 업데이트하기
+                  </Button>
 
                   <Button className="w-full text-xs h-9 gap-1.5" asChild>
                     <Link href={`/admin/invitations/editor/${invitation.id}`}>

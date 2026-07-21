@@ -117,11 +117,21 @@ export default function EditorLayout({
       <header className="sticky top-0 z-50 border-b border-border bg-background">
         <div className="flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" asChild>
-              <Link href={invitationId === 'new' ? '/' : `/invitation/${invitationId}/dashboard`}>
-                <ArrowLeft className="h-5 w-5" />
-                <span className="sr-only">뒤로가기</span>
-              </Link>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.history.length > 1) {
+                  router.back()
+                } else {
+                  router.push('/admin/invitations')
+                }
+              }}
+              title="이전 화면으로 돌아가기"
+            >
+              <ArrowLeft className="h-5 w-5" />
+              <span className="sr-only">뒤로가기</span>
             </Button>
             <Logo className="h-4.5 w-auto text-foreground" />
           </div>
