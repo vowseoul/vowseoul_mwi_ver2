@@ -130,12 +130,62 @@ function PublicFormContent({ slug }: { slug: string }) {
       
       // Initialize default empty values for each field
       const defaults: Record<string, any> = {}
-      instance.fields_snapshot.forEach((f: any) => {
+      instance.fields_snapshot?.forEach((f: any) => {
         defaults[f.field_key] = ''
       })
-      setFormValues(defaults)
+      setFormValues((prev) => Object.keys(prev).length === 0 ? defaults : prev)
     }
   }, [instance])
+
+  // 1. Load draft from Supabase & localStorage on init
+  useEffect(() => {
+    if (!instance?.id) return
+    const draftKey = `vowseoul_draft_${instance.slug || instance.id}`
+
+    let initialValues: Record<string, any> = {}
+
+    const serverSubmission = instance.form_submissions?.[0]
+    if (serverSubmission?.data) {
+      initialValues = { ...serverSubmission.data }
+    }
+
+    try {
+      const localData = localStorage.getItem(draftKey)
+      if (localData) {
+        const parsed = JSON.parse(localData)
+        if (parsed.values && typeof parsed.values === 'object') {
+          initialValues = { ...initialValues, ...parsed.values }
+          if (typeof parsed.currentStep === 'number') {
+            setCurrentStep(parsed.currentStep)
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error reading localStorage draft:', e)
+    }
+
+    if (Object.keys(initialValues).length > 0) {
+      setFormValues((prev) => ({ ...prev, ...initialValues }))
+    }
+  }, [instance])
+
+  // 2. Auto-save to localStorage as user types
+  useEffect(() => {
+    if (!instance?.id || Object.keys(formValues).length === 0) return
+    const draftKey = `vowseoul_draft_${instance.slug || instance.id}`
+    try {
+      localStorage.setItem(
+        draftKey,
+        JSON.stringify({
+          values: formValues,
+          currentStep,
+          updatedAt: new Date().toISOString(),
+        })
+      )
+    } catch (e) {
+      // Ignore quota errors
+    }
+  }, [formValues, instance, currentStep])
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -308,56 +358,6 @@ function PublicFormContent({ slug }: { slug: string }) {
   const handleInputChange = (key: string, val: any) => {
     setFormValues((prev) => ({ ...prev, [key]: val }))
   }
-
-  // 1. Load draft from Supabase & localStorage on init
-  useEffect(() => {
-    if (!instance?.id) return
-    const draftKey = `vowseoul_draft_${instance.slug || instance.id}`
-
-    let initialValues: Record<string, any> = {}
-
-    const serverSubmission = instance.form_submissions?.[0]
-    if (serverSubmission?.data) {
-      initialValues = { ...serverSubmission.data }
-    }
-
-    try {
-      const localData = localStorage.getItem(draftKey)
-      if (localData) {
-        const parsed = JSON.parse(localData)
-        if (parsed.values && typeof parsed.values === 'object') {
-          initialValues = { ...initialValues, ...parsed.values }
-          if (typeof parsed.currentStep === 'number') {
-            setCurrentStep(parsed.currentStep)
-          }
-        }
-      }
-    } catch (e) {
-      console.error('Error reading localStorage draft:', e)
-    }
-
-    if (Object.keys(initialValues).length > 0) {
-      setFormValues(initialValues)
-    }
-  }, [instance])
-
-  // 2. Auto-save to localStorage as user types
-  useEffect(() => {
-    if (!instance?.id || Object.keys(formValues).length === 0) return
-    const draftKey = `vowseoul_draft_${instance.slug || instance.id}`
-    try {
-      localStorage.setItem(
-        draftKey,
-        JSON.stringify({
-          values: formValues,
-          currentStep,
-          updatedAt: new Date().toISOString(),
-        })
-      )
-    } catch (e) {
-      // Ignore quota errors
-    }
-  }, [formValues, instance, currentStep])
 
   // 3. Manual Draft Save Handler
   const handleSaveDraft = async () => {
