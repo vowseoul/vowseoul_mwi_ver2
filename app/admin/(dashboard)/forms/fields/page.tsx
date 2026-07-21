@@ -187,6 +187,7 @@ export default function FieldLibraryPage() {
   const [newType, setNewType] = useState<any>('text')
   const [newCategory, setNewCategory] = useState<string>('신랑 정보')
   const [newChoices, setNewChoices] = useState('')
+  const [newSelectTextChoices, setNewSelectTextChoices] = useState<string[]>([''])
   const [isCustomCategory, setIsCustomCategory] = useState(false)
   const [newIsSystem, setNewIsSystem] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
@@ -198,6 +199,7 @@ export default function FieldLibraryPage() {
   const [editHelpText, setEditHelpText] = useState('')
   const [editCategory, setEditCategory] = useState('')
   const [editChoices, setEditChoices] = useState('')
+  const [editSelectTextChoices, setEditSelectTextChoices] = useState<string[]>([''])
   const [isEditCustomCategory, setIsEditCustomCategory] = useState(false)
   const [editIsSystem, setEditIsSystem] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
@@ -393,9 +395,11 @@ export default function FieldLibraryPage() {
 
     setIsUpdating(true)
     try {
-      const choices = (editingField.field_type === 'select' || editingField.field_type === 'rselect' || editingField.field_type === 'select_text' || editingField.field_type === 'mselect')
-        ? editChoices.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean)
-        : []
+      const choices = editingField.field_type === 'select_text'
+        ? editSelectTextChoices.map((s) => s.trim()).filter(Boolean)
+        : (editingField.field_type === 'select' || editingField.field_type === 'rselect' || editingField.field_type === 'mselect')
+          ? editChoices.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean)
+          : []
 
       await updateMutation.mutateAsync({
         fieldId: editingField.id,
@@ -434,9 +438,11 @@ export default function FieldLibraryPage() {
 
     setIsSubmitting(true)
     try {
-      const choices = (newType === 'select' || newType === 'rselect' || newType === 'select_text' || newType === 'mselect')
-        ? newChoices.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean)
-        : []
+      const choices = newType === 'select_text'
+        ? newSelectTextChoices.map((s) => s.trim()).filter(Boolean)
+        : (newType === 'select' || newType === 'rselect' || newType === 'mselect')
+          ? newChoices.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean)
+          : []
 
       await createMutation.mutateAsync({
         field_key: newKey,
@@ -1005,7 +1011,7 @@ export default function FieldLibraryPage() {
                       </Select>
                     </Field>
                   </div>
-                  {(newType === 'select' || newType === 'rselect' || newType === 'select_text' || newType === 'mselect') && (
+                  {(newType === 'select' || newType === 'rselect' || newType === 'mselect') && (
                     <Field className="mt-2">
                       <FieldLabel htmlFor="newChoices">선택지 목록 설정 *</FieldLabel>
                       <Textarea
@@ -1018,6 +1024,48 @@ export default function FieldLibraryPage() {
                         required
                         maxLength={1000}
                       />
+                    </Field>
+                  )}
+                  {newType === 'select_text' && (
+                    <Field className="mt-2 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <FieldLabel>추천 인사말 / 문구 선택지 설정 *</FieldLabel>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-6 text-[10px] px-2 gap-1"
+                          onClick={() => setNewSelectTextChoices(prev => [...prev, ''])}
+                        >
+                          <Plus className="w-3 h-3" /> 새 선택지 추가
+                        </Button>
+                      </div>
+                      <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                        {newSelectTextChoices.map((choice, idx) => (
+                          <div key={idx} className="flex items-start gap-2 bg-muted/20 p-2 rounded border border-border">
+                            <Textarea
+                              value={choice}
+                              placeholder={`추천 인사말 ${idx + 1} 내용 (줄바꿈 가능)`}
+                              rows={2}
+                              onChange={(e) => {
+                                const updated = [...newSelectTextChoices];
+                                updated[idx] = e.target.value;
+                                setNewSelectTextChoices(updated);
+                              }}
+                              className="text-xs flex-1 bg-background resize-y min-h-[50px]"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-destructive shrink-0 mt-1 hover:bg-destructive/10"
+                              onClick={() => setNewSelectTextChoices(prev => prev.filter((_, i) => i !== idx))}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
                     </Field>
                   )}
                 </FieldGroup>
@@ -1333,7 +1381,7 @@ export default function FieldLibraryPage() {
                         </Select>
                       </Field>
                     </div>
-                    {editingField && (editingField.field_type === 'select' || editingField.field_type === 'rselect' || editingField.field_type === 'select_text' || editingField.field_type === 'mselect') && (
+                    {editingField && (editingField.field_type === 'select' || editingField.field_type === 'rselect' || editingField.field_type === 'mselect') && (
                       <Field className="mt-2">
                         <FieldLabel htmlFor="editChoices">선택지 목록 설정 *</FieldLabel>
                         <Textarea
@@ -1346,6 +1394,48 @@ export default function FieldLibraryPage() {
                           required
                           maxLength={1000}
                         />
+                      </Field>
+                    )}
+                    {editingField && editingField.field_type === 'select_text' && (
+                      <Field className="mt-2 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <FieldLabel>추천 인사말 / 문구 선택지 설정 *</FieldLabel>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-6 text-[10px] px-2 gap-1"
+                            onClick={() => setEditSelectTextChoices(prev => [...prev, ''])}
+                          >
+                            <Plus className="w-3 h-3" /> 새 선택지 추가
+                          </Button>
+                        </div>
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                          {editSelectTextChoices.map((choice, idx) => (
+                            <div key={idx} className="flex items-start gap-2 bg-muted/20 p-2 rounded border border-border">
+                              <Textarea
+                                value={choice}
+                                placeholder={`추천 인사말 ${idx + 1} 내용 (줄바꿈 가능)`}
+                                rows={2}
+                                onChange={(e) => {
+                                  const updated = [...editSelectTextChoices];
+                                  updated[idx] = e.target.value;
+                                  setEditSelectTextChoices(updated);
+                                }}
+                                className="text-xs flex-1 bg-background resize-y min-h-[50px]"
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-destructive shrink-0 mt-1 hover:bg-destructive/10"
+                                onClick={() => setEditSelectTextChoices(prev => prev.filter((_, i) => i !== idx))}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
                       </Field>
                     )}
                   </FieldGroup>

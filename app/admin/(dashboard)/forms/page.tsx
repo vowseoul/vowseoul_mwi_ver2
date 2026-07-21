@@ -40,7 +40,7 @@ import {
   useDeleteFormTemplateMutation,
   useFormTemplateFieldsQuery
 } from '@/hooks/queries/useForms'
-import { FileText, Plus, Search, Edit2, Copy, Trash2, ArrowLeft, Settings, LayoutGrid, Eye, Edit, Loader2 } from 'lucide-react'
+import { FileText, Plus, Search, Edit2, Copy, Trash2, ArrowLeft, Settings, LayoutGrid, Eye, Edit, Loader2, ZoomIn } from 'lucide-react'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
@@ -154,6 +154,7 @@ export default function FormTemplatesPage() {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [previewStep, setPreviewStep] = useState(0)
   const [previewValues, setPreviewValues] = useState<Record<string, any>>({})
+  const [previewZoomImage, setPreviewZoomImage] = useState<string | null>(null)
 
   React.useEffect(() => {
     if (!isPreviewOpen && playingAudioId) {
@@ -361,47 +362,81 @@ export default function FormTemplatesPage() {
       }
       case 'select_text': {
         const opts = parseOptions(field)
-        const choices = opts.choices || []
+        const choices: string[] = opts.choices || []
         const isCustomActive = customSelectTexts[field.field_key] || (value && !choices.includes(value))
-        
+
         return (
-          <div className="space-y-2">
-            <Select 
-              value={isCustomActive ? '__direct_input__' : value} 
-              onValueChange={(selectedVal) => {
-                if (selectedVal === '__direct_input__') {
+          <div className="space-y-3">
+            {/* List of preset choice cards */}
+            {choices.map((choiceOpt: string, idx: number) => {
+              const isSelected = !isCustomActive && value === choiceOpt
+              return (
+                <div
+                  key={idx}
+                  onClick={() => {
+                    setCustomSelectTexts(prev => ({ ...prev, [field.field_key]: false }))
+                    handlePreviewInputChange(field.field_key, choiceOpt)
+                  }}
+                  className={cn(
+                    "relative p-3 rounded-xl border-2 cursor-pointer transition-all duration-200 select-none bg-background",
+                    isSelected
+                      ? "border-primary bg-primary/5 shadow-2xs"
+                      : "border-border/60 hover:border-border hover:bg-muted/30"
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap flex-1">
+                      {choiceOpt}
+                    </p>
+                    <div className={cn(
+                      "w-4 h-4 rounded-full border flex items-center justify-center shrink-0 mt-0.5 transition-colors",
+                      isSelected ? "border-primary bg-primary text-primary-foreground" : "border-slate-300"
+                    )}>
+                      {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+
+            {/* Direct Input Card */}
+            <div
+              onClick={() => {
+                if (!isCustomActive) {
                   setCustomSelectTexts(prev => ({ ...prev, [field.field_key]: true }))
                   handlePreviewInputChange(field.field_key, '')
-                } else {
-                  setCustomSelectTexts(prev => ({ ...prev, [field.field_key]: false }))
-                  handlePreviewInputChange(field.field_key, selectedVal)
                 }
               }}
+              className={cn(
+                "relative p-3 rounded-xl border-2 transition-all duration-200 bg-background",
+                isCustomActive
+                  ? "border-primary bg-primary/5 shadow-2xs"
+                  : "border-border/60 hover:border-border hover:bg-muted/30 cursor-pointer"
+              )}
             >
-              <SelectTrigger className="w-full text-xs">
-                <SelectValue placeholder="선택하거나 직접 입력 선택" />
-              </SelectTrigger>
-              <SelectContent>
-                {choices.map((opt: string) => (
-                  <SelectItem key={opt} value={opt} className="text-xs">
-                    {opt}
-                  </SelectItem>
-                ))}
-                <SelectItem value="__direct_input__" className="text-primary font-semibold text-xs">
-                  + 직접 입력
-                </SelectItem>
-              </SelectContent>
-            </Select>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <span>✏️</span> 직접 입력하기
+                </span>
+                <div className={cn(
+                  "w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors",
+                  isCustomActive ? "border-primary bg-primary text-primary-foreground" : "border-slate-300"
+                )}>
+                  {isCustomActive && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                </div>
+              </div>
 
-            {isCustomActive && (
-              <Input
-                value={value}
-                onChange={(e) => handlePreviewInputChange(field.field_key, e.target.value)}
-                placeholder="직접 내용을 입력하세요."
-                className="text-xs mt-1.5"
-                required={field.is_required}
-              />
-            )}
+              {isCustomActive && (
+                <Textarea
+                  value={value || ''}
+                  onChange={(e) => handlePreviewInputChange(field.field_key, e.target.value)}
+                  placeholder="원하시는 인사말이나 문구를 직접 작성해 주세요."
+                  rows={3}
+                  className="text-xs mt-3 bg-background resize-y"
+                  required={field.is_required}
+                />
+              )}
+            </div>
           </div>
         )
       }
@@ -1133,33 +1168,50 @@ export default function FormTemplatesPage() {
                       (c) => parseOptions(c).parent_field_key === field.field_key
                     )
 
+                    const renderPreviewAttachedImages = (images: string[]) => {
+                      if (!images || images.length === 0) return null
+                      return (
+                        <div className="space-y-2.5 my-2.5">
+                          {images.map((img: string, idx: number) => (
+                            <div
+                              key={idx}
+                              onClick={() => setPreviewZoomImage(img)}
+                              className="relative group cursor-pointer overflow-hidden rounded-xl border border-slate-200 shadow-2xs bg-slate-50 transition-all duration-200 hover:shadow-md hover:border-primary/50"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={img}
+                                alt="안내 가이드 이미지"
+                                className="w-full h-auto max-h-[400px] object-contain mx-auto transition-transform duration-300 group-hover:scale-[1.01]"
+                              />
+                              <div className="absolute bottom-2 right-2 bg-slate-900/80 backdrop-blur-xs text-white text-[10px] font-medium px-2 py-1 rounded-md flex items-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity">
+                                <ZoomIn className="w-3 h-3 text-primary-foreground" />
+                                <span>확대 보기</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    }
+
                     return (
                       <React.Fragment key={field.field_key}>
                         {showSectionHeader && (
-                          <div className="pt-4 pb-1 border-b border-slate-200 mt-6 first:mt-0">
-                            <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                              <span className="w-1.5 h-3.5 bg-primary rounded-full" />
+                          <div className="pt-5 pb-2 border-b-2 border-slate-800 mt-6 first:mt-0 mb-3 flex items-center gap-2">
+                            <div className="w-2 h-4.5 bg-slate-900 rounded-sm shrink-0" />
+                            <h4 className="text-sm font-extrabold text-slate-900 tracking-tight">
                               {currentSection}
                             </h4>
                           </div>
                         )}
 
-                        <div className="space-y-2">
+                        <div className="p-4 rounded-xl border border-slate-200/80 bg-white shadow-2xs space-y-2.5 my-2">
                           <Field>
-                            <FieldLabel htmlFor={`preview-${field.field_key}`} className="text-xs font-semibold">
-                              {field.label}
-                              {field.is_required && <span className="text-red-500 ml-1">*</span>}
+                            <FieldLabel htmlFor={`preview-${field.field_key}`} className="text-xs font-bold text-slate-800 tracking-tight flex items-center gap-1">
+                              <span>{field.label}</span>
+                              {field.is_required && <span className="text-rose-500 font-bold ml-0.5">*</span>}
                             </FieldLabel>
-                            {opts.attached_images?.length > 0 && (
-                              <div className="grid grid-cols-2 gap-2 my-1.5">
-                                {opts.attached_images.map((img: string, idx: number) => (
-                                  <div key={idx} className="relative aspect-video rounded-lg overflow-hidden border border-border shadow-sm">
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img src={img} alt="Reference Attachment" className="w-full h-full object-cover" />
-                                  </div>
-                                ))}
-                              </div>
-                            )}
+                            {renderPreviewAttachedImages(opts.attached_images)}
                             {renderPreviewInputField(field)}
                           </Field>
 
@@ -1175,27 +1227,21 @@ export default function FormTemplatesPage() {
                             return (
                               <div
                                 key={childField.field_key}
-                                className={`transition-all duration-300 ease-in-out overflow-hidden border-l-2 border-primary/30 pl-4 ml-1 mt-1 ${
+                                className={`transition-all duration-300 ease-in-out overflow-hidden border-l-2 border-primary pl-3.5 ml-1 mt-2 bg-slate-50 p-3 rounded-r-lg border-y border-r border-slate-200/60 ${
                                   isTriggered 
-                                    ? 'max-h-[500px] opacity-100 py-2' 
+                                    ? 'max-h-[500px] opacity-100 py-2.5' 
                                     : 'max-h-0 opacity-0 py-0 pointer-events-none'
                                 }`}
                               >
+                                <div className="text-[10px] font-bold text-primary flex items-center gap-1 mb-1.5">
+                                  <span>↳</span> 하위 세부 항목
+                                </div>
                                 <Field>
-                                  <FieldLabel htmlFor={`preview-${childField.field_key}`} className="text-xs font-semibold text-slate-600">
+                                  <FieldLabel htmlFor={`preview-${childField.field_key}`} className="text-xs font-bold text-slate-700">
                                     {childField.label}
-                                    {childField.is_required && <span className="text-red-500 ml-1">*</span>}
+                                    {childField.is_required && <span className="text-rose-500 font-bold ml-0.5">*</span>}
                                   </FieldLabel>
-                                  {childOpts.attached_images?.length > 0 && (
-                                    <div className="grid grid-cols-2 gap-2 my-1.5">
-                                      {childOpts.attached_images.map((img: string, idx: number) => (
-                                        <div key={idx} className="relative aspect-video rounded-lg overflow-hidden border border-border shadow-sm">
-                                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                                          <img src={img} alt="Reference Attachment" className="w-full h-full object-cover" />
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
+                                  {renderPreviewAttachedImages(childOpts.attached_images)}
                                   {renderPreviewInputField(childField)}
                                 </Field>
                               </div>
@@ -1232,6 +1278,23 @@ export default function FormTemplatesPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Admin Preview Image Lightbox Zoom Modal */}
+      {previewZoomImage && (
+        <Dialog open={!!previewZoomImage} onOpenChange={() => setPreviewZoomImage(null)}>
+          <DialogContent className="max-w-4xl p-3 bg-slate-950/95 border-slate-800 text-white flex flex-col items-center">
+            <DialogHeader className="w-full flex flex-row items-center justify-between px-2 py-1.5 border-b border-slate-800">
+              <DialogTitle className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                <ZoomIn className="w-4 h-4 text-primary" /> 미리보기 안내 이미지 원본 확대
+              </DialogTitle>
+            </DialogHeader>
+            <div className="relative w-full max-h-[82vh] overflow-auto flex items-center justify-center p-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={previewZoomImage} alt="원본 확대 이미지" className="max-w-full max-h-[78vh] object-contain rounded-lg shadow-2xl" />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   )
 }

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
@@ -1041,8 +1042,8 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                           </Label>
                                         </div>
 
-                                        {/* Options config for Select/Rselect/SelectText fields */}
-                                        {(field.field_type === 'select' || field.field_type === 'rselect' || field.field_type === 'select_text' || field.field_type === 'mselect') && (
+                                        {/* Options config for Select/Rselect/Mselect fields */}
+                                        {(field.field_type === 'select' || field.field_type === 'rselect' || field.field_type === 'mselect') && (
                                           <div className="flex items-center gap-1.5 min-w-[200px] flex-1">
                                             <span className="text-[10px] font-medium text-primary shrink-0 font-semibold">선택지 설정:</span>
                                             <Input
@@ -1064,6 +1065,64 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                               className="h-7 text-xs bg-background px-2 border border-border flex-1"
                                               maxLength={1000}
                                             />
+                                          </div>
+                                        )}
+
+                                        {/* Dedicated Multi-line Choice Cards Editor for SelectText fields */}
+                                        {field.field_type === 'select_text' && (
+                                          <div className="flex flex-col gap-2.5 min-w-[200px] flex-1 bg-muted/20 p-2.5 rounded-lg border border-border/80">
+                                            <div className="flex items-center justify-between">
+                                              <span className="text-[11px] font-bold text-primary flex items-center gap-1">
+                                                <span>📝</span> 추천 인사말 / 문구 선택지 설정
+                                              </span>
+                                              <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-6 text-[10px] px-2 gap-1 bg-background shadow-2xs hover:bg-muted"
+                                                onClick={() => {
+                                                  const currentOpts = typeof field.options === 'string' ? JSON.parse(field.options || '{}') : (field.options || {});
+                                                  const choices = Array.isArray(currentOpts.choices) ? [...currentOpts.choices, ''] : [''];
+                                                  handleUpdateFieldProperty(field.field_library_id, 'options', { ...currentOpts, choices });
+                                                }}
+                                              >
+                                                <Plus className="w-3 h-3" /> 새 선택지 추가
+                                              </Button>
+                                            </div>
+                                            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                                              {(Array.isArray(field.options?.choices) && field.options.choices.length > 0 ? field.options.choices : ['']).map((choice: string, idx: number) => (
+                                                <div key={idx} className="relative flex items-start gap-2 bg-background p-2 rounded-md border border-border shadow-2xs">
+                                                  <span className="text-[10px] font-semibold text-muted-foreground shrink-0 mt-1.5 w-4 text-center">
+                                                    {idx + 1}
+                                                  </span>
+                                                  <Textarea
+                                                    value={choice}
+                                                    placeholder={`추천 인사말 ${idx + 1} 내용 (줄바꿈 가능)`}
+                                                    rows={2}
+                                                    onChange={(e) => {
+                                                      const currentOpts = typeof field.options === 'string' ? JSON.parse(field.options || '{}') : (field.options || {});
+                                                      const choices = Array.isArray(currentOpts.choices) ? [...currentOpts.choices] : [''];
+                                                      choices[idx] = e.target.value;
+                                                      handleUpdateFieldProperty(field.field_library_id, 'options', { ...currentOpts, choices });
+                                                    }}
+                                                    className="text-xs flex-1 resize-y min-h-[54px] bg-background leading-relaxed"
+                                                  />
+                                                  <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6 text-destructive shrink-0 mt-1 hover:bg-destructive/10"
+                                                    onClick={() => {
+                                                      const currentOpts = typeof field.options === 'string' ? JSON.parse(field.options || '{}') : (field.options || {});
+                                                      const choices = Array.isArray(currentOpts.choices) ? currentOpts.choices.filter((_: any, i: number) => i !== idx) : [];
+                                                      handleUpdateFieldProperty(field.field_library_id, 'options', { ...currentOpts, choices });
+                                                    }}
+                                                  >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                  </Button>
+                                                </div>
+                                              ))}
+                                            </div>
                                           </div>
                                         )}
 
