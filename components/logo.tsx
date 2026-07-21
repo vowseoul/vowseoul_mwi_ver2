@@ -19,7 +19,7 @@ export function Logo({ className = "h-6 w-auto", ...props }: React.ImgHTMLAttrib
           .from('settings')
           .select('value')
           .eq('key', 'logo_image')
-          .single()
+          .maybeSingle()
 
         if (data?.value?.path) {
           const publicUrl = supabase.storage.from('vow-seoul-storage').getPublicUrl(data.value.path).data.publicUrl

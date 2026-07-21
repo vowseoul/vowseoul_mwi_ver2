@@ -395,6 +395,12 @@ export function useFormInstanceBySlugQuery(slug: string) {
             groom_name,
             bride_name,
             wedding_date
+          ),
+          form_submissions (
+            id,
+            data,
+            is_complete,
+            updated_at
           )
         `)
         .eq('unique_url_slug', slug)

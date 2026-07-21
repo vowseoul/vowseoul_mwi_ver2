@@ -45,7 +45,7 @@ export function HeroSection() {
           .from('settings')
           .select('value')
           .eq('key', 'main_image')
-          .single()
+          .maybeSingle()
 
         const imagePath = settingData?.value?.path || 'main-images/main1.png'
         
@@ -64,7 +64,7 @@ export function HeroSection() {
           .from('settings')
           .select('value')
           .eq('key', 'hero_content')
-          .single()
+          .maybeSingle()
           
         if (textData?.value) {
           setHeroContent(textData.value)

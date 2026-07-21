@@ -316,8 +316,9 @@ function PublicFormContent({ slug }: { slug: string }) {
 
     let initialValues: Record<string, any> = {}
 
-    if (submission?.data) {
-      initialValues = { ...submission.data }
+    const serverSubmission = instance.form_submissions?.[0]
+    if (serverSubmission?.data) {
+      initialValues = { ...serverSubmission.data }
     }
 
     try {
@@ -338,7 +339,7 @@ function PublicFormContent({ slug }: { slug: string }) {
     if (Object.keys(initialValues).length > 0) {
       setFormValues(initialValues)
     }
-  }, [instance, submission])
+  }, [instance])
 
   // 2. Auto-save to localStorage as user types
   useEffect(() => {

@@ -16,7 +16,7 @@ export function FeatureToggleProvider({ children }: { children: React.ReactNode 
           .from('settings')
           .select('value')
           .eq('key', 'is_feature_open')
-          .single()
+          .maybeSingle()
 
         if (error) {
           // 설정 레코드가 없거나 에러 시 기본적으로 기능은 오픈된 것으로 간주
