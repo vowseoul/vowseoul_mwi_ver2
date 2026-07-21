@@ -66,9 +66,16 @@ function PublicFormContent({ slug }: { slug: string }) {
   const [customSelectTexts, setCustomSelectTexts] = useState<Record<string, boolean>>({})
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null)
 
-  const handlePlayPause = (audioId: string) => {
-    const aud = document.getElementById(audioId) as HTMLAudioElement
-    if (!aud) return
+  const handlePlayPause = (audioId: string, fileUrl: string) => {
+    let aud = document.getElementById(audioId) as HTMLAudioElement
+    if (!aud) {
+      aud = document.createElement('audio')
+      aud.id = audioId
+      aud.src = fileUrl
+      aud.preload = 'auto'
+      aud.setAttribute('playsinline', 'true')
+      document.body.appendChild(aud)
+    }
 
     if (playingAudioId === audioId) {
       aud.pause()
@@ -76,12 +83,32 @@ function PublicFormContent({ slug }: { slug: string }) {
     } else {
       if (playingAudioId) {
         const prevAud = document.getElementById(playingAudioId) as HTMLAudioElement
-        if (prevAud) prevAud.pause()
+        if (prevAud) {
+          prevAud.pause()
+          prevAud.currentTime = 0
+        }
       }
-      aud.play()
-      setPlayingAudioId(audioId)
-      aud.onended = () => {
+
+      aud.currentTime = 0
+      aud.onended = () => setPlayingAudioId(null)
+      aud.onerror = () => {
         setPlayingAudioId(null)
+        toast.error('음원을 재생할 수 없습니다. 파일 링크를 확인해 주세요.')
+      }
+
+      const playPromise = aud.play()
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            setPlayingAudioId(audioId)
+          })
+          .catch((err) => {
+            console.error('Audio play error:', err)
+            setPlayingAudioId(null)
+            toast.error('모바일 미디어 재생 제한으로 실패했습니다. 다시 재생 버튼을 눌러주세요.')
+          })
+      } else {
+        setPlayingAudioId(audioId)
       }
     }
   }
@@ -530,10 +557,10 @@ function PublicFormContent({ slug }: { slug: string }) {
                     )}
                   >
                     <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                      <audio id={audioId} src={file.url} className="hidden" />
+                      <audio id={audioId} src={file.url} preload="auto" playsInline className="hidden" />
                       <button
                         type="button"
-                        onClick={() => handlePlayPause(audioId)}
+                        onClick={() => handlePlayPause(audioId, file.url)}
                         className={cn(
                           "w-9 h-9 rounded-full flex items-center justify-center transition-colors shrink-0 shadow-xs",
                           isPlaying ? "bg-primary text-white" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
@@ -941,28 +968,36 @@ function PublicFormContent({ slug }: { slug: string }) {
 
   return (
     <div className="min-h-screen bg-slate-50/50 flex flex-col font-sans">
-      {/* Public Header */}
-      <header className="bg-white border-b border-border py-3 px-6 flex justify-between items-center shadow-sm sticky top-0 z-50">
-        <Logo className="h-5 w-auto" />
-        <div className="flex items-center gap-3">
+      {/* Public Header - Mobile Optimized */}
+      <header className="bg-white/95 backdrop-blur-md border-b border-border py-2.5 px-3.5 sm:px-6 flex justify-between items-center shadow-2xs sticky top-0 z-50">
+        <div className="flex items-center gap-2 shrink-0">
+          <Logo className="h-4 sm:h-5 w-auto" />
+        </div>
+
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <Button
             type="button"
             variant="ghost"
+            size="sm"
             onClick={handleSaveDraft}
             disabled={savingDraft}
-            className="h-8 text-xs text-slate-500 hover:text-slate-800"
+            className="h-7 sm:h-8 text-[11px] sm:text-xs text-slate-600 hover:text-slate-900 px-2 sm:px-3 font-medium border border-slate-200/80 sm:border-none rounded-lg shrink-0"
           >
-            {savingDraft ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
-            나중에 이어쓰기 (임시저장)
+            {savingDraft ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+            <span className="hidden sm:inline">나중에 이어쓰기 (임시저장)</span>
+            <span className="sm:hidden">임시저장</span>
           </Button>
-          <div className="text-right border-l border-slate-200 pl-3">
-            <span className="text-xs font-semibold text-primary block">
-              {instance.customer?.groom_name} & {instance.customer?.bride_name}
-            </span>
-            <span className="text-[10px] text-muted-foreground block">
-              결혼식 정보 입력 양식
-            </span>
-          </div>
+
+          {(instance.customer?.groom_name || instance.customer?.bride_name) && (
+            <div className="text-right border-l border-slate-200 pl-2 sm:pl-3 shrink-0">
+              <span className="text-[11px] sm:text-xs font-bold text-primary block truncate max-w-[100px] sm:max-w-[200px]">
+                {instance.customer?.groom_name || '신랑'} & {instance.customer?.bride_name || '신부'}
+              </span>
+              <span className="text-[9px] text-slate-400 hidden sm:block">
+                결혼식 정보 입력 양식
+              </span>
+            </div>
+          )}
         </div>
       </header>
 
