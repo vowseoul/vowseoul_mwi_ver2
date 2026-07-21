@@ -35,7 +35,9 @@ import {
   Home,
   AlertCircle,
   ZoomIn,
-  Maximize2
+  Maximize2,
+  Trash2,
+  Plus
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Logo } from '@/components/logo'
