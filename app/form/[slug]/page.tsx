@@ -685,6 +685,93 @@ function PublicFormContent({ slug }: { slug: string }) {
           </div>
         )
       }
+      case 'timentext': {
+        let items: Array<{ time: string; text: string }> = []
+        if (Array.isArray(value)) {
+          items = value
+        } else if (typeof value === 'string' && value.trim()) {
+          try {
+            const parsed = JSON.parse(value)
+            if (Array.isArray(parsed)) items = parsed
+          } catch {
+            items = value.split(',').map((part) => {
+              const [t, ...txt] = part.split('|')
+              return { time: (t || '').trim(), text: txt.join('|').trim() }
+            })
+          }
+        }
+
+        if (items.length === 0) {
+          items = [
+            { time: '', text: '' },
+            { time: '', text: '' },
+            { time: '', text: '' },
+          ]
+        }
+
+        const updateRow = (idx: number, key: 'time' | 'text', val: string) => {
+          const newItems = items.map((row, i) => (i === idx ? { ...row, [key]: val } : row))
+          handleInputChange(field.field_key, newItems)
+        }
+
+        const addRow = () => {
+          const newItems = [...items, { time: '', text: '' }]
+          handleInputChange(field.field_key, newItems)
+        }
+
+        const removeRow = (idx: number) => {
+          const newItems = items.filter((_, i) => i !== idx)
+          handleInputChange(field.field_key, newItems)
+        }
+
+        return (
+          <div className="space-y-3">
+            <div className="space-y-2">
+              {items.map((row, idx) => (
+                <div key={idx} className="flex items-center gap-2 bg-slate-50/60 p-2 rounded-xl border border-slate-200/80">
+                  <div className="shrink-0 w-28 sm:w-32">
+                    <Input
+                      type="time"
+                      value={row.time}
+                      onChange={(e) => updateRow(idx, 'time', e.target.value)}
+                      className="h-10 text-xs sm:text-sm font-mono text-center bg-white border-slate-200 focus:border-slate-800"
+                    />
+                  </div>
+                  <span className="text-slate-400 font-bold px-0.5">|</span>
+                  <Input
+                    type="text"
+                    value={row.text}
+                    placeholder={`식순 ${idx + 1} 내용 (예: ${idx === 0 ? '개식선언 및 입장' : idx === 1 ? '성혼선언문 낭독' : '축가 및 하객 식사 안내'})`}
+                    onChange={(e) => updateRow(idx, 'text', e.target.value)}
+                    className="flex-1 h-10 text-xs sm:text-sm bg-white border-slate-200 focus:border-slate-800"
+                  />
+                  {items.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-10 w-10 text-slate-400 hover:text-red-500 hover:bg-red-50 shrink-0 rounded-lg"
+                      onClick={() => removeRow(idx)}
+                      title="삭제"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={addRow}
+              className="w-full h-10 text-xs sm:text-sm gap-1.5 border-dashed border-slate-300 bg-white text-slate-700 hover:border-slate-800 hover:bg-slate-50 font-medium rounded-xl shadow-2xs"
+            >
+              <Plus className="w-4 h-4 text-primary" /> 식순 항목 추가하기 (+)
+            </Button>
+          </div>
+        )
+      }
       case 'select_text': {
         const choices: string[] = field.options?.choices || []
         const isCustomActive = customSelectTexts[field.field_key] || (value && !choices.includes(value))

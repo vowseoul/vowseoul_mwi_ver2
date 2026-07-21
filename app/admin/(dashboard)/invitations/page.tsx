@@ -28,7 +28,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { 
   useInvitationsQuery, 
   useCreateInvitationMutation, 
-  useUpdateInvitationStatusMutation 
+  useUpdateInvitationStatusMutation,
+  useDeleteInvitationMutation 
 } from '@/hooks/queries/useInvitations'
 import { useCustomersQuery } from '@/hooks/queries/useCustomers'
 import { useThemesQuery } from '@/hooks/queries/useThemes'
@@ -44,7 +45,8 @@ import {
   Loader2, 
   Calendar,
   Sparkles,
-  Link2
+  Link2,
+  Trash2
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -55,6 +57,7 @@ export default function InvitationsListPage() {
 
   const createMutation = useCreateInvitationMutation()
   const statusMutation = useUpdateInvitationStatusMutation()
+  const deleteMutation = useDeleteInvitationMutation()
 
   const [search, setSearch] = useState('')
   const [isOpen, setIsOpen] = useState(false)
@@ -64,6 +67,8 @@ export default function InvitationsListPage() {
   const [isCreating, setIsCreating] = useState(false)
 
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -343,6 +348,18 @@ export default function InvitationsListPage() {
                             <Play className="w-3.5 h-3.5" /> 공개
                           </Button>
                         )}
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-[11px] text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                          onClick={() => setDeleteTarget({
+                            id: inv.id,
+                            name: `${inv.customer?.groom_name || '신랑'} & ${inv.customer?.bride_name || '신부'}`
+                          })}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> 삭제
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -352,6 +369,47 @@ export default function InvitationsListPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold text-destructive flex items-center gap-2">
+              <Trash2 className="w-5 h-5" /> 모바일 청첩장 삭제
+            </DialogTitle>
+            <DialogDescription className="text-xs pt-2">
+              <strong className="text-foreground">{deleteTarget?.name}</strong> 고객의 모바일 청첩장을 정말 삭제하시겠습니까?<br />
+              이 작업은 취소할 수 없으며 생성된 고유 웹링크 접속이 차단됩니다.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4 gap-2">
+            <Button variant="outline" size="sm" onClick={() => setDeleteTarget(null)} disabled={isDeleting}>
+              취소
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={isDeleting}
+              onClick={async () => {
+                if (!deleteTarget) return
+                setIsDeleting(true)
+                try {
+                  await deleteMutation.mutateAsync(deleteTarget.id)
+                  toast.success('청첩장이 성공적으로 삭제되었습니다.')
+                  setDeleteTarget(null)
+                } catch (err: any) {
+                  toast.error(err.message || '청첩장 삭제 실패')
+                } finally {
+                  setIsDeleting(false)
+                }
+              }}
+            >
+              {isDeleting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+              삭제하기
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

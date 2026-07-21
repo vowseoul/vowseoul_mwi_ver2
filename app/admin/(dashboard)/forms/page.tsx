@@ -360,6 +360,65 @@ export default function FormTemplatesPage() {
           </div>
         )
       }
+      case 'timentext': {
+        const items = Array.isArray(value) && value.length > 0 ? value : [{ time: '12:00', text: '입장' }, { time: '12:10', text: '주례' }, { time: '12:30', text: '식사' }]
+        return (
+          <div className="space-y-2">
+            {items.map((row: any, idx: number) => (
+              <div key={idx} className="flex items-center gap-2">
+                <Input
+                  type="time"
+                  value={row.time || ''}
+                  onChange={(e) => {
+                    const newItems = [...items]
+                    newItems[idx] = { ...newItems[idx], time: e.target.value }
+                    handlePreviewInputChange(field.field_key, newItems)
+                  }}
+                  className="w-32 font-mono text-center h-9 text-xs"
+                />
+                <span className="text-muted-foreground font-bold">|</span>
+                <Input
+                  type="text"
+                  value={row.text || ''}
+                  placeholder="식순 / 내용 입력"
+                  onChange={(e) => {
+                    const newItems = [...items]
+                    newItems[idx] = { ...newItems[idx], text: e.target.value }
+                    handlePreviewInputChange(field.field_key, newItems)
+                  }}
+                  className="flex-1 h-9 text-xs"
+                />
+                {items.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 text-muted-foreground hover:text-destructive shrink-0"
+                    onClick={() => {
+                      const newItems = items.filter((_: any, i: number) => i !== idx)
+                      handlePreviewInputChange(field.field_key, newItems)
+                    }}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const newItems = [...items, { time: '', text: '' }]
+                handlePreviewInputChange(field.field_key, newItems)
+              }}
+              className="w-full mt-1.5 h-8 text-xs gap-1 border-dashed text-muted-foreground hover:text-foreground"
+            >
+              <Plus className="w-3.5 h-3.5" /> 식순 항목 추가
+            </Button>
+          </div>
+        )
+      }
       case 'select_text': {
         const opts = parseOptions(field)
         const choices: string[] = opts.choices || []

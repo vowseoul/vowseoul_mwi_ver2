@@ -232,3 +232,32 @@ export function useUpdateInvitationStatusMutation() {
     },
   })
 }
+
+// 4. Delete invitation mutation
+export function useDeleteInvitationMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (invitationId: string) => {
+      // Hard delete or soft-delete invitation
+      const { error: hardDeleteErr } = await supabase
+        .from('invitations')
+        .delete()
+        .eq('id', invitationId)
+
+      if (hardDeleteErr) {
+        // Fallback to soft delete if hard delete restricted
+        const { error: softErr } = await supabase
+          .from('invitations')
+          .update({ deleted_at: new Date().toISOString(), status: 'expired' })
+          .eq('id', invitationId)
+
+        if (softErr) throw hardDeleteErr
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invitations-list'] })
+      queryClient.invalidateQueries({ queryKey: ['customers'] })
+      queryClient.invalidateQueries({ queryKey: ['customer-invitation'] })
+    },
+  })
+}

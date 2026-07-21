@@ -171,6 +171,15 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
       )
     }
 
+    if (field.field_type === 'timentext') {
+      const formatted = formatTimeTextValue(rawVal)
+      return (
+        <div className="text-xs font-semibold text-slate-800 leading-relaxed bg-slate-50 p-2.5 rounded-lg border border-slate-200/80 whitespace-pre-wrap select-text cursor-text">
+          {formatted || '(미입력 항목)'}
+        </div>
+      )
+    }
+
     if (!displayVal) {
       return (
         <div className="text-xs text-slate-400 italic bg-slate-50/60 p-2.5 rounded-lg border border-slate-200/50">
@@ -376,6 +385,82 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
                 </div>
               )
             })}
+          </div>
+        )
+      }
+      case 'timentext': {
+        let items: Array<{ time: string; text: string }> = []
+        if (Array.isArray(value)) {
+          items = value
+        } else if (typeof value === 'string' && value.trim()) {
+          try {
+            const parsed = JSON.parse(value)
+            if (Array.isArray(parsed)) items = parsed
+          } catch {
+            items = value.split(',').map((part) => {
+              const [t, ...txt] = part.split('|')
+              return { time: (t || '').trim(), text: txt.join('|').trim() }
+            })
+          }
+        }
+        if (items.length === 0) {
+          items = [{ time: '', text: '' }, { time: '', text: '' }, { time: '', text: '' }]
+        }
+
+        return (
+          <div className="space-y-2 flex-1">
+            {items.map((row, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <Input
+                  type="time"
+                  value={row.time}
+                  onChange={(e) => {
+                    const newItems = [...items]
+                    newItems[idx] = { ...newItems[idx], time: e.target.value }
+                    handleInputChange(field.field_key, newItems)
+                  }}
+                  className="w-28 font-mono text-center h-8 text-xs bg-muted/10"
+                />
+                <span className="text-muted-foreground font-bold">|</span>
+                <Input
+                  type="text"
+                  value={row.text}
+                  placeholder="식순 내용"
+                  onChange={(e) => {
+                    const newItems = [...items]
+                    newItems[idx] = { ...newItems[idx], text: e.target.value }
+                    handleInputChange(field.field_key, newItems)
+                  }}
+                  className="flex-1 h-8 text-xs bg-muted/10"
+                />
+                {items.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                    onClick={() => {
+                      const newItems = items.filter((_, i) => i !== idx)
+                      handleInputChange(field.field_key, newItems)
+                    }}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </Button>
+                )}
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const newItems = [...items, { time: '', text: '' }]
+                handleInputChange(field.field_key, newItems)
+              }}
+              className="w-full mt-1 h-7 text-xs gap-1 border-dashed text-muted-foreground hover:text-foreground"
+            >
+              <Edit2 className="w-3 h-3" /> 식순 항목 추가
+            </Button>
           </div>
         )
       }

@@ -934,6 +934,7 @@ export default function FieldLibraryPage() {
                           <SelectItem value="images">다중 이미지 업로드 (images)</SelectItem>
                           <SelectItem value="music">음원 선택 (music)</SelectItem>
                           <SelectItem value="select_text">선택지 또는 직접입력 (select_text)</SelectItem>
+                          <SelectItem value="timentext">시간 & 텍스트 세트 / 식순 (timentext)</SelectItem>
                           <SelectItem value="imageselect">이미지 선택형 (imageselect)</SelectItem>
                           <SelectItem value="mselect">다중 선택형 (mselect)</SelectItem>
                         </SelectContent>
