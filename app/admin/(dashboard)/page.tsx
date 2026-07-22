@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { useAppStore, sampleOrders } from '@/lib/store'
+import { useAppStore } from '@/lib/store'
 import { useEffect } from 'react'
 import { 
   DollarSign, 
@@ -36,13 +36,7 @@ const weeklyData = [
 ]
 
 export default function AdminDashboard() {
-  const { orders, setOrders } = useAppStore()
-
-  useEffect(() => {
-    if (orders.length === 0) {
-      setOrders(sampleOrders)
-    }
-  }, [orders.length, setOrders])
+  const { orders } = useAppStore()
 
   const todayPayments = orders.filter(o => o.status === 'paid' || o.status === 'deployed').length
   const todayRevenue = todayPayments * 50000

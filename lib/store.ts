@@ -276,17 +276,67 @@ interface AppState {
 export const useAppStore = create<AppState>((set, get) => ({
   fetchData: async () => {
     try {
-      const [
-        { data: faqs },
-        { data: themes },
-        { data: bgms },
-        { data: orders }
-      ] = await Promise.all([
-        supabase.from('faqs').select('*'),
-        supabase.from('themes').select('*'),
-        supabase.from('bgms').select('*'),
-        supabase.from('orders').select('*')
-      ])
+      let faqs: any[] = []
+      try {
+        const { data } = await supabase.from('faqs').select('*')
+        faqs = data || []
+      } catch (err) {
+        faqs = []
+      }
+
+      let themes: any[] = []
+      try {
+        const { data } = await supabase.from('themes').select('*')
+        themes = data || []
+      } catch (err) {
+        themes = []
+      }
+
+      let bgms: any[] = []
+      try {
+        const { data } = await supabase.from('bgms').select('*')
+        bgms = data || []
+      } catch (err) {
+        bgms = []
+      }
+
+      let customers: any[] = []
+      try {
+        const { data } = await supabase.from('customers').select('*')
+        customers = data || []
+      } catch (err) {
+        customers = []
+      }
+
+      let invitations: any[] = []
+      try {
+        const { data } = await supabase.from('invitations').select('*')
+        invitations = data || []
+      } catch (err) {
+        invitations = []
+      }
+
+      const inviteMap: Record<string, any> = {}
+      invitations.forEach(inv => {
+        inviteMap[inv.customer_id] = inv
+      })
+
+      const mappedOrders: Order[] = customers.map((cust: any) => {
+        const inv = inviteMap[cust.id]
+        return {
+          id: `ORD-${cust.id.substring(0, 8).toUpperCase()}`,
+          invitationId: inv ? inv.id : '',
+          customerName: `${cust.groom_name} & 	ext: ${cust.bride_name}`.replace('text: ', ''), // Avoid text keyword issues
+          groomName: cust.groom_name || '',
+          brideName: cust.bride_name || '',
+          weddingDate: cust.wedding_date || '',
+          theme: inv ? (inv.theme_version_id || 'Classic White') : 'Classic White',
+          amount: 50000,
+          status: inv ? (inv.status === 'published' ? 'deployed' : 'paid') : 'paid',
+          createdAt: cust.created_at ? cust.created_at.split('T')[0] : '',
+          notes: cust.memo || ''
+        }
+      })
 
       let noticesList = []
       try {
@@ -302,7 +352,6 @@ export const useAppStore = create<AppState>((set, get) => ({
           }
         }
       } catch (err) {
-        console.warn('Querying notices table failed, checking localStorage:', err)
         const localNotices = typeof window !== 'undefined' ? localStorage.getItem('vow_seoul_local_notices') : null
         if (localNotices) {
           noticesList = JSON.parse(localNotices)
@@ -312,10 +361,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       set({
-        faqs: faqs || [],
+        faqs: faqs.length > 0 ? faqs : sampleFaqs,
         themes: themes || [],
-        bgmList: bgms || [],
-        orders: orders || [],
+        bgmList: bgms.length > 0 ? bgms : sampleBGMs,
+        orders: mappedOrders,
         notices: noticesList
       })
     } catch (e) {
@@ -418,7 +467,39 @@ export const useAppStore = create<AppState>((set, get) => ({
   orders: [],
   setOrders: (orders) => set({ orders }),
   updateOrder: async (id, updates) => {
-    await supabase.from('orders').update(updates).eq('id', id)
+    try {
+      const state = get()
+      const order = state.orders.find(o => o.id === id)
+      if (order) {
+        if (order.invitationId) {
+          const invStatus = updates.status === 'deployed' ? 'published' : (updates.status === 'paid' ? 'draft' : 'paused')
+          await supabase.from('invitations').update({
+            status: invStatus,
+            updated_at: new Date().toISOString()
+          }).eq('id', order.invitationId)
+        }
+
+        const custSeg = id.replace('ORD-', '').toLowerCase()
+        const { data: custs } = await supabase.from('customers').select('id, memo')
+        const targetCustomer = custs?.find(c => c.id.substring(0, 8) === custSeg)
+
+        if (targetCustomer) {
+          const customerUpdates: any = {}
+          if (updates.status) {
+            customerUpdates.status = updates.status === 'deployed' ? 'published' : 'draft'
+          }
+          if (updates.groomName) customerUpdates.groom_name = updates.groomName
+          if (updates.brideName) customerUpdates.bride_name = updates.brideName
+          if (updates.weddingDate) customerUpdates.wedding_date = updates.weddingDate
+          if (updates.notes !== undefined) customerUpdates.memo = updates.notes
+
+          await supabase.from('customers').update(customerUpdates).eq('id', targetCustomer.id)
+        }
+      }
+    } catch (err) {
+      console.error('Error updating order database mappings:', err)
+    }
+
     set((state) => ({
       orders: state.orders.map(o => o.id === id ? { ...o, ...updates } : o)
     }))
