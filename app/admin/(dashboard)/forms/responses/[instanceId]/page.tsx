@@ -31,6 +31,31 @@ const parseLocalDate = (dateStr: string) => {
   return new Date(year, month - 1, day)
 }
 
+function formatTimeTextValue(val: any): string {
+  if (!val) return ''
+  let items = val
+  if (typeof val === 'string') {
+    try {
+      items = JSON.parse(val)
+    } catch {
+      return val
+    }
+  }
+  if (Array.isArray(items)) {
+    const formatted = items
+      .filter((item: any) => item && (item.time || item.text))
+      .map((item: any) => {
+        const timeStr = (item.time || '').trim()
+        const textStr = (item.text || '').trim()
+        if (timeStr && textStr) return `${timeStr} | ${textStr}`
+        return timeStr || textStr
+      })
+      .join(', ')
+    return formatted
+  }
+  return String(val)
+}
+
 export default function FormResponsePage({ params }: { params: Promise<{ instanceId: string }> }) {
   const { instanceId } = use(params)
   const router = useRouter()
