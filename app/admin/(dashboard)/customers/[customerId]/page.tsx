@@ -240,6 +240,14 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
 
       const updatedContentData = {
         ...existingContent,
+
+        // 1) 폼 제출값(필드키) 전체를 그대로 보존한다.
+        //    아래 camelCase 매핑은 일부 항목만 다루므로, 이게 없으면 식순(wedding_programs),
+        //    혼주 이름, 계좌 정보, 개별 사진 등 나머지 필드가 전부 유실된다.
+        //    새 템플릿 렌더러는 이 필드키를 직접 사용한다.
+        ...rawData,
+
+        // 2) 레거시 렌더러 호환용 camelCase 키 (필드키와 이름이 겹치지 않아 공존 가능)
         groomName: getVal('groom_name', 'groomName', 'groom_name_kr') || customer?.groom_name || existingContent.groomName || '',
         brideName: getVal('bride_name', 'brideName', 'bride_name_kr') || customer?.bride_name || existingContent.brideName || '',
         weddingDate: getVal('wedding_date', 'weddingDate', 'date') || customer?.wedding_date || existingContent.weddingDate || '',
