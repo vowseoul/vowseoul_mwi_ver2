@@ -144,19 +144,36 @@ export function useCreateInvitationMutation() {
         "cover", "greeting", "couple-info", "event-info", "gallery", "map", "account", "rsvp", "guestbook"
       ]
 
+      // '미지정'/빈값 정리 헬퍼
+      const clean = (v?: string | null) => (v && v !== '미지정' ? v : '')
+      const invitationMessageDefault =
+        '서로가 마주 보며 다져온 사랑을 이제 함께 한곳을 바라보며 걸어가고자 합니다. 저희의 뜻깊은 출발에 축복과 격려로 함께해 주시면 더없는 기쁨으로 간직하겠습니다.'
+
       const contentData = {
-        groomName: customer?.groom_name && customer.groom_name !== '미지정' ? customer.groom_name : '',
-        brideName: customer?.bride_name && customer.bride_name !== '미지정' ? customer.bride_name : '',
+        // ── 필드키 (정식 소스, 새 템플릿 렌더러가 사용) ─────────────────
+        // 폼 수집 필드키와 동일한 snake_case. 이후 폼 동기화가 이 위에 덮어쓴다.
+        groom_name: clean(customer?.groom_name),
+        bride_name: clean(customer?.bride_name),
+        wedding_date: customer?.wedding_date || '',
+        wedding_time: '',
+        venue_name: clean(customer?.venue_name),
+        venue_address: clean(customer?.venue_address),
+        greeting_message: invitationMessageDefault,
+
+        // ── 레거시 camelCase (기존 invitation-client 렌더러 호환) ───────
+        // 필드키와 이름이 겹치지 않아 공존한다.
+        groomName: clean(customer?.groom_name),
+        brideName: clean(customer?.bride_name),
         weddingDate: customer?.wedding_date || '',
-        venueName: customer?.venue_name && customer.venue_name !== '미지정' ? customer.venue_name : '',
-        venueAddress: customer?.venue_address && customer.venue_address !== '미지정' ? customer.venue_address : '',
+        venueName: clean(customer?.venue_name),
+        venueAddress: clean(customer?.venue_address),
         groomNameEn: '',
         groomParentRelation: '장남',
         brideNameEn: '',
         brideParentRelation: '장녀',
         weddingTime: '12:00',
         venueHall: '1층 단독홀',
-        invitationMessage: '서로가 마주 보며 다져온 사랑을 이제 함께 한곳을 바라보며 걸어가고자 합니다. 저희의 뜻깊은 출발에 축복과 격려로 함께해 주시면 더없는 기쁨으로 간직하겠습니다.',
+        invitationMessage: invitationMessageDefault,
         galleryImages: [],
         galleryViewType: 'slide',
         trafficInfo: '지하철 역 도보 5분 거리',
