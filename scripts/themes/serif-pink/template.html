@@ -1,0 +1,152 @@
+<div class="se-container">
+  <!-- 1. HERO SECTION -->
+  <section class="se-hero">
+    <div class="se-hero__top-bar"></div>
+    <div class="se-hero__semi-circle"></div>
+    
+    <div class="se-hero__title-wrap">
+      <h1 class="se-hero__title">
+        You're Invited<br />To Our Wedding!
+      </h1>
+    </div>
+
+    <!-- Polaroid Visual Card -->
+    <div class="se-polaroid">
+      <div class="se-polaroid__img-frame">
+        <img class="se-polaroid__img" data-field="main_image" src="https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=800&auto=format&fit=crop" alt="메인 비주얼" />
+      </div>
+      <div class="se-polaroid__signature">
+        <span data-field="groom_name_en">Sunghoon</span> &amp; <span data-field="bride_name_en">Jihye</span>
+      </div>
+    </div>
+
+    <!-- Hero Bottom Info -->
+    <div class="se-hero__info">
+      <p class="se-hero__venue" data-field="venue_name">VOW SEOUL GRAND HALL</p>
+      <p class="se-hero__datetime">
+        <span data-field="wedding_date_en">MAY 7, 2028</span>. <span data-field="wedding_time">11:00 AM</span>
+      </p>
+    </div>
+  </section>
+
+  <!-- 2. GREETING SECTION -->
+  <section class="se-greeting">
+    <!-- Diagonal Slanted White Bar -->
+    <div class="se-greeting__slanted-bar"></div>
+    
+    <!-- Greeting Message -->
+    <div class="se-greeting__message" data-field="greeting_message">
+사랑으로 하나 된 두 사람이
+서로를 이해하며 한 길을 걸어가려 합니다.
+귀한 발걸음으로 저희의 출발을
+함께 축복해 주시기 바랍니다.
+    </div>
+
+    <!-- Profile Photos -->
+    <div class="se-profile">
+      <div class="se-profile__card">
+        <img class="se-profile__img" data-field="groom_photo" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=400&auto=format&fit=crop" alt="신랑 사진" />
+      </div>
+      <div class="se-profile__card">
+        <img class="se-profile__img" data-field="bride_photo" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=400&auto=format&fit=crop" alt="신부 사진" />
+      </div>
+    </div>
+
+    <!-- Spouses & Parents Info -->
+    <div class="se-parents">
+      <!-- Groom Side -->
+      <div class="se-parents__column">
+        <div class="se-parents__role-wrap">
+          <span class="se-parents__role-label">신랑</span>
+          <h3 class="se-parents__name" data-field="groom_name">박성훈</h3>
+        </div>
+        <div class="se-parents__divider"></div>
+        <div class="se-parents__list">
+          <span class="se-parents__section-title">신랑 측 혼주</span>
+          <p class="se-parents__item">
+            <span class="se-parents__relation">아버지</span>
+            <span data-field="groom_father_name">박태수</span>
+          </p>
+          <p class="se-parents__item">
+            <span class="se-parents__relation">어머니</span>
+            <span data-field="groom_mother_name">선우명희</span>
+          </p>
+        </div>
+      </div>
+
+      <!-- Bride Side -->
+      <div class="se-parents__column">
+        <div class="se-parents__role-wrap">
+          <span class="se-parents__role-label">신부</span>
+          <h3 class="se-parents__name" data-field="bride_name">이지혜</h3>
+        </div>
+        <div class="se-parents__divider"></div>
+        <div class="se-parents__list">
+          <span class="se-parents__section-title">신부 측 혼주</span>
+          <p class="se-parents__item">
+            <span class="se-parents__relation">아버지</span>
+            <span data-field="bride_father_name">이훈</span>
+          </p>
+          <p class="se-parents__item">
+            <span class="se-parents__relation">어머니</span>
+            <span data-field="bride_mother_name">최현숙</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. GALLERY SECTION -->
+  <section class="se-section se-gallery-section">
+    <h4 class="se-section__subtitle">GALLERY</h4>
+    <h3 class="se-section__title">갤러리</h3>
+    <div data-slot="gallery"></div>
+  </section>
+
+  <!-- 4. ORDER / SEQUENCE SECTION -->
+  <section class="se-section se-order-section">
+    <h4 class="se-section__subtitle">WEDDING ORDER</h4>
+    <h3 class="se-section__title">식순 안내</h3>
+    
+    <div data-slot="sequence"></div>
+  </section>
+
+  <!-- 5. CALENDAR & D-DAY SECTION -->
+  <section class="se-section se-calendar-section">
+    <h4 class="se-section__subtitle se-section__subtitle--pink">Calendar</h4>
+    
+    <div data-slot="calendar"></div>
+  </section>
+
+  <!-- 6. LOCATION / MAP SECTION -->
+  <section class="se-section se-location-section">
+    <h4 class="se-section__subtitle">LOCATION</h4>
+    <h3 class="se-section__title">식장 위치</h3>
+
+    <div class="se-location-card">
+      <h3 class="se-location-card__name" data-field="venue_name">VOW SEOUL GRAND HALL</h3>
+      <p class="se-location-card__hall">그랜드홀</p>
+      <p class="se-location-card__address" data-field="venue_address">서울 강남구 학동로 1212</p>
+      <p class="se-location-card__hint">터치하여 주소 복사</p>
+    </div>
+
+    <div data-slot="map"></div>
+  </section>
+
+  <!-- 7. ACCOUNT SECTION -->
+  <section class="se-section se-account-section">
+    <h4 class="se-section__subtitle">ACCOUNT</h4>
+    <h3 class="se-section__title">마음 전하실 곳</h3>
+    <div data-slot="account"></div>
+  </section>
+
+  <!-- 8. RSVP SECTION -->
+  <section class="se-section se-rsvp-section">
+    <h4 class="se-section__subtitle">RSVP</h4>
+    <h3 class="se-section__title">참석 여부 알리기</h3>
+    <div data-slot="rsvp"></div>
+  </section>
+
+  <!-- 9. BGM (플로팅 플레이어 — 배치 위치 무관) -->
+  <div data-slot="bgm"></div>
+</div>

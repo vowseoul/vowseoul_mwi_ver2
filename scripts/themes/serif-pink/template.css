@@ -1,0 +1,457 @@
+@import url('https://fonts.googleapis.com/css2?family=Covered+By+Your+Grace&family=Goudy+Bookletter+1911&family=Noto+Serif+KR:wght@300;400;500;600;700&family=Radio+Canada+Big:ital,wght@0,400..700;1,400..700&display=swap');
+
+:root {
+  --bg: #EFD0D0;
+  --accent: #D76C6C;
+  --ink: #FFFFFF;
+  --accent-2: #E29B9B;
+  --ink-2: rgba(255, 255, 255, 0.85);
+  --font-kr: 'Noto Serif KR', serif;
+  --font-en: 'Radio Canada Big', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.se-container {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  background-color: var(--bg, #EFD0D0);
+  color: var(--ink, #FFFFFF);
+  font-family: var(--font-en, 'Radio Canada Big', sans-serif);
+  overflow-x: hidden;
+  position: relative;
+  word-break: keep-all;
+}
+
+/* 1. HERO SECTION */
+.se-hero {
+  position: relative;
+  min-height: 640px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  text-align: center;
+  padding: 112px 16px 48px;
+  overflow: hidden;
+  background-color: var(--bg, #EFD0D0);
+}
+
+.se-hero__top-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background-color: #FFFFFF;
+  z-index: 10;
+}
+
+.se-hero__semi-circle {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 96px;
+  height: 48px;
+  background-color: #FFFFFF;
+  border-bottom-left-radius: 96px;
+  border-bottom-right-radius: 96px;
+  z-index: 10;
+}
+
+.se-hero__title-wrap {
+  position: relative;
+  z-index: 10;
+  margin-top: 24px;
+  padding: 0 16px;
+}
+
+.se-hero__title {
+  font-family: 'Goudy Bookletter 1911', serif;
+  font-size: 25px;
+  font-weight: 400;
+  line-height: 1.2;
+  color: #1A1A1A;
+  text-transform: capitalize;
+}
+
+.se-polaroid {
+  position: relative;
+  z-index: 10;
+  margin: 48px 0;
+  background-color: #FFFFFF;
+  padding: 16px 16px 20px;
+  box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 250px;
+  transition: transform 0.3s ease;
+}
+
+.se-polaroid:hover {
+  transform: scale(1.02);
+}
+
+.se-polaroid__img-frame {
+  width: 218px;
+  height: 260px;
+  overflow: hidden;
+  background-color: #F3F4F6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.se-polaroid__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.se-polaroid__signature {
+  margin-top: 16px;
+  font-family: 'Covered By Your Grace', cursive;
+  font-size: 24px;
+  font-weight: 400;
+  font-style: italic;
+  color: #000000;
+  text-transform: lowercase;
+}
+
+.se-hero__info {
+  position: relative;
+  z-index: 10;
+  text-align: center;
+  font-family: 'Goudy Bookletter 1911', serif;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: #686868;
+}
+
+.se-hero__venue {
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  margin-bottom: 6px;
+}
+
+.se-hero__datetime {
+  text-transform: uppercase;
+}
+
+/* 2. GREETING SECTION */
+.se-greeting {
+  position: relative;
+  padding: 0 0 64px;
+  text-align: center;
+  overflow: hidden;
+  background-color: var(--bg, #EFD0D0);
+  color: var(--ink, #FFFFFF);
+}
+
+.se-greeting__slanted-bar {
+  width: 100%;
+  height: 100px;
+  background-color: #FFFFFF;
+  margin-bottom: 48px;
+  clip-path: polygon(0 50px, 100% 0, 100% 48px, 0 98px);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.06));
+}
+
+.se-greeting__message {
+  padding: 0 24px;
+  max-width: 340px;
+  margin: 0 auto;
+  font-size: 15px;
+  line-height: 2.0;
+  font-weight: 500;
+  white-space: pre-line;
+  color: rgba(255, 255, 255, 0.95);
+  font-family: var(--font-kr, 'Noto Serif KR', serif);
+}
+
+.se-profile {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  align-items: center;
+  margin: 40px 0;
+  padding: 0 16px;
+}
+
+.se-profile__card {
+  width: 140px;
+  height: 140px;
+  background-color: rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.se-profile__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.se-parents {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  text-align: center;
+  max-width: 300px;
+  margin: 24px auto 0;
+  color: #FFFFFF;
+}
+
+.se-parents__column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.se-parents__role-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.se-parents__role-label {
+  font-size: 13px;
+  opacity: 0.6;
+}
+
+.se-parents__name {
+  font-size: 21px;
+  font-weight: 500;
+  font-family: var(--font-kr, 'Noto Serif KR', serif);
+}
+
+.se-parents__divider {
+  height: 1px;
+  background-color: rgba(255, 255, 255, 0.2);
+  width: 32px;
+  margin: 0 auto;
+}
+
+.se-parents__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.se-parents__section-title {
+  font-size: 11px;
+  opacity: 0.6;
+  display: block;
+}
+
+.se-parents__item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.se-parents__relation {
+  font-size: 11px;
+  opacity: 0.5;
+  margin-right: 4px;
+}
+
+/* COMMON SECTIONS */
+.se-section {
+  padding: 64px 24px;
+  text-align: center;
+  background-color: var(--bg, #EFD0D0);
+  color: var(--ink, #FFFFFF);
+}
+
+.se-section__subtitle {
+  font-size: 18px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  opacity: 0.8;
+}
+
+.se-section__subtitle--pink {
+  font-size: 14px;
+  color: rgba(215, 108, 108, 0.9);
+}
+
+.se-section__title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-top: 4px;
+  margin-bottom: 32px;
+  font-family: var(--font-kr, 'Noto Serif KR', serif);
+}
+
+/* 4. ORDER TABLE */
+.se-order-table {
+  max-width: 320px;
+  margin: 0 auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.8);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+.se-order-table__row {
+  display: flex;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+  align-items: stretch;
+}
+
+.se-order-table__row:last-child {
+  border-bottom: none;
+}
+
+.se-order-table__time {
+  width: 90px;
+  padding: 12px 0;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 300;
+  color: rgba(255, 255, 255, 0.9);
+  border-right: 1px solid rgba(255, 255, 255, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: monospace;
+}
+
+.se-order-table__desc {
+  flex: 1;
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 14px;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  font-family: var(--font-kr, 'Noto Serif KR', serif);
+}
+
+/* 5. CALENDAR & D-DAY */
+.se-calendar-card {
+  max-width: 320px;
+  margin: 16px auto 0;
+  background-color: #FFFFFF;
+  padding: 16px;
+  color: #000000;
+  border-radius: 2px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+}
+
+.se-calendar-card__header {
+  text-align: center;
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  font-family: 'Goudy Bookletter 1911', serif;
+  color: var(--accent, #D76C6C);
+  margin-bottom: 24px;
+}
+
+.se-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  row-gap: 12px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(213, 155, 155, 0.8);
+}
+
+.se-calendar-grid__day-name {
+  padding: 4px 0;
+  opacity: 0.5;
+  font-weight: 600;
+}
+
+.se-calendar-grid__active {
+  position: relative;
+  padding: 4px 0;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0 auto;
+  border-radius: 50%;
+  font-weight: 700;
+  color: #FFFFFF;
+  background-color: var(--accent, #D76C6C);
+}
+
+.se-dday-container {
+  margin-top: 48px;
+  padding-top: 32px;
+  text-align: center;
+  border-top: 1px solid var(--accent, #D76C6C);
+}
+
+.se-dday-title {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  color: var(--accent, #D76C6C);
+  margin-bottom: 12px;
+}
+
+.se-dday-badge {
+  font-size: 32px;
+  font-weight: 500;
+  color: var(--accent, #D76C6C);
+  font-family: var(--font-en, 'Radio Canada Big', sans-serif);
+}
+
+/* 6. LOCATION */
+.se-location-card {
+  background-color: #FFFFFF;
+  padding: 24px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.05);
+  margin-bottom: 24px;
+  border-radius: 2px;
+}
+
+.se-location-card__name {
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: 0.05em;
+  color: var(--accent, #D76C6C);
+  font-family: var(--font-kr, 'Noto Serif KR', serif);
+}
+
+.se-location-card__hall {
+  font-size: 12px;
+  color: rgba(215, 108, 108, 0.8);
+  margin-top: 4px;
+}
+
+.se-location-card__address {
+  font-size: 14px;
+  font-weight: 500;
+  margin-top: 8px;
+  white-space: pre-line;
+  color: var(--accent, #D76C6C);
+}
+
+.se-location-card__hint {
+  font-size: 10px;
+  margin-top: 4px;
+  color: rgba(215, 108, 108, 0.6);
+}
