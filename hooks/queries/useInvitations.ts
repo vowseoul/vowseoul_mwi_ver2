@@ -64,14 +64,36 @@ export function useCreateInvitationMutation() {
       themeId: string
       publicSlug: string
     }) => {
-      // Get the latest version of the theme to set as theme_version_id
-      const { data: latestVersion } = await supabase
+      // Get the latest version of the theme to set as theme_version_id.
+      // 결과가 0건일 수 있으므로 .single() 대신 .maybeSingle() 사용 (0건이면 HTTP 406)
+      let { data: latestVersion } = await supabase
         .from('theme_versions')
         .select('id, default_block_order')
         .eq('theme_id', themeId)
         .order('version_number', { ascending: false })
         .limit(1)
-        .single()
+        .maybeSingle()
+
+      // 버전이 아직 없는 테마(예: 새로 등록한 템플릿 테마)는 v1을 자동 생성해
+      // 청첩장이 항상 유효한 theme_version_id 를 갖도록 한다.
+      if (!latestVersion) {
+        const { data: createdVersion, error: versionErr } = await supabase
+          .from('theme_versions')
+          .insert({
+            theme_id: themeId,
+            version_number: 1,
+            design_tokens: {},
+            block_variant_selections: {},
+            default_block_order: [],
+            status: 'active',
+            change_note: '청첩장 생성 시 자동 생성된 초기 버전',
+          })
+          .select('id, default_block_order')
+          .single()
+
+        if (versionErr) throw versionErr
+        latestVersion = createdVersion
+      }
 
       let targetCustomerId = customerId
       let customer = null
