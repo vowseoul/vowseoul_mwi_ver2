@@ -278,24 +278,30 @@ CREATE TABLE orders (
 
 ### 2-2. 실 데이터에 가짜 값이 섞인 곳 (더 위험)
 
-**`app/admin/(dashboard)/statistics/page.tsx`**
-- L86 `revenue += 50000` — 청첩장 1건당 매출 5만원 고정. 실제 결제액과 무관.
-- L94 `inv.theme_version_id || 'Classic White'` — UUID를 테마명으로 사용.
-- L98~102 — UUID에 `'rose'`/`'minimal'` 문자열 포함 여부로 테마명 추정. 절대 매칭 안 됨.
-- L112 `inv.content_data?.bgmId || 'Canon in D'` — 존재하지 않는 키. 전량 기본값.
-- L122 `trafficMap = {'00':15,'04':5,'08':42,...}` — 시간대 트래픽 **기저값 하드코딩** 후
-  실 통계를 가산. 방문자 0명이어도 그래프가 그려진다.
-- L105, L119 — 데이터 없으면 가짜 항목을 push.
+**`app/admin/(dashboard)/statistics/page.tsx` — ✅ 완료**
+- ~~`revenue += 50000` 고정~~ → `orders.amount` 실합계로 교체(§1-B `orders` 테이블 활용).
+- ~~`inv.theme_version_id || 'Classic White'` (UUID를 테마명으로 사용)~~,
+  ~~UUID에 `'rose'`/`'minimal'` 문자열 포함 여부로 테마명 추정(절대 매칭 안 됨)~~ →
+  `theme_version_id → theme_versions.theme_id → themes.name` 실제 조인으로 교체.
+- ~~`inv.content_data?.bgmId || 'Canon in D'`~~ → 실 데이터 확인 결과 `bgmId` 는
+  `bgms.id`(uuid) 참조가 아니라 파일명 문자열("Paper Swan.mp3" 등)이 그대로 들어있음
+  — uuid 형식일 때만 `bgms.name` 조인, 아니면 원본 문자열을 그대로 표시.
+- ~~`trafficMap = {'00':15,...}` 기저값 하드코딩~~ → `visit_daily_stats`(일 단위) 대신
+  `visit_logs.visited_at`(실제 방문 시각)에서 3시간 단위로 직접 집계, 기저값 없이
+  방문 0건이면 그래프도 정직하게 0으로 표시.
+- 데이터 없을 때 가짜 항목 push 하던 부분 제거, 대신 차트 영역에 "데이터 없음" 문구.
+- "선택 기간 내" 문구도 실제로는 필터링되지 않고 있어 "전체 누적"으로 정정,
+  "결제" 표현은 "주문"으로 정정(§실제 비즈니스 프로세스 — 결제는 앱 밖에서 발생).
+- RSVP 활성화율은 legacy `content_data.rsvpEnabled` 플래그만 보고 있어 템플릿
+  엔진 청첩장(플래그 없음 → 항상 true 취급)에는 부정확할 수 있음 — 후속 과제로 남김.
 
-**`lib/store.ts:405~425`**
-- `customers` 를 순회해 `orders` 를 **합성**. `amount: 50000` 고정,
-  `id: 'ORD-' + uuid앞8자리`, `theme: inv.theme_version_id || 'Classic White'`.
-  → §1-B에서 `orders` 를 정식 테이블로 만들면 이 합성 로직 자체를 제거해야 한다.
-- L444 `faqs.length > 0 ? faqs : sampleFaqs` — 빈 결과를 샘플로 대체.
-- L431~439 `notices` → localStorage → `sampleNotices` 3단 폴백.
-
-> 통계 화면은 "그럴듯한 숫자"를 보여주기 때문에 **운영 판단을 오도할 수 있다.**
-> 실연동 전까지는 해당 카드에 "샘플" 배지를 노출하거나 화면을 감추는 편이 안전하다.
+**`lib/store.ts:405~425` — ✅ 완료** (Task 6 에서 처리, §1-B 참고)
+- ~~`customers` 를 순회해 `orders` 를 합성하던 로직~~ → 실제 `orders` 테이블 조회로 교체 완료.
+- `faqs`/`notices` 의 `sampleFaqs`/`sampleNotices` 폴백은 그대로 남아있음 — 단,
+  `addFaq`/`updateFaq`/`addNotice`/`updateNotice` 를 호출하는 관리 UI가 아예
+  없음을 확인(`/admin/faq`,`/admin/notice` 는 `/admin` 리다이렉트 스텁) →
+  실질적으로 이 폴백이 유일한 콘텐츠 소스이므로 지금 제거하면 콘텐츠가 통째로
+  사라진다. 관리 UI를 새로 만들기 전까지는 유지가 맞다 (제거 대상 아님으로 재분류).
 
 ### 2-3. 정당한 샘플 (유지, 단 출처 통일)
 
