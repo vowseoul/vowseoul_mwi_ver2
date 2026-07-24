@@ -525,11 +525,26 @@ false` 임시 클라이언트는 이 세션 탈취를 막는 의도된 방어 �
 - `themes` 테이블: `update_schema.sql:16-19` 에서 `"recommendedBgms"`, `"colorSets"`,
   `"fontSets"` 를 **따옴표로 감싼 camelCase 컬럼**으로 추가 → 스키마 내부에서도 혼재.
 
-### 4-8. 타입 안정성
+### 4-8. 타입 안정성 — Database 타입 생성 완료, 전면 적용은 안 함
 
 `app`/`lib`/`hooks`/`components` 전체에 `: any` 209회 (셀프서비스 에디터 삭제로 228→209).
-Supabase 생성 타입(`supabase gen types typescript`)이 없어 컬럼 오타가 런타임까지 간다.
-§1의 테이블 누락도 타입이 있었다면 컴파일 단계에서 걸렸다.
+Supabase 생성 타입이 없어 컬럼 오타가 런타임까지 간다. §1의 테이블 누락도 타입이
+있었다면 컴파일 단계에서 걸렸다.
+
+`types/database.ts` 작성 완료. **단, `supabase gen types typescript` CLI 로 생성한
+게 아니다** — 이 명령은 Supabase 액세스 토큰(`supabase login` 또는
+`SUPABASE_ACCESS_TOKEN`)이 필요한데 이 세션엔 anon key 뿐이라 실행 권한이 없었다
+(`--project-id` 만으로는 `LegacyPlatformAuthRequiredError`). 대신 이번 세션에 직접
+작성해 운영 DB에 적용·검증한 4개 마이그레이션 파일을 근거로 손으로 작성했다 —
+스키마가 바뀌면 수동으로 같이 갱신해야 하고, 사용자가 액세스 토큰을 발급하면
+정식 CLI 생성으로 교체하는 게 더 안전하다(파일 상단에 방법 기록해둠).
+
+**`lib/supabase.ts`/`lib/supabase-server.ts` 의 클라이언트에는 이 타입을 아직
+연결하지 않았다** — `createBrowserClient<Database>` 로 강제하면 `.from('invitations')`
+등의 반환 타입이 엄격해지는데, `content_data`/`customization_overrides` 같은
+jsonb 컬럼을 `any` 로 느슨하게 다루는 기존 코드 다수(레거시 camelCase 필드 접근
+포함)가 한꺼번에 타입 에러로 드러날 가능성이 높다. "타입 생성"과 "전면 적용"은
+분리된 작업으로 남겨둔다 — 후자는 다른 발견들처럼 그 자체로 별도 세션이 필요하다.
 
 ---
 
@@ -538,10 +553,15 @@ Supabase 생성 타입(`supabase gen types typescript`)이 없어 컬럼 오타�
 - **초대형 파일 분해** — `orders/[id]/page.tsx` 3,431줄, `invitation-client.tsx` 2,755줄,
   `mobile-preview.tsx` 2,147줄, `assets/themes/[id]/page.tsx` 1,809줄.
   단, §4-1대로 legacy는 **삭제 대상**이므로 분해보다 이관을 우선한다.
-- **테스트 0** — 자동화 테스트가 전혀 없다. 최소한
-  `buildFieldData` / `normalizeLegacyKeys` / `buildThemeTokens` 단위 테스트부터.
-- **DB 타입 생성 파이프라인** — `supabase gen types` → `types/database.ts` 커밋.
+- **테스트 0 → ✅ 33개 추가** — `vitest` 도입(`pnpm test`), `lib/invitation-data.test.ts`
+  (`buildFieldData`/`normalizeLegacyKeys`/`mergeInvitationRaw`, 15개)와
+  `lib/theme-template.test.ts`(`buildThemeTokens`/`resolveThemeSwatch`/
+  `isTemplateTheme`/`toThemeTemplate`/`extractOverrideTokens`/`buildInvitationTokens`,
+  18개) 작성. 핵심 어댑터만 커버한 시작점이고, 컴포넌트/페이지 테스트는 없다.
+- **DB 타입 생성 파이프라인** — ✅ `types/database.ts` 작성 완료(§4-8 참고,
+  CLI 생성이 아니라 마이그레이션 기반 수기 작성).
 - **`app/theme-lab`** — 개발용 페이지가 프로덕션 빌드에 포함됨. 라우트 가드 또는 제외.
+  (미착수로 남음)
 
 ---
 
@@ -565,12 +585,13 @@ Supabase 생성 타입(`supabase gen types typescript`)이 없어 컬럼 오타�
 8. `store.ts` 합성 orders 제거(§1-B 정식 테이블로 대체), `sampleFaqs`/`sampleNotices` 폴백 제거 · §2-2
 9. ~~`templates`/`users` 실연동 (또는 화면 통폐합)~~ · §2-1 ✅ 완료 (고아 페이지 확인 후 삭제)
 
-### 3차 — 중복 제거·안전망 (1~2주)
+### 3차 — 중복 제거·안전망 (1~2주) — ✅ 전체 완료
 10. ESLint 설정 복구 · §3-6
 11. ~~`defaultOrder`·색상추출·SAMPLE_RAW·클라이언트 단일화~~ · §4-2~4-5 ✅ 완료
     (클라이언트 2벌은 조사 후 의도된 방어 코드로 확인, 통합 안 함)
 12. ~~미들웨어 → `proxy.ts` + 서버 세션 검증~~ · §3-4, §3-5 ✅ 완료
-13. Supabase 타입 생성 + 핵심 어댑터 단위 테스트 · §4-8, §5
+13. ~~Supabase 타입 생성 + 핵심 어댑터 단위 테스트~~ · §4-8, §5 ✅ 완료
+    (타입은 CLI 대신 마이그레이션 기반 수기 작성, 클라이언트엔 아직 미적용)
 
 ### 4차 — legacy 청산 (별도 계획)
 14. 남은 legacy 테마 2개(봄날의 세레나데, 모던 에센스 — 여전히 `themes`/`/templates`
