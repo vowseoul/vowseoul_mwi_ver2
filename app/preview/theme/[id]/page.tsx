@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase"
+import { supabase, logSupabaseError } from "@/lib/supabase"
 import type { Viewport } from "next"
 import ThemePreviewClient from "./theme-preview-client"
 import type { ThemeRow } from "@/lib/theme-template"
@@ -21,7 +21,8 @@ export default async function Page({ params }: PageProps) {
 
   let themeRow: ThemeRow | null = null
   try {
-    const { data } = await supabase.from("themes").select("*").eq("id", id).maybeSingle()
+    const { data, error } = await supabase.from("themes").select("*").eq("id", id).maybeSingle()
+    logSupabaseError("theme preview: themes", error)
     themeRow = (data as ThemeRow) ?? null
   } catch (err) {
     console.error("Error fetching theme for preview:", err)

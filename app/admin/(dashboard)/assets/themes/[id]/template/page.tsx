@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useParams } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import { supabase, logSupabaseError } from "@/lib/supabase"
 import { InvitationFrame, type ThemeTemplate, type TokenMap } from "@/components/invitation/invitation-frame"
 import { buildSlots } from "@/components/invitation/slot-registry"
 import { buildFieldData } from "@/lib/invitation-data"
@@ -54,7 +54,8 @@ export default function TemplateThemeEditor() {
   useEffect(() => {
     let active = true
     ;(async () => {
-      const { data } = await supabase.from("themes").select("*").eq("id", id).maybeSingle()
+      const { data, error } = await supabase.from("themes").select("*").eq("id", id).maybeSingle()
+      logSupabaseError("template editor: load theme", error)
       if (!active) return
       if (data) {
         setName(data.name || "")

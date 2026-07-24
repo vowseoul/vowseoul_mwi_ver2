@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase, logSupabaseError } from '@/lib/supabase'
 
 export function FontLoader() {
   const [customFonts, setCustomFonts] = useState<any[]>([])
@@ -9,7 +9,8 @@ export function FontLoader() {
   useEffect(() => {
     const loadFonts = async () => {
       try {
-        const { data } = await supabase.from('settings').select('*').eq('key', 'fonts')
+        const { data, error } = await supabase.from('settings').select('*').eq('key', 'fonts')
+        logSupabaseError('loadFonts (FontLoader)', error)
         if (data && data.length > 0 && data[0].value) {
           setCustomFonts(data[0].value)
         }

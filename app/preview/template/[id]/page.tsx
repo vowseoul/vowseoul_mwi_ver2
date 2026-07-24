@@ -29,7 +29,7 @@ import {
   Pause,
   ArrowLeft
 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { supabase, logSupabaseError } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
@@ -70,7 +70,8 @@ export default function TemplatePreviewPage() {
   useEffect(() => {
     const loadFonts = async () => {
       try {
-        const { data } = await supabase.from('settings').select('*').eq('key', 'fonts')
+        const { data, error } = await supabase.from('settings').select('*').eq('key', 'fonts')
+        logSupabaseError('loadFonts (template preview)', error)
         if (data && data.length > 0 && data[0].value) {
           setCustomFonts(data[0].value)
         }

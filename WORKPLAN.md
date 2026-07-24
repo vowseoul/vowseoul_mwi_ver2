@@ -267,7 +267,7 @@ const isPublicPage = window.location.pathname.startsWith('/invitation/')
 **템플릿 엔진의 실제 발행 경로 `/w/[slug]` 와 하객 대시보드 `/dashboard/[slug]` 가 빠져 있다.**
 → 신 렌더러로 발행된 청첩장에서 세션 락 충돌이 재발할 수 있다.
 
-### 3-3. [P0] 에러를 수신하지 않는 쿼리 19곳
+### 3-3. [P0] 에러를 수신하지 않는 쿼리 19곳 — ✅ 완료
 
 ```
 const { data } = await supabase.from('bgms').select('*')   // error 미수신
@@ -278,7 +278,15 @@ const { data } = await supabase.from('bgms').select('*')   // error 미수신
 테이블이 없어도 `data = null` → `[]` 로 조용히 흘러간다.
 §1의 8개 테이블 누락이 지금까지 드러나지 않은 직접적 원인이다.
 
-→ 최소한 `if (error) console.error(...)` 또는 공용 `queryOrThrow()` 래퍼 도입.
+`lib/supabase.ts` 에 `logSupabaseError(context, error)` 헬퍼를 추가하고, 원래
+식별된 `const { data } = await supabase...`(별칭 없음) 19곳 전부에 `error` 를
+받아 로깅하도록 교정했다 (동작은 그대로, 실패 시 콘솔에 남도록만 추가).
+
+> **후속 스코프**: 이번엔 원 감사에서 지목된 19곳(별칭 없는 `{ data }`)만
+> 처리했다. `{ data: xxx }` 형태의 별칭 있는 동일 패턴이 앱 전역에 약 32곳 더
+> 있다(`w/[slug]`, `invitation/[id]/dashboard`, `admin/statistics`,
+> `hooks/queries/*` 등) — 범위가 커서 이번 세션에는 포함하지 않았다. 같은
+> `logSupabaseError` 헬퍼로 이어서 정리할 것.
 
 ### 3-4. [P1] 인증 가드가 쿠키 존재 여부만 확인
 

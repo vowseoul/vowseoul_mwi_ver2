@@ -7,7 +7,7 @@ import { Footer } from '@/components/footer'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { sampleThemes, Theme } from '@/lib/store'
-import { supabase } from '@/lib/supabase'
+import { supabase, logSupabaseError } from '@/lib/supabase'
 import { Eye, FileText, Loader2 } from 'lucide-react'
 
 export default function TemplatesPage() {
@@ -17,7 +17,8 @@ export default function TemplatesPage() {
 
   useEffect(() => {
     const fetchThemes = async () => {
-      const { data } = await supabase.from('themes').select('*')
+      const { data, error } = await supabase.from('themes').select('*')
+      logSupabaseError('fetchThemes (templates page)', error)
       if (data && data.length > 0) {
         setThemes(data as any)
       } else {

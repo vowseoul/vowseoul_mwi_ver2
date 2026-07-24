@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { sampleThemes, sampleBGMs, Theme, samplePhrases } from '@/lib/store'
-import { supabase } from '@/lib/supabase'
+import { supabase, logSupabaseError } from '@/lib/supabase'
 import { Plus, Play, Pause, Trash2, Upload, Loader2, CheckCircle2 } from 'lucide-react'
 import { uploadFile, deleteFile } from '@/lib/storage'
 import Link from 'next/link'
@@ -67,11 +67,12 @@ export default function AssetsPage() {
   const fetchFonts = async () => {
     setIsLoadingFonts(true)
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('settings')
         .select('*')
         .eq('key', 'fonts')
-      
+      logSupabaseError('fetchFonts (assets page)', error)
+
       if (data && data.length > 0 && data[0].value) {
         setFonts(data[0].value)
       } else {
@@ -169,7 +170,8 @@ export default function AssetsPage() {
 
   const fetchBgms = async () => {
     setIsLoadingBgms(true)
-    const { data } = await supabase.from('bgms').select('*')
+    const { data, error } = await supabase.from('bgms').select('*')
+    logSupabaseError('fetchBgms (assets page)', error)
     if (data && data.length > 0) {
       setBgms(data)
     } else {

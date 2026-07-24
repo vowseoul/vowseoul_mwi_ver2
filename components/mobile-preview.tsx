@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useAppStore, sampleThemes } from '@/lib/store'
 import { NaverMap } from '@/components/naver-map'
-import { supabase } from '@/lib/supabase'
+import { supabase, logSupabaseError } from '@/lib/supabase'
 import { cn, getLegibleColor } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Logo } from '@/components/logo'
@@ -145,7 +145,8 @@ export function MobilePreview({ className, isSticky = true }: { className?: stri
   useEffect(() => {
     const loadFonts = async () => {
       try {
-        const { data } = await supabase.from('settings').select('*').eq('key', 'fonts')
+        const { data, error } = await supabase.from('settings').select('*').eq('key', 'fonts')
+        logSupabaseError('loadFonts (mobile-preview)', error)
         if (data && data.length > 0 && data[0].value) {
           setCustomFonts(data[0].value)
         }

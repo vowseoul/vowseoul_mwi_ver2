@@ -19,7 +19,7 @@ import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { MobilePreview } from '@/components/mobile-preview'
 import { useAppStore, sampleThemes, samplePhrases, type BankAccount, type Contact, type Order } from '@/lib/store'
-import { supabase } from '@/lib/supabase'
+import { supabase, logSupabaseError } from '@/lib/supabase'
 import { uploadFile } from '@/lib/storage'
 import { ChevronLeft, Save, Upload, Loader2, Plus, Trash2, Play, Pause, FileText, ArrowUp, ArrowDown, ExternalLink, Pencil, Image, Copy } from 'lucide-react'
 import { toast } from 'sonner'
@@ -156,13 +156,15 @@ export default function OrderDetailPage() {
   }, [orderId])
 
   const fetchBgms = async () => {
-    const { data } = await supabase.from('bgms').select('*')
+    const { data, error } = await supabase.from('bgms').select('*')
+    logSupabaseError('fetchBgms (order detail)', error)
     if (data) setBgms(data)
   }
 
   const fetchFonts = async () => {
     try {
-      const { data } = await supabase.from('settings').select('*').eq('key', 'fonts')
+      const { data, error } = await supabase.from('settings').select('*').eq('key', 'fonts')
+      logSupabaseError('fetchFonts (order detail)', error)
       if (data && data.length > 0 && data[0].value) {
         setCustomFonts(data[0].value)
       }

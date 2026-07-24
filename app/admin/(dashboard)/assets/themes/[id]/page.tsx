@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { ChevronLeft, Save, Upload, Download, Loader2, Link as LinkIcon, Music, Heart, Copy, Phone, Calendar as CalendarIcon, Share2, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
-import { supabase } from '@/lib/supabase'
+import { supabase, logSupabaseError } from '@/lib/supabase'
 import { uploadFile } from '@/lib/storage'
 import { sampleThemes } from '@/lib/store'
 import { cn, getLegibleColor } from '@/lib/utils'
@@ -92,13 +92,15 @@ export default function ThemeEditorPage() {
   }, [themeId])
 
   const fetchBgms = async () => {
-    const { data } = await supabase.from('bgms').select('*')
+    const { data, error } = await supabase.from('bgms').select('*')
+    logSupabaseError('fetchBgms (theme editor)', error)
     if (data) setBgms(data)
   }
 
   const fetchFonts = async () => {
     try {
-      const { data } = await supabase.from('settings').select('*').eq('key', 'fonts')
+      const { data, error } = await supabase.from('settings').select('*').eq('key', 'fonts')
+      logSupabaseError('fetchFonts (theme editor)', error)
       if (data && data.length > 0 && data[0].value) {
         setCustomFonts(data[0].value)
       }

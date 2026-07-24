@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { supabase } from './supabase'
+import { supabase, logSupabaseError } from './supabase'
 
 export interface WeddingInvitation {
   id: string
@@ -358,7 +358,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       let faqs: any[] = []
       try {
-        const { data } = await supabase.from('faqs').select('*')
+        const { data, error } = await supabase.from('faqs').select('*')
+        logSupabaseError('fetchData: faqs', error)
         faqs = data || []
       } catch (err) {
         faqs = []
@@ -366,7 +367,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       let themes: any[] = []
       try {
-        const { data } = await supabase.from('themes').select('*')
+        const { data, error } = await supabase.from('themes').select('*')
+        logSupabaseError('fetchData: themes', error)
         themes = data || []
       } catch (err) {
         themes = []
@@ -374,7 +376,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       let bgms: any[] = []
       try {
-        const { data } = await supabase.from('bgms').select('*')
+        const { data, error } = await supabase.from('bgms').select('*')
+        logSupabaseError('fetchData: bgms', error)
         bgms = data || []
       } catch (err) {
         bgms = []
@@ -382,7 +385,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       let customers: any[] = []
       try {
-        const { data } = await supabase.from('customers').select('*')
+        const { data, error } = await supabase.from('customers').select('*')
+        logSupabaseError('fetchData: customers', error)
         customers = data || []
       } catch (err) {
         customers = []
@@ -390,7 +394,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       let invitations: any[] = []
       try {
-        const { data } = await supabase.from('invitations').select('*')
+        const { data, error } = await supabase.from('invitations').select('*')
+        logSupabaseError('fetchData: invitations', error)
         invitations = data || []
       } catch (err) {
         invitations = []

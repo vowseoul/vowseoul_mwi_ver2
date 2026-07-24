@@ -33,7 +33,7 @@ import {
   Pause,
   Image
 } from "lucide-react"
-import { supabase } from "@/lib/supabase"
+import { supabase, logSupabaseError } from "@/lib/supabase"
 import { NaverMap } from "@/components/naver-map"
 import { toast } from "sonner"
 import { format } from "date-fns"
@@ -204,7 +204,8 @@ export default function InvitationClient({
     const loadFonts = async () => {
       if (initialFonts && initialFonts.length > 0) return
       try {
-        const { data } = await supabase.from('settings').select('*').eq('key', 'fonts')
+        const { data, error } = await supabase.from('settings').select('*').eq('key', 'fonts')
+        logSupabaseError('loadFonts (invitation-client)', error)
         if (data && data.length > 0 && data[0].value) {
           setCustomFonts(data[0].value)
         }
