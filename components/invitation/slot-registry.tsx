@@ -536,33 +536,99 @@ const stepBtn: React.CSSProperties = {
 }
 
 /* ---------------------------- Guestbook ---------------------------- */
-function GuestbookIsland({ accent }: SlotProps) {
-  const [entries, setEntries] = useState<{ name: string; msg: string }[]>([
-    { name: "정우", msg: "두 사람 결혼 진심으로 축하해!" },
-  ])
+/**
+ * guestbook_entries 테이블에 맞춰 구현. invitationId 가 없으면 미리보기 모드
+ * (로컬 state만 사용, 저장 없음) — RsvpIsland 와 동일한 규칙.
+ * password_hash 는 자기 글 삭제 UI가 없어 실질적으로 쓰이지 않는 자리표시자다
+ * (NOT NULL 제약만 만족시키는 빈 문자열). 노출 여부는 관리자 대시보드에서 관리한다.
+ */
+function GuestbookIsland({ accent, invitationId }: SlotProps) {
+  const [entries, setEntries] = useState<{ id: string; name: string; msg: string }[]>([])
+  const [loading, setLoading] = useState(!!invitationId)
   const [name, setName] = useState("")
   const [msg, setMsg] = useState("")
-  const add = () => {
-    if (!name || !msg) return
-    setEntries((e) => [{ name, msg }, ...e])
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!invitationId) { setLoading(false); return }
+    let active = true
+    ;(async () => {
+      const { data, error: err } = await supabase
+        .from("guestbook_entries")
+        .select("id, author_name, message")
+        .eq("invitation_id", invitationId)
+        .eq("is_visible", true)
+        .order("created_at", { ascending: false })
+        .limit(50)
+      if (!active) return
+      if (!err && data) {
+        setEntries(data.map((r) => ({ id: r.id, name: r.author_name, msg: r.message })))
+      }
+      setLoading(false)
+    })()
+    return () => { active = false }
+  }, [invitationId])
+
+  const add = async () => {
+    if (!name.trim() || !msg.trim()) return
+    setError(null)
+
+    if (!invitationId) {
+      // 미리보기 모드: 저장 없이 화면에만 반영
+      setEntries((e) => [{ id: "preview-" + Date.now(), name, msg }, ...e])
+      setName(""); setMsg("")
+      return
+    }
+
+    setSaving(true)
+    const { data, error: err } = await supabase
+      .from("guestbook_entries")
+      .insert({
+        invitation_id: invitationId,
+        author_name: name.trim(),
+        message: msg.trim(),
+        password_hash: "",
+      })
+      .select("id, author_name, message")
+      .single()
+    setSaving(false)
+
+    if (err || !data) {
+      setError("등록에 실패했습니다. 잠시 후 다시 시도해주세요.")
+      return
+    }
+    setEntries((e) => [{ id: data.id, name: data.author_name, msg: data.message }, ...e])
     setName(""); setMsg("")
   }
+
   return (
     <div style={{ textAlign: "left", maxWidth: 320, margin: "0 auto", fontSize: 13 }}>
       <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="이름"
+          disabled={saving}
           style={{ width: 80, padding: "8px 10px", border: "1px solid #e2ddd6", borderRadius: 8, outline: "none", fontSize: 13 }} />
         <input value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="축하 메시지"
+          disabled={saving}
           style={{ flex: 1, padding: "8px 10px", border: "1px solid #e2ddd6", borderRadius: 8, outline: "none", fontSize: 13 }} />
-        <button onClick={add} style={{ padding: "0 14px", borderRadius: 8, border: "none", cursor: "pointer", background: accent, color: "#fff", fontSize: 13 }}>등록</button>
+        <button onClick={add} disabled={saving} style={{ padding: "0 14px", borderRadius: 8, border: "none", cursor: saving ? "wait" : "pointer", background: accent, color: "#fff", fontSize: 13, opacity: saving ? 0.7 : 1 }}>
+          {saving ? "등록 중…" : "등록"}
+        </button>
       </div>
+      {error && <p style={{ fontSize: 12, color: "#dc2626", margin: "4px 0" }}>{error}</p>}
       <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
-        {entries.map((e, i) => (
-          <div key={i} style={{ padding: "10px 12px", background: "rgba(255,255,255,.5)", borderRadius: 8 }}>
-            <span style={{ color: accent, marginRight: 8 }}>{e.name}</span>
-            <span>{e.msg}</span>
-          </div>
-        ))}
+        {loading ? (
+          <div style={{ padding: "10px 12px", opacity: 0.6 }}>불러오는 중…</div>
+        ) : entries.length === 0 ? (
+          <div style={{ padding: "10px 12px", opacity: 0.6 }}>아직 등록된 축하 메시지가 없습니다.</div>
+        ) : (
+          entries.map((e) => (
+            <div key={e.id} style={{ padding: "10px 12px", background: "rgba(255,255,255,.5)", borderRadius: 8 }}>
+              <span style={{ color: accent, marginRight: 8 }}>{e.name}</span>
+              <span>{e.msg}</span>
+            </div>
+          ))
+        )}
       </div>
     </div>
   )

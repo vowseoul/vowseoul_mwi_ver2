@@ -254,7 +254,7 @@ CREATE TABLE orders (
 
 ## 3. [P0/P1] 오류 발생 포인트
 
-### 3-1. [P0] 방명록 슬롯이 저장을 안 하고, 가짜 글이 실제로 보인다
+### 3-1. [P0] 방명록 슬롯이 저장을 안 하고, 가짜 글이 실제로 보인다 — ✅ 완료
 
 `components/invitation/slot-registry.tsx:539` `GuestbookIsland`
 
@@ -268,7 +268,14 @@ const [entries, setEntries] = useState([
 - **하드코딩된 "정우" 축하글이 실제 발행 청첩장에 노출된다.**
 - 같은 파일의 `RsvpIsland`(L383)는 `rsvp_responses` 에 정상 insert 하고 있어 대비된다.
 
-→ `guestbook_entries` 연동 + 비밀번호(bcrypt) 처리 + 목록 조회 구현 필요.
+→ `guestbook_entries` 조회/등록 연동 완료. `invitationId` 있으면 실 DB(공개된
+`is_visible=true` 항목만, 최신순 50개) 조회 후 등록 시 insert, 없으면(테마랩 등
+미리보기) 로컬 state만 사용 — `RsvpIsland` 와 동일한 규칙. `password_hash` 는
+자기 글 삭제 UI가 없어 빈 문자열 자리표시자로 NOT NULL 만 충족시킨다(§1-A 부속
+참고). theme-lab 브라우저 테스트로 미리보기 모드 등록/표시 확인, 실 DB
+경로는 insert/select curl 왕복으로 스키마 정합 확인 완료 — 어떤 배포된
+테마도 아직 `slot_manifest`에 `guestbook`을 선언하지 않아 실제 청첩장에서의
+end-to-end 클릭 테스트는 다음 테마 등록 시 진행할 것.
 
 ### 3-2. [P0] Supabase 클라이언트의 public 경로 목록에 신규 발행 경로 누락
 
