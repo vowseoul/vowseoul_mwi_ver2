@@ -262,19 +262,21 @@ CREATE TABLE orders (
 
 ## 2. [P1] 하드코딩 데이터 → 실 DB 연동
 
-### 2-1. 순수 목데이터 (화면은 그럴듯한데 전부 가짜)
+### 2-1. 순수 목데이터 (화면은 그럴듯한데 전부 가짜) — ✅ 완료
 
-| 위치 | 내용 | 연동 대상 |
+| 위치 | 내용 | 처리 |
 |---|---|---|
-| `app/admin/(dashboard)/templates/page.tsx:28` | `mockTemplates` 6건. 추가/수정/삭제 전부 무동작 | `themes` (+ `theme_versions`) |
-| `app/admin/(dashboard)/users/page.tsx:32` | `mockUsers` 5건 (이름·이메일·결제액) | `profiles` (이미 존재) |
-| `app/preview/template/[id]/page.tsx:487` | `mockImages` 갤러리 | `content_data.gallery_images` |
+| `app/admin/(dashboard)/templates/page.tsx` | `mockTemplates` 6건 | **삭제** — 사이드바 네비/코드베이스 어디서도 링크되지 않는 고아 페이지로 확인 |
+| `app/admin/(dashboard)/users/page.tsx` | `mockUsers` 5건 | **삭제** — 위와 동일하게 고아 페이지로 확인 |
+| `app/preview/template/[id]/page.tsx:487` | `mockImages` 갤러리 | 미착수 — 남은 항목 |
 
 > `app/my-invitations/page.tsx`(`mockInvitations`)는 소비자 셀프서비스 플로우와 함께
-> 이번 세션에 삭제됐다.
+> 이번 세션 초반에 삭제됐다.
 
-> `templates` 관리 화면은 이미 `themes` 테이블과 `admin/assets/themes/[id]` 가
-> 같은 역할을 하고 있다. **연동보다 화면 통폐합이 맞는지 먼저 판단**할 것.
+> `templates`/`users` 는 §7 결정 #3("assets/themes 와 통폐합할지")을 고민할 필요 없이
+> **애초에 어느 화면에서도 진입할 수 없는 라우트**였다(어드민 사이드바 nav 배열에 없음,
+> URL 직접 입력해야만 접근). `themes`/`profiles` 연동 대신 삭제로 처리 — 실사용
+> 경로였다면 이미 사이드바에 있었을 것.
 
 ### 2-2. 실 데이터에 가짜 값이 섞인 곳 (더 위험)
 
@@ -513,10 +515,10 @@ Supabase 생성 타입(`supabase gen types typescript`)이 없어 컬럼 오타�
 6. `orders`(§1-B 확정 스키마)/`bgms`/`faqs`/`notices`/`inquiries` 생성 · §1-B
    - **남은 결정**: `bgms` 저장 위치(테이블 vs `settings` JSONB)뿐
 
-### 2차 — 목데이터 실연동 (1주)
+### 2차 — 목데이터 실연동 (1주) — ✅ 전체 완료
 7. `statistics` 하드코딩 제거 또는 "샘플" 명시 · §2-2
 8. `store.ts` 합성 orders 제거(§1-B 정식 테이블로 대체), `sampleFaqs`/`sampleNotices` 폴백 제거 · §2-2
-9. `templates`/`users` 실연동 (또는 화면 통폐합) · §2-1
+9. ~~`templates`/`users` 실연동 (또는 화면 통폐합)~~ · §2-1 ✅ 완료 (고아 페이지 확인 후 삭제)
 
 ### 3차 — 중복 제거·안전망 (1~2주)
 10. ESLint 설정 복구 · §3-6
@@ -543,6 +545,6 @@ Supabase 생성 타입(`supabase gen types typescript`)이 없어 컬럼 오타�
 |---|---|---|
 | 1 | ~~`orders` 를 정식 테이블로 만들 것인가~~ | ✅ 확정 — §1-B 스키마대로 "제작 의뢰 이행 기록"으로 재정의. 결제 게이트웨이 불필요(네이버 스마트스토어가 처리) |
 | 2 | `bgms` = 테이블 vs `settings` JSONB | 미결 — 9개 호출 지점 영향 |
-| 3 | `admin/templates` 화면을 `admin/assets/themes` 와 통폐합할 것인가 | 미결 — §2-1 작업량에 영향 |
+| 3 | ~~`admin/templates` 화면을 `admin/assets/themes` 와 통폐합할 것인가~~ | ✅ 해소 — 애초에 사이드바 nav 에 없는 고아 페이지였음, `admin/users` 와 함께 삭제 |
 | 4 | legacy 테마 2개(봄날의 세레나데/모던 에센스)를 템플릿 엔진으로 이관할 것인가 | 미결 — 이관 전까지 `orders/[id]` 3,431줄 + legacy 렌더러 4벌 유지 필요 |
 | 5 | `statistics` 를 실연동 전까지 숨길 것인가, "샘플" 배지로 남길 것인가 | 미결 — 운영 오판 리스크 |
