@@ -345,21 +345,31 @@ export default function AssetsPage() {
                         className="overflow-hidden rounded-lg border border-border transition-all hover:border-primary/50"
                       >
                         <Link href={`/admin/assets/themes/${theme.id}`} className="block">
-                          <div 
-                            className="aspect-[3/4] p-4 cursor-pointer"
-                            style={{ backgroundColor: defaultBg }}
-                          >
-                            <div 
-                              className="flex h-full flex-col items-center justify-center text-center"
-                              style={{ color: defaultText }}
-                            >
-                              <p className="font-serif text-sm">Preview</p>
-                              <div 
-                                className="mt-3 h-12 w-10 rounded-sm"
-                                style={{ backgroundColor: defaultPrimary }}
+                          {theme.thumbnail ? (
+                            <div className="aspect-[3/4] cursor-pointer overflow-hidden">
+                              <img
+                                src={theme.thumbnail}
+                                alt={theme.name}
+                                className="h-full w-full object-cover"
                               />
                             </div>
-                          </div>
+                          ) : (
+                            <div
+                              className="aspect-[3/4] p-4 cursor-pointer"
+                              style={{ backgroundColor: defaultBg }}
+                            >
+                              <div
+                                className="flex h-full flex-col items-center justify-center text-center"
+                                style={{ color: defaultText }}
+                              >
+                                <p className="font-serif text-sm">Preview</p>
+                                <div
+                                  className="mt-3 h-12 w-10 rounded-sm"
+                                  style={{ backgroundColor: defaultPrimary }}
+                                />
+                              </div>
+                            </div>
+                          )}
                         </Link>
                         <div className="border-t border-border bg-background p-3">
                           <div className="flex items-center justify-between">

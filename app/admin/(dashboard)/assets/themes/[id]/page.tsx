@@ -13,12 +13,16 @@ import { Switch } from '@/components/ui/switch'
 import { ChevronLeft, Save, Upload, Download, Loader2, Link as LinkIcon, Music, Heart, Copy, Phone, Calendar as CalendarIcon, Share2, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase, logSupabaseError } from '@/lib/supabase'
-import { resolveThemeSwatch } from '@/lib/theme-template'
+import { resolveThemeSwatch, buildThemeTokens } from '@/lib/theme-template'
 import { uploadFile } from '@/lib/storage'
 import { sampleThemes } from '@/lib/store'
 import { DEFAULT_BLOCK_ORDER } from '@/lib/constants'
 import { cn, getLegibleColor } from '@/lib/utils'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { InvitationFrame, type ThemeTemplate, type TokenMap } from '@/components/invitation/invitation-frame'
+import { buildSlots } from '@/components/invitation/slot-registry'
+import { buildFieldData } from '@/lib/invitation-data'
+import { SAMPLE_RAW } from '@/lib/sample-invitation'
 
 export default function ThemeEditorPage() {
   const params = useParams()
@@ -84,6 +88,14 @@ export default function ThemeEditorPage() {
   const [fontSets, setFontSets] = useState<any[]>([])
   const [newColorSetName, setNewColorSetName] = useState('')
   const [newFontSetName, setNewFontSetName] = useState('')
+
+  /** 템플릿(B+iframe) 엔진 테마 여부 및 실제 마크업 — 실시간 미리보기에 사용 */
+  const [engineInfo, setEngineInfo] = useState<{
+    renderEngine: string
+    templateHtml: string
+    templateCss: string
+    slotManifest: string[]
+  } | null>(null)
 
   useEffect(() => {
     fetchBgms()
@@ -184,6 +196,12 @@ export default function ThemeEditorPage() {
         name: '기본 폰트',
         fonts: [data.styles?.fontKr || 'font-serif', data.styles?.fontEn || 'font-serif']
       }])
+      setEngineInfo({
+        renderEngine: data.render_engine || 'legacy',
+        templateHtml: data.template_html || '',
+        templateCss: data.template_css || '',
+        slotManifest: Array.isArray(data.slot_manifest) ? data.slot_manifest : [],
+      })
     } else {
       const sample = sampleThemes.find(t => t.id === themeId)
       if (sample) {
@@ -513,6 +531,34 @@ export default function ThemeEditorPage() {
     color1 = theme.backgroundColor || '#CCECFF'
     color2 = theme.primaryColor || '#361623'
   }
+
+  // 템플릿(B+iframe) 엔진 테마면 실제 template_html/css 로 미리보기 (레거시 목업 대신)
+  const isTemplateEngine = engineInfo?.renderEngine === 'template' && !!engineInfo.templateHtml
+  const previewTemplate: ThemeTemplate | null = isTemplateEngine && engineInfo ? {
+    key: themeId,
+    name: theme.name,
+    html: engineInfo.templateHtml,
+    css: engineInfo.templateCss,
+    slots: engineInfo.slotManifest,
+  } : null
+  const previewTokens: TokenMap = buildThemeTokens({
+    id: themeId,
+    styles: {
+      primaryColor: theme.primaryColor,
+      backgroundColor: theme.backgroundColor,
+      textColor: theme.textColor,
+      fontKr: theme.fontKr,
+      fontEn: theme.fontEn,
+    },
+  })
+  const previewFieldData = buildFieldData(SAMPLE_RAW)
+  const previewSlots = previewTemplate
+    ? buildSlots(previewTemplate.slots ?? [], {
+        accent: previewTokens['--accent'] || theme.primaryColor,
+        data: previewFieldData,
+        raw: SAMPLE_RAW,
+      })
+    : {}
 
   const getSectionColors = (sectionId: string, index: number) => {
     if (!isDuotone) {
@@ -1119,7 +1165,19 @@ export default function ThemeEditorPage() {
       {/* Right Panel: Mobile Preview */}
       <div className="w-full md:w-[400px] flex-shrink-0 bg-muted/20 border rounded-lg p-6 flex flex-col items-center justify-center shadow-inner overflow-hidden">
         <h3 className="mb-4 text-sm font-medium text-muted-foreground">실시간 모바일 미리보기</h3>
-        <div 
+        {isTemplateEngine && previewTemplate ? (
+          <div className="w-[320px] rounded-[2.5rem] overflow-hidden border-8 border-gray-900 shadow-xl">
+            <InvitationFrame
+              template={previewTemplate}
+              data={previewFieldData}
+              tokens={previewTokens}
+              slots={previewSlots}
+              width={304}
+              height={650}
+            />
+          </div>
+        ) : (
+        <div
           className="w-[320px] h-[650px] border-8 border-gray-900 rounded-[2.5rem] shadow-xl overflow-y-auto relative transition-colors duration-300 scrollbar-hide"
           style={{ 
             backgroundColor: isDuotone ? color1 : theme.backgroundColor, 
@@ -1554,6 +1612,7 @@ export default function ThemeEditorPage() {
             })}
           </div>
         </div>
+        )}
       </div>
 
       {/* Visual Section Style Customizer Dialog */}
