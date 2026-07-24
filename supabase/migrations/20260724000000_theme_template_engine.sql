@@ -1,12 +1,10 @@
--- =========================================================================
--- B(하이브리드) + iframe 테마 구조를 위한 themes 테이블 컬럼 추가
--- Supabase Dashboard -> SQL Editor 에 복사하여 실행해 주세요.
+-- Baseline snapshot — 이미 운영 DB에 적용된 변경 (구 theme_template_schema.sql 을 이관)
+-- 원본 커밋: 9dd869f (2026-07-24, template theme engine (B-hybrid + iframe) core)
 --
 -- 배경: 기존 테마는 하드코딩 렌더러(invitation-client.tsx) + styles jsonb 로 동작한다.
 --       새 구조는 테마가 자체 HTML/CSS(템플릿)를 갖고, 필요한 기능(슬롯)만 선언하며,
 --       InvitationFrame 이 이를 iframe 안에서 렌더링한다.
 --       두 방식을 render_engine 플래그로 구분해 무중단 점진 이행한다.
--- =========================================================================
 
 -- 1. 테마가 소유하는 마크업/스타일 (디자이너 export 결과)
 --    template_html : [data-field="키"] / [data-slot="키"] 마커가 포함된 HTML
@@ -30,8 +28,3 @@ ALTER TABLE public.themes ADD COLUMN IF NOT EXISTS "render_engine" text NOT NULL
 ALTER TABLE public.themes DROP CONSTRAINT IF EXISTS themes_render_engine_check;
 ALTER TABLE public.themes ADD CONSTRAINT themes_render_engine_check
   CHECK (render_engine IN ('legacy', 'template'));
-
--- 4. 확인용 조회 (선택)
--- SELECT id, name, render_engine, slot_manifest, field_manifest,
---        (template_html IS NOT NULL) AS has_html
--- FROM public.themes ORDER BY created_at DESC;

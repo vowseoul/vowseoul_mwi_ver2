@@ -7,7 +7,7 @@ import type { ThemeTemplate, TokenMap } from "@/components/invitation/invitation
  * InvitationFrame 이 요구하는 ThemeTemplate 형태로 변환한다.
  * render_engine 플래그로 신/구 렌더러를 구분한다.
  *
- * 관련 마이그레이션: theme_template_schema.sql
+ * 관련 마이그레이션: supabase/migrations/20260724000000_theme_template_engine.sql
  */
 
 export type RenderEngine = "legacy" | "template"

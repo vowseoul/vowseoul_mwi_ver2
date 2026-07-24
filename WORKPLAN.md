@@ -161,16 +161,34 @@ CREATE TABLE orders (
 
 **작업량**: 마이그레이션/RLS 1일 + 코드 정합(admin/orders 3개 화면 재작성) 1~2일.
 
-### 1-C. 마이그레이션 체계 부재
+### 1-C. 마이그레이션 체계 부재 — ✅ 완료
 
-현재 스키마 관리 방식:
+기존 방식 — 순서·적용 여부를 추적할 수 없는 루트 SQL 파일 3벌
+(`supabase_schema.sql`/`update_schema.sql`/`theme_template_schema.sql`,
+"Supabase Dashboard SQL Editor에 복사해 실행" 수동 방식) — 이 위 8개 테이블
+누락의 근본 원인이었다.
 
-- `supabase_schema.sql` — 초기 전량 정의 (18 테이블)
-- `update_schema.sql` — "Supabase Dashboard SQL Editor에 복사해 실행" 주석 (수동)
-- `theme_template_schema.sql` — 테마 엔진 컬럼 추가
+`npx supabase init` 으로 `supabase/` 프로젝트 구조를 만들고, 커밋 이력(`git log
+--diff-filter=A`)으로 확인한 실제 적용 순서에 맞춰 타임스탬프 마이그레이션으로 이관:
 
-→ 순서·적용 여부를 추적할 수 없고, 위 8개 테이블 누락도 이 때문에 발생했다.
-`supabase/migrations/` 도입 + 타임스탬프 파일명 규칙으로 전환할 것.
+- `supabase/migrations/20260708000000_initial_schema.sql` (구 `supabase_schema.sql`)
+- `supabase/migrations/20260709000000_storage_bucket.sql` (구 `create_storage_bucket.sql`)
+- `supabase/migrations/20260719000000_field_library_and_theme_assets.sql` (구 `update_schema.sql`)
+- `supabase/migrations/20260724000000_theme_template_engine.sql` (구 `theme_template_schema.sql`)
+- `supabase/seed.sql` (구 `seed.sql`, CLI 관례 경로)
+
+루트의 5개 원본 SQL 파일은 삭제. 이후 스키마 변경은 `supabase/migrations/`에
+새 타임스탬프 파일로만 추가할 것 (§1-B의 orders 등 신규 테이블부터 적용).
+
+> ⚠️ **별도 보안 메모**: `seed.sql`(현 `supabase/seed.sql`)에 관리자/디자이너 계정의
+> 평문 비밀번호(`admin1234`, `designer1234`)가 하드코딩되어 git 히스토리에 이미
+> 커밋되어 있다. 이번 이관으로 노출 범위가 늘지는 않았으나, 실제로 이 비밀번호를
+> 아직 쓰고 있다면 교체를 권장한다. 이 워크플랜의 스코프 밖이라 별도로 처리 필요.
+>
+> `supabase link`/`db pull` 로 라이브 DB와 실제로 동기화하려면 프로젝트 access
+> token과 DB 비밀번호가 필요하다 — 이 세션은 anon key만 갖고 있어 위 스냅샷은
+> "기존 SQL 파일 기준"이며 라이브와 byte-level로 대조하진 않았다. 편할 때 사용자가
+> `supabase db pull` 을 한 번 실행해 대조해볼 것을 권한다.
 
 ---
 

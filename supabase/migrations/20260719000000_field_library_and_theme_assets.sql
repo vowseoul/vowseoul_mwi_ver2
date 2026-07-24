@@ -1,7 +1,5 @@
--- =========================================================================
--- 카테고리 자유 편집 및 '라디오 선택 (rselect)' 타입 추가를 위해 제약 조건 삭제
--- Supabase Dashboard -> SQL Editor에 복사하여 실행해 주세요.
--- =========================================================================
+-- Baseline snapshot — 이미 운영 DB에 적용된 변경 (구 update_schema.sql 을 이관)
+-- 원본 커밋: a336597 (2026-07-19, 폼 시스템 전면 리디자인)
 
 -- 1. field_library 테이블의 카테고리 CHECK 제약 조건 삭제
 ALTER TABLE public.field_library DROP CONSTRAINT IF EXISTS field_library_category_check;

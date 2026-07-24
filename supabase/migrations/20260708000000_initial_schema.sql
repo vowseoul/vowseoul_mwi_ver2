@@ -1,5 +1,5 @@
--- Supabase SQL Schema for VOW SEOUL (v2.1)
--- 이 쿼리를 Supabase SQL Editor에 복사하여 실행하세요.
+-- Baseline snapshot — 이미 운영 DB에 적용된 최초 스키마 (구 supabase_schema.sql 을 이관)
+-- 원본 커밋: 1802a02 (2026-07-08, initial commit of independent vowseoul mwi v2 project)
 
 -- 0. 확장 기능 활성화
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -337,15 +337,19 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- 트리거 바인딩
+DROP TRIGGER IF EXISTS set_customers_updated_at ON public.customers;
 CREATE TRIGGER set_customers_updated_at BEFORE UPDATE ON public.customers
 FOR EACH ROW EXECUTE FUNCTION public.set_current_timestamp_updated_at();
 
+DROP TRIGGER IF EXISTS set_form_templates_updated_at ON public.form_templates;
 CREATE TRIGGER set_form_templates_updated_at BEFORE UPDATE ON public.form_templates
 FOR EACH ROW EXECUTE FUNCTION public.set_current_timestamp_updated_at();
 
+DROP TRIGGER IF EXISTS set_form_submissions_updated_at ON public.form_submissions;
 CREATE TRIGGER set_form_submissions_updated_at BEFORE UPDATE ON public.form_submissions
 FOR EACH ROW EXECUTE FUNCTION public.set_current_timestamp_updated_at();
 
+DROP TRIGGER IF EXISTS set_invitations_updated_at ON public.invitations;
 CREATE TRIGGER set_invitations_updated_at BEFORE UPDATE ON public.invitations
 FOR EACH ROW EXECUTE FUNCTION public.set_current_timestamp_updated_at();
 
