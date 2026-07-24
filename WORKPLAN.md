@@ -387,10 +387,26 @@ const { data } = await supabase.from('bgms').select('*')   // error 미수신
 빌드 로그: `The "middleware" file convention is deprecated. Please use "proxy" instead.`
 → 3-4 작업과 함께 `proxy.ts` 로 이관.
 
-### 3-6. [P1] ESLint가 동작하지 않음
+### 3-6. [P1] ESLint가 동작하지 않음 — ✅ 완료
 
-`package.json` 에 `"lint": "eslint ."` 이 있으나 `eslint.config.*` / `.eslintrc*` 파일이 없다.
-현재 `pnpm lint` 는 설정 없음 오류로 종료 → **정적 검사가 0인 상태.**
+`package.json` 에 `"lint": "eslint ."` 이 있으나 `eslint.config.*` / `.eslintrc*` 파일이 없었고
+`eslint` 자체도 devDependencies 에 없었다. 현재 `pnpm lint` 는 설정 없음 오류로 종료 →
+**정적 검사가 0인 상태였다.**
+
+`eslint@9`, `eslint-config-next@16.2.0`(Next 버전과 일치), `@eslint/eslintrc` 설치 +
+`eslint.config.mjs`(flat config) 추가. 처음엔 `FlatCompat.extends("next/core-web-vitals")`
+로 시도했으나 legacy shim이 flat-config용 `eslint-plugin-react` 인스턴스와 충돌해
+"Converting circular structure to JSON" 에러가 났다 — `eslint-config-next` 의
+default export 자체가 이미 flat config 배열이라 FlatCompat 없이 바로 spread 해서 해결.
+
+`components/ui/**`(shadcn 생성 컴포넌트, 직접 수정 대상 아님)는 lint 제외 처리.
+
+**남은 실제 위반**: 104건(에러 32 + 경고 72). 대부분 `<img>` → `next/image` 권고,
+`jsx-a11y/alt-text`, 그리고 `react-hooks/set-state-in-effect`/`react-hooks/purity`
+(React 19의 더 엄격해진 규칙 — `hooks/use-mobile.ts`, `components/naver-map.tsx` 등에서
+effect 안에서 곧바로 setState 하거나 렌더 중 `Math.random()` 호출하는 기존 패턴을 지적).
+**이번 세션은 린터를 동작시키는 것까지만 처리했고, 위반 수정 자체는 하지 않았다** —
+별도 후속 작업으로 남겨둠(전체 리스트는 `pnpm lint` 실행 결과 참고).
 
 ### 3-7. [P1] 레거시 편집기 ↔ 필드키 정합 — ✅ (b) 적용 완료
 
