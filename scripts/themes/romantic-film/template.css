@@ -1,0 +1,402 @@
+@import url('https://fonts.googleapis.com/css2?family=Kaushan+Script&family=Noto+Serif+KR:wght@300;400;500;600;700&family=Radio+Canada+Big:ital,wght@0,400..700;1,400..700&display=swap');
+
+:root {
+  --bg: #9EB7CE;
+  --accent: #62798E;
+  --ink: #FFFFFF;
+  --accent-2: #B0C7DD;
+  --ink-2: rgba(255, 255, 255, 0.7);
+  --font-kr: 'Noto Serif KR', serif;
+  --font-en: 'Radio Canada Big', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.sb-container {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  background-color: var(--bg, #9EB7CE);
+  color: var(--ink, #FFFFFF);
+  font-family: var(--font-en, 'Radio Canada Big', sans-serif);
+  overflow-x: hidden;
+  position: relative;
+  word-break: keep-all;
+}
+
+/* 1. HERO SECTION */
+.sb-hero {
+  position: relative;
+  height: 640px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  text-align: center;
+  padding-bottom: 48px;
+  overflow: hidden;
+  background-color: var(--bg, #9EB7CE);
+}
+
+.sb-hero__bg-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
+
+.sb-hero__overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: linear-gradient(
+    to top,
+    rgba(158, 183, 206, 1) 0%,
+    rgba(158, 183, 206, 0) 70%,
+    rgba(158, 183, 206, 0.3) 100%
+  );
+}
+
+.sb-hero__title-wrap {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  margin-top: -16px;
+}
+
+.sb-hero__title-inner {
+  position: relative;
+  width: 280px;
+  height: 130px;
+  user-select: none;
+  color: var(--ink, #FFFFFF);
+}
+
+.sb-hero__word {
+  position: absolute;
+  line-height: 1;
+}
+
+.sb-hero__word--save {
+  left: 8px;
+  top: 16px;
+  font-size: 48px;
+  letter-spacing: 0.1em;
+  font-weight: 400;
+  font-family: 'Kaushan Script', cursive;
+}
+
+.sb-hero__word--the {
+  left: 103px;
+  top: 72px;
+  font-size: 18px;
+  font-style: italic;
+  opacity: 0.9;
+  font-family: 'Kaushan Script', cursive;
+}
+
+.sb-hero__word--date {
+  left: 138px;
+  top: 60px;
+  font-size: 48px;
+  letter-spacing: 0.1em;
+  font-weight: 400;
+  font-family: 'Kaushan Script', cursive;
+}
+
+.sb-hero__spacer {
+  height: 40px;
+}
+
+.sb-hero__info {
+  position: relative;
+  z-index: 20;
+  padding: 0 24px;
+}
+
+.sb-hero__names {
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 24px;
+  font-family: var(--font-kr, 'Noto Serif KR', serif);
+}
+
+.sb-hero__amp {
+  opacity: 0.6;
+  font-size: 12px;
+  font-style: italic;
+  font-family: serif;
+}
+
+.sb-hero__datetime-venue {
+  font-size: 11px;
+  line-height: 1.6;
+  letter-spacing: 0.05em;
+  opacity: 0.9;
+}
+
+.sb-hero__sub-info {
+  margin-top: 2px;
+}
+
+/* 2. GREETING SECTION */
+.sb-greeting {
+  position: relative;
+  padding: 64px 24px;
+  text-align: center;
+  background-color: var(--bg, #9EB7CE);
+  color: var(--ink, #FFFFFF);
+}
+
+.sb-parents {
+  max-width: 280px;
+  margin: 0 auto 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sb-parents__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 300;
+}
+
+.sb-parents__relation-wrap {
+  text-align: left;
+}
+
+.sb-parents__label {
+  font-size: 9px;
+  opacity: 0.6;
+  display: block;
+  letter-spacing: 0.15em;
+  font-family: monospace;
+}
+
+.sb-parents__relation-text {
+  letter-spacing: 0.05em;
+}
+
+.sb-parents__child-name {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  width: 64px;
+  text-align: left;
+  margin-left: 16px;
+}
+
+.sb-greeting__divider {
+  height: 1px;
+  background-color: rgba(255, 255, 255, 0.2);
+  max-width: 280px;
+  margin: 0 auto 24px;
+}
+
+.sb-greeting__message {
+  font-size: 14px;
+  line-height: 1.8;
+  letter-spacing: 0.05em;
+  font-weight: 300;
+  max-width: 300px;
+  margin: 0 auto;
+  white-space: pre-line;
+  opacity: 0.95;
+  font-family: var(--font-kr, 'Noto Serif KR', serif);
+}
+
+/* COMMON SECTION STYLES */
+.sb-section {
+  padding: 64px 24px;
+  text-align: center;
+  background-color: var(--bg, #9EB7CE);
+  color: var(--ink, #FFFFFF);
+}
+
+.sb-section__subtitle {
+  font-size: 18px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  opacity: 0.8;
+}
+
+.sb-section__title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-top: 4px;
+  margin-bottom: 32px;
+  font-family: var(--font-kr, 'Noto Serif KR', serif);
+}
+
+/* 4. ORDER / SEQUENCE TABLE */
+.sb-order-table {
+  max-width: 280px;
+  margin: 0 auto;
+  border-top: 1px solid var(--ink, #FFFFFF);
+  border-bottom: 1px solid var(--ink, #FFFFFF);
+}
+
+.sb-order-table__row {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  padding: 14px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.sb-order-table__row:last-child {
+  border-bottom: none;
+}
+
+.sb-order-table__time {
+  width: 60px;
+  text-align: left;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  font-family: monospace;
+}
+
+.sb-order-table__divider {
+  width: 1px;
+  height: 16px;
+  background-color: var(--ink, #FFFFFF);
+  margin: 0 16px;
+}
+
+.sb-order-table__desc {
+  flex: 1;
+  text-align: left;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+  font-family: var(--font-kr, 'Noto Serif KR', serif);
+}
+
+/* 5. CALENDAR & D-DAY */
+.sb-calendar-card {
+  max-width: 280px;
+  margin: 0 auto;
+  background-color: #FFFFFF;
+  padding: 24px;
+  color: #000000;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.sb-calendar-card__header {
+  text-align: center;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  font-family: monospace;
+  color: var(--accent, #62798E);
+  margin-bottom: 24px;
+}
+
+.sb-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  row-gap: 12px;
+  text-align: center;
+  font-size: 12px;
+}
+
+.sb-calendar-grid__day-name {
+  padding: 4px 0;
+  opacity: 0.4;
+  font-weight: 600;
+}
+
+.sb-calendar-grid__active {
+  position: relative;
+  padding: 4px 0;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0 auto;
+  border-radius: 50%;
+  font-weight: 700;
+  color: #FFFFFF;
+  background-color: var(--accent, #62798E);
+}
+
+.sb-dday-container {
+  margin-top: 32px;
+  text-align: center;
+}
+
+.sb-dday-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-weight: 600;
+  color: var(--accent, #62798E);
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+
+.sb-dday-badge {
+  font-size: 32px;
+  font-weight: 300;
+  color: var(--accent, #62798E);
+  font-family: monospace;
+}
+
+/* 6. LOCATION */
+.sb-location-card {
+  background-color: #FFFFFF;
+  padding: 24px;
+  text-align: center;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  margin-bottom: 16px;
+  border-radius: 0;
+}
+
+.sb-location-card__name {
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: 0.05em;
+  color: #000000;
+  font-family: var(--font-kr, 'Noto Serif KR', serif);
+}
+
+.sb-location-card__hall {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--accent, #62798E);
+  margin-top: 4px;
+}
+
+.sb-location-card__address {
+  font-size: 14px;
+  margin-top: 8px;
+  white-space: pre-line;
+  color: rgba(0, 0, 0, 0.75);
+}
+
+.sb-location-card__hint {
+  font-size: 10px;
+  margin-top: 4px;
+  color: rgba(0, 0, 0, 0.4);
+}

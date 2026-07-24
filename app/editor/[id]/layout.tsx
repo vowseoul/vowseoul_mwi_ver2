@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useParams, usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { MobilePreview } from '@/components/mobile-preview'
+import { EditorPreview } from '@/components/invitation/editor-preview'
 import { useAppStore, sampleThemes } from '@/lib/store'
 import { supabase } from '@/lib/supabase'
 import { ArrowLeft, Check } from 'lucide-react'
@@ -212,7 +212,7 @@ export default function EditorLayout({
         {/* Right Panel - Preview */}
         {editorStep !== 5 && (
           <div className="hidden w-[400px] border-l border-border bg-muted/30 p-6 lg:block">
-            <MobilePreview />
+            <EditorPreview />
           </div>
         )}
       </div>

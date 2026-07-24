@@ -1,0 +1,133 @@
+<div class="sb-container">
+  <!-- 1. HERO SECTION -->
+  <section class="sb-hero">
+    <!-- Background Image -->
+    <img class="sb-hero__bg-img" data-field="main_image" src="https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=800&auto=format&fit=crop" alt="메인 사진" />
+    
+    <!-- Gradient Overlay -->
+    <div class="sb-hero__overlay"></div>
+
+    <!-- Centered Main Text: SAVE the DATE -->
+    <div class="sb-hero__title-wrap">
+      <div class="sb-hero__title-inner">
+        <span class="sb-hero__word sb-hero__word--save">SAVE</span>
+        <span class="sb-hero__word sb-hero__word--the">the</span>
+        <span class="sb-hero__word sb-hero__word--date">DATE</span>
+      </div>
+    </div>
+
+    <!-- Top Spacing Helper -->
+    <div class="sb-hero__spacer"></div>
+
+    <!-- Bottom Info -->
+    <div class="sb-hero__info">
+      <!-- Groom & Bride Name -->
+      <div class="sb-hero__names">
+        <span data-field="groom_name">김혁</span>
+        <span class="sb-hero__amp">&amp;</span>
+        <span data-field="bride_name">김민주</span>
+      </div>
+      
+      <!-- Date and Venue -->
+      <div class="sb-hero__datetime-venue">
+        <p data-field="wedding_date_display">2026. 09. 19 (토)</p>
+        <p class="sb-hero__sub-info">
+          <span data-field="wedding_time">오후 5시</span> | <span data-field="venue_name">춘천 스카이컨벤션 4층 스카이홀</span>
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. GREETING SECTION -->
+  <section class="sb-greeting">
+    <!-- Parent Names Spaced -->
+    <div class="sb-parents">
+      <!-- Groom Side -->
+      <div class="sb-parents__row">
+        <div class="sb-parents__relation-wrap">
+          <span class="sb-parents__label">GROOM</span>
+          <span class="sb-parents__relation-text">
+            <span data-field="groom_father_name">김태진</span> · <span data-field="groom_mother_name">정혜선</span><span data-field="groom_relationship">의 아들</span>
+          </span>
+        </div>
+        <span class="sb-parents__child-name" data-field="groom_name">혁</span>
+      </div>
+      
+      <!-- Bride Side -->
+      <div class="sb-parents__row">
+        <div class="sb-parents__relation-wrap">
+          <span class="sb-parents__label">BRIDE</span>
+          <span class="sb-parents__relation-text">
+            <span data-field="bride_father_name">김필래</span> · <span data-field="bride_mother_name">이수윤</span><span data-field="bride_relationship">의 딸</span>
+          </span>
+        </div>
+        <span class="sb-parents__child-name" data-field="bride_name">민주</span>
+      </div>
+    </div>
+
+    <!-- Divider Line -->
+    <div class="sb-greeting__divider"></div>
+
+    <!-- Greeting Message -->
+    <div class="sb-greeting__message" data-field="greeting_message">
+여보, 우리는 등불 하나 켜서 삽시다.
+바람에 흔들리는 심지 등불이라도 켜서
+기름 졸이듯 마음을 다하여
+사랑하며 삽시다. 오래도록.
+    </div>
+  </section>
+
+  <!-- 3. GALLERY SECTION -->
+  <section class="sb-section sb-gallery-section">
+    <h4 class="sb-section__subtitle">Gallery</h4>
+    <h3 class="sb-section__title">사진첩</h3>
+    <div data-slot="gallery"></div>
+  </section>
+
+  <!-- 4. ORDER / SEQUENCE SECTION -->
+  <section class="sb-section sb-order-section">
+    <h4 class="sb-section__subtitle">WEDDING ORDER</h4>
+    <h3 class="sb-section__title">식순 안내</h3>
+    
+    <div data-slot="sequence"></div>
+  </section>
+
+  <!-- 5. CALENDAR SECTION -->
+  <section class="sb-section sb-calendar-section">
+    <h4 class="sb-section__subtitle">Calendar</h4>
+    <h3 class="sb-section__title">소중한 날</h3>
+    
+    <div data-slot="calendar"></div>
+  </section>
+
+  <!-- 6. LOCATION / MAP SECTION -->
+  <section class="sb-section sb-location-section">
+    <h4 class="sb-section__subtitle">Location</h4>
+    <h3 class="sb-section__title">식장 위치</h3>
+
+    <div class="sb-location-card">
+      <h3 class="sb-location-card__name" data-field="venue_name">춘천 스카이컨벤션 4층 스카이홀</h3>
+      <p class="sb-location-card__address" data-field="venue_address">강남구 학동로 1212</p>
+      <p class="sb-location-card__hint">터치하여 주소 복사</p>
+    </div>
+
+    <div data-slot="map"></div>
+  </section>
+
+  <!-- 7. ACCOUNT SECTION -->
+  <section class="sb-section sb-account-section">
+    <h4 class="sb-section__subtitle">Account</h4>
+    <h3 class="sb-section__title">마음 전하실 곳</h3>
+    <div data-slot="account"></div>
+  </section>
+
+  <!-- 8. RSVP SECTION -->
+  <section class="sb-section sb-rsvp-section">
+    <h4 class="sb-section__subtitle">RSVP</h4>
+    <h3 class="sb-section__title">참석 여부 알리기</h3>
+    <div data-slot="rsvp"></div>
+  </section>
+
+  <!-- 9. BGM (플로팅 플레이어) -->
+  <div data-slot="bgm"></div>
+</div>

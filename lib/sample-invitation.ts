@@ -21,8 +21,10 @@ export const SAMPLE_RAW: RawInvitationData = {
   bride_photo: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&q=80",
   groom_father_name: "김정호",
   groom_mother_name: "박선영",
+  groom_relationship: "의 아들",
   bride_father_name: "이성재",
   bride_mother_name: "최미경",
+  bride_relationship: "의 딸",
   gallery_images: [
     "https://images.unsplash.com/photo-1519741497674-611481863552?w=600&q=80",
     "https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=600&q=80",

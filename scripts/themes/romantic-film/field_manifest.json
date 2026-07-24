@@ -1,0 +1,16 @@
+[
+  "main_image",
+  "groom_name",
+  "bride_name",
+  "wedding_date_display",
+  "wedding_time",
+  "venue_name",
+  "groom_father_name",
+  "groom_mother_name",
+  "groom_relationship",
+  "bride_father_name",
+  "bride_mother_name",
+  "bride_relationship",
+  "greeting_message",
+  "venue_address"
+]
