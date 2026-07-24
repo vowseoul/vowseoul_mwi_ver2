@@ -1,0 +1,101 @@
+<div class="ca-container">
+  <!-- 1. HERO SECTION (Dark Section) -->
+  <section class="ca-section ca-section--dark ca-hero">
+    <div class="ca-hero__subtitle">SAVE THE DATE</div>
+    
+    <!-- Hero Image Card -->
+    <div class="ca-hero__img-wrap">
+      <img class="ca-hero__img" data-field="main_image" src="https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=800&auto=format&fit=crop" alt="메인 사진" />
+    </div>
+
+    <!-- Groom & Bride names -->
+    <div class="ca-hero__names">
+      <span data-field="groom_name">민준</span>
+      <span class="ca-hero__amp">&amp;</span>
+      <span data-field="bride_name">서연</span>
+    </div>
+
+    <!-- Hero Info Details -->
+    <div class="ca-hero__info">
+      <p class="ca-hero__venue" data-field="venue_name">VOW SEOUL GRAND HALL</p>
+      <p class="ca-hero__datetime" data-field="wedding_date_display">2026. 05. 07 11:00 AM</p>
+    </div>
+
+    <!-- Scroll Arrow icon -->
+    <div class="ca-hero__arrow">
+      <svg class="ca-hero__arrow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M19.5 8.25l-7.5 7.5-7.5-7.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+  </section>
+
+  <!-- 2. GREETING SECTION (Light Section) -->
+  <section class="ca-section ca-section--light ca-greeting">
+    <!-- Heart Icon Decoration -->
+    <div class="ca-greeting__icon-wrap">
+      <svg class="ca-greeting__icon" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+      </svg>
+    </div>
+    
+    <div class="ca-greeting__message" data-field="greeting_message">
+사랑으로 하나 된 두 사람이
+서로를 이해하며 한 길을 걸어가려 합니다.
+귀한 발걸음으로 저희의 출발을
+함께 축복해 주시기 바랍니다.
+    </div>
+  </section>
+
+  <!-- 3. GALLERY SECTION (Dark Section) -->
+  <section class="ca-section ca-section--dark ca-gallery-section">
+    <h4 class="ca-section__header-sub">GALLERY</h4>
+    <h3 class="ca-section__header-title">갤러리</h3>
+    <div data-slot="gallery"></div>
+  </section>
+
+  <!-- 4. ORDER / SEQUENCE SECTION (Dark Section) -->
+  <section class="ca-section ca-section--dark ca-order-section">
+    <h4 class="ca-section__header-sub">WEDDING ORDER</h4>
+    <h3 class="ca-section__header-title">식순 안내</h3>
+    
+    <div data-slot="sequence"></div>
+  </section>
+
+  <!-- 5. CALENDAR & D-DAY SECTION (Dark Section) -->
+  <section class="ca-section ca-section--dark ca-calendar-section">
+    <h4 class="ca-section__header-sub">CALENDAR</h4>
+    <h3 class="ca-section__header-title">소중한 날</h3>
+    
+    <div data-slot="calendar"></div>
+  </section>
+
+  <!-- 6. LOCATION / MAP SECTION (Light Section) -->
+  <section class="ca-section ca-section--light ca-location-section">
+    <h4 class="ca-section__header-sub">LOCATION</h4>
+    <h3 class="ca-section__header-title">식장 위치</h3>
+
+    <div class="ca-location-card">
+      <h3 class="ca-location-card__name" data-field="venue_name">VOW SEOUL GRAND HALL</h3>
+      <p class="ca-location-card__address" data-field="venue_address">서울 강남구 학동로 1212</p>
+    </div>
+
+    <div data-slot="map"></div>
+  </section>
+
+  <!-- 7. ACCOUNT SECTION (Light Section) -->
+  <section class="ca-section ca-section--light ca-account-section">
+    <h4 class="ca-section__header-sub">ACCOUNT</h4>
+    <h3 class="ca-section__header-title">마음 전하실 곳</h3>
+    <div data-slot="account"></div>
+  </section>
+
+  <!-- 8. RSVP SECTION (Light Section) -->
+  <section class="ca-section ca-section--light ca-rsvp-section">
+    <h4 class="ca-section__header-sub">RSVP</h4>
+    <h3 class="ca-section__header-title">참석 여부 알리기</h3>
+    <div data-slot="rsvp"></div>
+  </section>
+
+  <!-- 9. BGM (플로팅 플레이어) -->
+  <div data-slot="bgm"></div>
+</div>

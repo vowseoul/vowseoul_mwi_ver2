@@ -37,6 +37,8 @@ export interface WeddingInvitation {
   createdAt: string
   publishedUrl: string | null
   customStyles?: Record<string, any>
+  /** 템플릿 테마 컬러/폰트 토큰 오버라이드 ('--accent' 등). customization_overrides 에 저장 */
+  tokenOverrides?: Record<string, string>
 }
 
 export interface BankAccount {
@@ -120,6 +122,17 @@ export interface Notice {
   createdAt: string
 }
 
+// customization_overrides 에서 '--' CSS 변수 키만 추출
+function extractTokenOverrides(overrides: any): Record<string, string> {
+  const out: Record<string, string> = {}
+  if (overrides && typeof overrides === 'object') {
+    for (const [k, v] of Object.entries(overrides)) {
+      if (k.startsWith('--') && typeof v === 'string' && v) out[k] = v
+    }
+  }
+  return out
+}
+
 // Helper to map DB record to WeddingInvitation (unpack content_data)
 export function mapFromDb(dbRecord: any): WeddingInvitation {
   if (!dbRecord) return null as any
@@ -129,6 +142,7 @@ export function mapFromDb(dbRecord: any): WeddingInvitation {
     themeId: dbRecord.theme_version_id || 'classic-white',
     colorSet: dbRecord.customization_overrides?.colorSet || 'default',
     fontSet: dbRecord.customization_overrides?.fontSet || 'default',
+    tokenOverrides: extractTokenOverrides(dbRecord.customization_overrides),
     status: dbRecord.status,
     createdAt: dbRecord.created_at,
     publishedUrl: dbRecord.published_at ? `${dbRecord.public_slug}` : null,
@@ -145,6 +159,7 @@ export function mapFromDb(dbRecord: any): WeddingInvitation {
     venueName: content.venueName || '',
     venueHall: content.venueHall || '',
     venueAddress: content.venueAddress || '',
+    mainImage: content.mainImage || content.main_image || null,
     invitationMessage: content.invitationMessage || '',
     galleryImages: content.galleryImages || [],
     galleryViewType: content.galleryViewType || 'slide',
@@ -182,6 +197,8 @@ export function mapToDb(inv: any) {
     customization_overrides: {
       colorSet: inv.colorSet || 'default',
       fontSet: inv.fontSet || 'default',
+      // 템플릿 테마 컬러/폰트 토큰 오버라이드 ('--' 키). 발행 경로가 이 값을 읽는다
+      ...(inv.tokenOverrides || {}),
     },
     content_data: {
       groomName: inv.groomName || '',

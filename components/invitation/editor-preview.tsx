@@ -57,7 +57,13 @@ export function EditorPreview() {
 
   // 템플릿 identity 는 테마가 바뀔 때만 갱신 → 폼 입력마다 iframe 재작성 방지
   const template = useMemo(() => toThemeTemplate(themeRow), [themeRow])
-  const tokens = useMemo(() => buildThemeTokens(themeRow), [themeRow])
+  // 최종 토큰 = 테마 기본 + 이 청첩장의 컬러 커스텀(디자인 페이지에서 설정)
+  const overrides = currentInvitation?.tokenOverrides
+  const tokens = useMemo(() => {
+    const t = buildThemeTokens(themeRow)
+    if (overrides) for (const [k, v] of Object.entries(overrides)) if (v) t[k] = v
+    return t
+  }, [themeRow, overrides])
 
   const raw = useMemo<RawInvitationData>(
     () => normalizeLegacyKeys((currentInvitation ?? {}) as RawInvitationData),

@@ -1,0 +1,333 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+
+:root {
+  --bg: #FAF9F7;       /* color1 - Light background */
+  --ink: #3D3D3D;      /* color2 - Dark contrast color */
+  --accent: #C4A574;   /* Point accent color */
+  --font-kr: 'Noto Serif KR', serif;
+  --font-en: 'Playfair Display', serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.ca-container {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  font-family: var(--font-kr, 'Noto Serif KR', serif);
+  overflow-x: hidden;
+  position: relative;
+  word-break: keep-all;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+/* SECTION STRUCTURE AND ALTERNATING COLORS */
+.ca-section {
+  padding: 64px 24px;
+  text-align: center;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Dark Sections: bg is color2, text is color1 */
+.ca-section--dark {
+  background-color: var(--ink, #3D3D3D);
+  color: var(--bg, #FAF9F7);
+}
+
+/* Light Sections: bg is color1, text is color2 */
+.ca-section--light {
+  background-color: var(--bg, #FAF9F7);
+  color: var(--ink, #3D3D3D);
+}
+
+/* Section Header Typography */
+.ca-section__header-sub {
+  font-family: var(--font-en, 'Playfair Display', serif);
+  font-size: 16px;
+  font-weight: 300;
+  letter-spacing: 0.2em;
+  opacity: 0.7;
+}
+
+.ca-section__header-title {
+  font-size: 18px;
+  font-weight: 500;
+  margin-top: 4px;
+  margin-bottom: 32px;
+  letter-spacing: 0.05em;
+}
+
+/* 1. HERO SECTION */
+.ca-hero {
+  height: 640px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 64px 32px 32px;
+}
+
+.ca-hero__subtitle {
+  font-family: var(--font-en, 'Playfair Display', serif);
+  font-size: 24px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-weight: 300;
+}
+
+.ca-hero__img-wrap {
+  width: 220px;
+  height: 300px;
+  margin: 24px 0;
+  overflow: hidden;
+  border: 1px solid rgba(250, 249, 247, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.ca-hero__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ca-hero__names {
+  font-size: 22px;
+  font-weight: 300;
+  letter-spacing: 0.1em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.ca-hero__amp {
+  font-size: 16px;
+  opacity: 0.6;
+  font-style: italic;
+  font-family: serif;
+}
+
+.ca-hero__info {
+  width: 100%;
+  max-width: 240px;
+  margin: 16px auto 0;
+  padding-top: 16px;
+  border-top: 1px solid rgba(250, 249, 247, 0.1);
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  line-height: 1.6;
+  opacity: 0.85;
+}
+
+.ca-hero__venue {
+  text-transform: uppercase;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.ca-hero__arrow {
+  margin-top: 16px;
+  animation: caFloat 2s infinite ease-in-out;
+}
+
+.ca-hero__arrow-icon {
+  width: 24px;
+  height: 24px;
+  opacity: 0.55;
+}
+
+@keyframes caFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(6px); }
+}
+
+/* 2. GREETING SECTION */
+.ca-greeting {
+  padding: 80px 24px;
+}
+
+.ca-greeting__icon-wrap {
+  margin-bottom: 24px;
+}
+
+.ca-greeting__icon {
+  width: 24px;
+  height: 24px;
+  color: var(--accent, #C4A574);
+  opacity: 0.7;
+}
+
+.ca-greeting__message {
+  font-size: 15px;
+  line-height: 2.0;
+  letter-spacing: 0.05em;
+  font-weight: 300;
+  max-width: 320px;
+  margin: 0 auto;
+  white-space: pre-line;
+  opacity: 0.9;
+}
+
+/* 4. ORDER TABLE */
+.ca-order-table {
+  max-width: 320px;
+  margin: 0 auto;
+  border-top: 1px solid rgba(250, 249, 247, 0.3);
+  border-bottom: 1px solid rgba(250, 249, 247, 0.3);
+}
+
+.ca-order-table__row {
+  display: flex;
+  align-items: center;
+  padding: 16px 8px;
+  border-bottom: 1px solid rgba(250, 249, 247, 0.15);
+}
+
+.ca-order-table__row:last-child {
+  border-bottom: none;
+}
+
+.ca-order-table__time {
+  width: 64px;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.ca-order-table__desc {
+  flex: 1;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 300;
+  opacity: 0.95;
+  padding-left: 16px;
+  border-left: 1px solid rgba(250, 249, 247, 0.15);
+}
+
+/* 5. CALENDAR & D-DAY */
+.ca-calendar-card {
+  max-width: 320px;
+  margin: 0 auto;
+  background-color: rgba(255, 255, 255, 0.08);
+  padding: 24px;
+  border: 1px solid rgba(250, 249, 247, 0.1);
+  border-radius: 4px;
+}
+
+.ca-calendar-card__header {
+  margin-bottom: 24px;
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.ca-calendar-card__month {
+  font-size: 24px;
+  font-weight: 600;
+  font-family: var(--font-en, 'Playfair Display', serif);
+  letter-spacing: 0.1em;
+}
+
+.ca-calendar-card__year {
+  font-size: 12px;
+  opacity: 0.4;
+  font-family: monospace;
+}
+
+.ca-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  row-gap: 12px;
+  text-align: center;
+  font-size: 12px;
+}
+
+.ca-calendar-grid__day-name {
+  padding: 4px 0;
+  opacity: 0.45;
+  font-weight: 600;
+}
+
+.ca-calendar-grid__active {
+  position: relative;
+  padding: 4px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0 auto;
+  border-radius: 50%;
+  font-weight: 700;
+  color: var(--ink, #3D3D3D);
+  background-color: var(--bg, #FAF9F7);
+}
+
+.ca-dday-container {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(250, 249, 247, 0.1);
+}
+
+.ca-dday-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  opacity: 0.5;
+  margin-bottom: 12px;
+}
+
+.ca-dday-grid {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.ca-dday-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ca-dday-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.5;
+}
+
+.ca-dday-value {
+  font-size: 28px;
+  font-weight: 300;
+  margin-top: 2px;
+  font-family: monospace;
+}
+
+/* 6. LOCATION */
+.ca-location-card {
+  background-color: rgba(61, 61, 61, 0.05);
+  padding: 24px;
+  text-align: center;
+  border: 1px solid rgba(61, 61, 61, 0.1);
+  margin-bottom: 24px;
+  border-radius: 4px;
+}
+
+.ca-location-card__name {
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: 0.05em;
+  color: var(--ink, #3D3D3D);
+}
+
+.ca-location-card__address {
+  font-size: 14px;
+  margin-top: 8px;
+  color: rgba(61, 61, 61, 0.8);
+}

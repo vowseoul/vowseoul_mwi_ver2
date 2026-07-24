@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useAppStore, sampleThemes, Theme } from '@/lib/store'
 import { supabase } from '@/lib/supabase'
+import { buildThemeTokens, TOKEN_FIELDS as THEME_TOKEN_FIELDS, type ThemeRow } from '@/lib/theme-template'
 import { ArrowLeft, ArrowRight, Check, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useState, useEffect } from 'react'
@@ -80,6 +81,8 @@ export default function DesignPage() {
   }, [])
 
   const selectedTheme = themes.find(t => t.id === currentInvitation?.themeId) || themes[0]
+  // 선택한 테마의 기본 컬러/폰트 토큰 (테마 컬러 커스텀의 placeholder/기본값)
+  const themeDefaultTokens = buildThemeTokens(selectedTheme as unknown as ThemeRow)
 
   if (isLoading) {
     return <div className="flex h-64 items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>
@@ -176,135 +179,55 @@ export default function DesignPage() {
         </CardContent>
       </Card>
 
-      {/* Color Set Selection */}
+      {/* Theme Color Customization (replaces legacy Color Set) */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">컬러셋</CardTitle>
-          <CardDescription>테마에 어울리는 색상 조합을 선택해주세요.</CardDescription>
+          <CardTitle className="text-lg">테마 컬러</CardTitle>
+          <CardDescription>선택한 테마에 사용되는 색상과 폰트를 직접 조정할 수 있습니다. 비워두면 테마 기본값이 사용됩니다.</CardDescription>
         </CardHeader>
         <CardContent>
-          <RadioGroup
-            value={currentInvitation?.colorSet || selectedTheme?.colorSets?.[0]?.id || 'default'}
-            onValueChange={(value) => updateCurrentInvitation({ colorSet: value })}
-            className="grid gap-4 sm:grid-cols-2"
-          >
-            {selectedTheme?.colorSets?.map((colorSet) => (
-              <div key={colorSet.id}>
-                <RadioGroupItem
-                  value={colorSet.id}
-                  id={`color-${colorSet.id}`}
-                  className="peer sr-only"
-                />
-                <Label
-                  htmlFor={`color-${colorSet.id}`}
-                  className={cn(
-                    'flex cursor-pointer items-center gap-4 rounded-lg border-2 p-4 transition-all',
-                    'peer-data-[state=checked]:border-foreground peer-data-[state=unchecked]:border-border',
-                    'hover:border-foreground/50'
-                  )}
-                >
-                  <div className="flex gap-1">
-                    {colorSet.colors.map((color, idx) => (
-                      <div
-                        key={idx}
-                        className="h-8 w-8 rounded-full border border-border"
-                        style={{ backgroundColor: color }}
+          <div className="grid gap-4 sm:grid-cols-2">
+            {THEME_TOKEN_FIELDS.map((t) => {
+              const value = currentInvitation?.tokenOverrides?.[t.name] || ''
+              const themeDefault = themeDefaultTokens[t.name] || ''
+              const setValue = (v: string) => updateCurrentInvitation({
+                tokenOverrides: { ...(currentInvitation?.tokenOverrides || {}), [t.name]: v }
+              })
+              return (
+                <div key={t.name} className="space-y-2">
+                  <Label className="text-xs">{t.label}</Label>
+                  <div className="flex gap-2 items-center">
+                    {t.type === 'color' && (
+                      <Input
+                        type="color"
+                        className="w-10 h-10 p-1 cursor-pointer border shrink-0"
+                        value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : (/^#[0-9a-fA-F]{6}$/.test(themeDefault) ? themeDefault : '#ffffff')}
+                        onChange={(e) => setValue(e.target.value)}
                       />
-                    ))}
-                  </div>
-                  <span className="font-medium">{colorSet.name}</span>
-                </Label>
-              </div>
-            ))}
-          </RadioGroup>
-
-          {/* 직접 설정하기 Toggle */}
-          <div className="mt-6 pt-6 border-t border-border space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="custom-colors-toggle" className="text-sm font-medium">직접 설정하기 (커스텀 듀오톤)</Label>
-                <p className="text-xs text-muted-foreground">테마 프리셋 대신 내가 원하는 두 가지 색상 조합으로 청첩장을 꾸밉니다.</p>
-              </div>
-              <Switch 
-                id="custom-colors-toggle"
-                checked={currentInvitation?.customStyles?.customColorsEnabled || false}
-                onCheckedChange={(checked) => {
-                  updateCurrentInvitation({
-                    customStyles: {
-                      ...(currentInvitation?.customStyles || {}),
-                      customColorsEnabled: checked,
-                      duotoneEnabled: checked // automatically enable duotone alternating if custom colors are used
-                    }
-                  })
-                }}
-              />
-            </div>
-
-            {currentInvitation?.customStyles?.customColorsEnabled && (
-              <div className="grid gap-4 sm:grid-cols-2 pt-2 animate-in fade-in duration-200">
-                <div className="space-y-2">
-                  <Label className="text-xs">배경 색상 (Color 1 - 밝은색 권장)</Label>
-                  <div className="flex gap-2">
-                    <Input 
-                      type="color" 
-                      className="w-10 h-10 p-1 cursor-pointer border" 
-                      value={currentInvitation?.customStyles?.customBgColor || '#CCECFF'} 
-                      onChange={(e) => {
-                        updateCurrentInvitation({
-                          customStyles: {
-                            ...(currentInvitation?.customStyles || {}),
-                            customBgColor: e.target.value
-                          }
-                        })
-                      }}
+                    )}
+                    <Input
+                      className="flex-1 font-mono text-sm"
+                      placeholder={themeDefault || '테마 기본값'}
+                      value={value}
+                      onChange={(e) => setValue(e.target.value)}
                     />
-                    <Input 
-                      className="flex-1 uppercase font-mono text-sm" 
-                      value={currentInvitation?.customStyles?.customBgColor || '#CCECFF'} 
-                      onChange={(e) => {
-                        updateCurrentInvitation({
-                          customStyles: {
-                            ...(currentInvitation?.customStyles || {}),
-                            customBgColor: e.target.value
-                          }
-                        })
-                      }}
-                    />
+                    {value && (
+                      <button type="button" onClick={() => setValue('')} className="text-muted-foreground hover:text-foreground text-sm px-1" title="테마 기본값으로">×</button>
+                    )}
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-xs">주요 색상 (Color 2 - 어두운색 권장)</Label>
-                  <div className="flex gap-2">
-                    <Input 
-                      type="color" 
-                      className="w-10 h-10 p-1 cursor-pointer border" 
-                      value={currentInvitation?.customStyles?.customPrimaryColor || '#361623'} 
-                      onChange={(e) => {
-                        updateCurrentInvitation({
-                          customStyles: {
-                            ...(currentInvitation?.customStyles || {}),
-                            customPrimaryColor: e.target.value
-                          }
-                        })
-                      }}
-                    />
-                    <Input 
-                      className="flex-1 uppercase font-mono text-sm" 
-                      value={currentInvitation?.customStyles?.customPrimaryColor || '#361623'} 
-                      onChange={(e) => {
-                        updateCurrentInvitation({
-                          customStyles: {
-                            ...(currentInvitation?.customStyles || {}),
-                            customPrimaryColor: e.target.value
-                          }
-                        })
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
+              )
+            })}
           </div>
+          {currentInvitation?.tokenOverrides && Object.values(currentInvitation.tokenOverrides).some(Boolean) && (
+            <button
+              type="button"
+              onClick={() => updateCurrentInvitation({ tokenOverrides: {} })}
+              className="mt-4 text-xs text-muted-foreground underline hover:text-foreground"
+            >
+              전체 초기화 (테마 기본값으로)
+            </button>
+          )}
         </CardContent>
       </Card>
 
