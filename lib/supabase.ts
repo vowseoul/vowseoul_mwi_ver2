@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { createBrowserClient } from '@supabase/ssr'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
@@ -11,7 +11,12 @@ const isPublicPage = typeof window !== 'undefined' && (
   window.location.pathname.startsWith('/dashboard/')
 )
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+/**
+ * 쿠키 기반 세션 저장소(createBrowserClient)를 쓴다 — proxy.ts(서버)가 같은
+ * 쿠키를 읽어 세션을 검증할 수 있어야 하기 때문. 이전의 createClient(로컬스토리지
+ * 저장)는 서버에서 읽을 수 없어 미들웨어가 쿠키 유무만 확인하는 데 그쳤었다.
+ */
+export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: !isPublicPage,
     autoRefreshToken: !isPublicPage,

@@ -372,20 +372,37 @@ const { data } = await supabase.from('bgms').select('*')   // error 미수신
 > `hooks/queries/*` 등) — 범위가 커서 이번 세션에는 포함하지 않았다. 같은
 > `logSupabaseError` 헬퍼로 이어서 정리할 것.
 
-### 3-4. [P1] 인증 가드가 쿠키 존재 여부만 확인
+### 3-4. [P1] 인증 가드가 쿠키 존재 여부만 확인 — ✅ 완료
 
-`middleware.ts:16` — 쿠키 이름이 `sb-*-auth-token` 인지만 본다. **서명·만료 검증 없음.**
-실제 권한 확인은 클라이언트 `app/admin/(dashboard)/layout.tsx:69` 에서 `profiles.role` 조회로 이뤄진다.
+`middleware.ts:16` — 쿠키 이름이 `sb-*-auth-token` 인지만 봤다. **서명·만료 검증 없음.**
+게다가 이 쿠키는 `admin/login/page.tsx` 가 `document.cookie = ...` 로 직접 손으로 쓰던
+가짜 마커였다(값은 access_token 아니면 문자열 `'true'`) — 서버가 검증 가능한 진짜
+세션 쿠키가 전혀 아니었다. 실제 권한 확인은 클라이언트 `layout.tsx` 에서
+`profiles.role` 조회로만 이뤄지고 있었다.
 
-- 만료 토큰으로도 미들웨어 통과 → 어드민 레이아웃이 잠시 렌더된 뒤 튕김(콘텐츠 플래시).
-- 서버 컴포넌트에서의 데이터 접근은 RLS에만 의존.
+`@supabase/ssr` 도입:
+- `lib/supabase.ts` — `createClient`(로컬스토리지 세션) → `createBrowserClient`
+  (쿠키 세션)로 교체. 서버가 읽을 수 있는 진짜 세션 쿠키가 이제 존재한다.
+- `lib/supabase-server.ts` 신설 — Server Component/Route Handler 용 클라이언트.
+- `proxy.ts` — `/admin/*` 요청마다 `supabase.auth.getUser()`(로컬 쿠키 값을
+  그대로 믿는 `getSession()` 과 달리 Auth 서버에 매번 재검증)로 세션을 실제
+  검증하고, `profiles.role === 'ADMIN'` 까지 확인 후 리다이렉트.
+- `admin/login/page.tsx`, `admin/(dashboard)/layout.tsx` 의 손으로 쓰던
+  `document.cookie` 마커 제거(더 이상 필요 없음 — 진짜 쿠키가 그 역할을 한다).
+- 클라이언트 사이드 `layout.tsx` 의 재검증은 그대로 유지 — 이중 방어이자
+  로딩 스피너 UX 를 위해 남겨둠.
 
-→ `@supabase/ssr` 로 서버 측 세션 검증 + `profiles.role` 확인을 미들웨어로 이관.
+브라우저로 5단계 전부 확인: 미로그인 상태 `/admin/orders` 접근 → 로그인 리다이렉트 /
+실 계정(seed.sql: `vovvseoul@gmail.com`) 로그인 성공 → `/admin` 대시보드 진입 /
+다른 보호 라우트(`/admin/orders`) 이동 시 세션 유지 / 로그아웃 → 로그인 화면 복귀 /
+로그아웃 후 재접근 시 다시 차단.
 
-### 3-5. [P1] Next.js 16 `middleware` 관용구 폐기 예정
+### 3-5. [P1] Next.js 16 `middleware` 관용구 폐기 예정 — ✅ 완료
 
 빌드 로그: `The "middleware" file convention is deprecated. Please use "proxy" instead.`
-→ 3-4 작업과 함께 `proxy.ts` 로 이관.
+`middleware.ts` 삭제, `proxy.ts` 로 교체(exported 함수명도 `proxy` 로 변경 — Next 16
+관용구가 파일명뿐 아니라 export 이름도 `proxy` 를 요구한다). 빌드 로그에서 해당
+경고가 사라진 것 확인.
 
 ### 3-6. [P1] ESLint가 동작하지 않음 — ✅ 완료
 
@@ -552,7 +569,7 @@ Supabase 생성 타입(`supabase gen types typescript`)이 없어 컬럼 오타�
 10. ESLint 설정 복구 · §3-6
 11. ~~`defaultOrder`·색상추출·SAMPLE_RAW·클라이언트 단일화~~ · §4-2~4-5 ✅ 완료
     (클라이언트 2벌은 조사 후 의도된 방어 코드로 확인, 통합 안 함)
-12. 미들웨어 → `proxy.ts` + 서버 세션 검증 · §3-4, §3-5
+12. ~~미들웨어 → `proxy.ts` + 서버 세션 검증~~ · §3-4, §3-5 ✅ 완료
 13. Supabase 타입 생성 + 핵심 어댑터 단위 테스트 · §4-8, §5
 
 ### 4차 — legacy 청산 (별도 계획)

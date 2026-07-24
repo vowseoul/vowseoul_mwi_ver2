@@ -75,7 +75,6 @@ export default function AdminLayout({
           console.error('Not authorized as admin:', profileError)
           // Attempt sign out since they are not an admin
           await supabase.auth.signOut()
-          document.cookie = 'sb-vowseoul-auth-token=; path=/; max-age=0; SameSite=Lax'
           window.location.href = '/admin/login'
           return
         }
@@ -94,7 +93,6 @@ export default function AdminLayout({
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    document.cookie = 'sb-vowseoul-auth-token=; path=/; max-age=0; SameSite=Lax'
     setAuth(false, false)
     window.location.href = '/admin/login'
   }
