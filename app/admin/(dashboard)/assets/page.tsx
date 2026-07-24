@@ -247,15 +247,15 @@ export default function AssetsPage() {
   const handleSaveBgm = async () => {
     if (!bgmUrl || !newBgmName) return alert('음원 파일과 곡명을 입력해주세요.')
     setIsSavingBgm(true)
+    // bgms.id 는 uuid 컬럼이라 유효한 UUID 형식이어야 한다 ('bgm_'+타임스탬프는 삽입이 실패함).
     const newBgm = {
-      id: editingBgmId || `bgm_${Date.now()}`,
+      id: editingBgmId || crypto.randomUUID(),
       name: newBgmName,
       artist: newBgmArtist || 'Unknown',
       genre: newBgmGenre,
       hashtags: newBgmHashtags,
       duration: '-', // 나중에 메타데이터를 파싱하여 넣을 수 있습니다.
       url: bgmUrl,
-      isRecommended: false // Deprecated: Now managed per theme
     }
     const { error } = await supabase.from('bgms').upsert(newBgm)
     setIsSavingBgm(false)

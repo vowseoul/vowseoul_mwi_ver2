@@ -9,7 +9,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
-import { v4 as uuidv4 } from 'uuid'
 import { Mail, Phone, MapPin } from 'lucide-react'
 
 export default function ContactPage() {
@@ -32,7 +31,6 @@ export default function ContactPage() {
     setIsSubmitting(true)
     try {
       const { error } = await supabase.from('inquiries').insert({
-        id: `inq_${uuidv4().slice(0, 8)}`,
         name: formData.name,
         email: formData.email,
         subject: formData.subject,

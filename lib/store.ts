@@ -107,6 +107,8 @@ export interface BGM {
   duration: string
   url: string
   isRecommended: boolean
+  genre?: string
+  hashtags?: string
 }
 
 export interface Order {
@@ -118,7 +120,7 @@ export interface Order {
   weddingDate: string
   theme: string
   amount: number
-  status: 'pending' | 'paid' | 'deployed' | 'expired' | 'refunded'
+  status: 'registered' | 'form_sent' | 'form_completed' | 'in_production' | 'design_review' | 'published' | 'delivered'
   createdAt: string
   notes: string
 }
@@ -392,36 +394,33 @@ export const useAppStore = create<AppState>((set, get) => ({
         customers = []
       }
 
-      let invitations: any[] = []
+      // orders 는 제작 의뢰/이행 기록이다(§1-B). customer_id 로 표시용 이름/예식일을 채운다.
+      const customerMap: Record<string, any> = {}
+      customers.forEach((c: any) => { customerMap[c.id] = c })
+
+      let mappedOrders: Order[] = []
       try {
-        const { data, error } = await supabase.from('invitations').select('*')
-        logSupabaseError('fetchData: invitations', error)
-        invitations = data || []
+        const { data: ordersData, error } = await supabase.from('orders').select('*')
+        logSupabaseError('fetchData: orders', error)
+        mappedOrders = (ordersData || []).map((o: any) => {
+          const cust = o.customer_id ? customerMap[o.customer_id] : null
+          return {
+            id: o.id,
+            invitationId: o.invitation_id || '',
+            customerName: cust ? `${cust.groom_name} & ${cust.bride_name}` : (o.external_order_ref || '고객 미지정'),
+            groomName: cust?.groom_name || '',
+            brideName: cust?.bride_name || '',
+            weddingDate: cust?.wedding_date || '',
+            theme: '',
+            amount: o.amount,
+            status: o.status,
+            createdAt: o.created_at ? o.created_at.split('T')[0] : '',
+            notes: o.notes || '',
+          }
+        })
       } catch (err) {
-        invitations = []
+        mappedOrders = []
       }
-
-      const inviteMap: Record<string, any> = {}
-      invitations.forEach(inv => {
-        inviteMap[inv.customer_id] = inv
-      })
-
-      const mappedOrders: Order[] = customers.map((cust: any) => {
-        const inv = inviteMap[cust.id]
-        return {
-          id: `ORD-${cust.id.substring(0, 8).toUpperCase()}`,
-          invitationId: inv ? inv.id : '',
-          customerName: `${cust.groom_name} & 	ext: ${cust.bride_name}`.replace('text: ', ''), // Avoid text keyword issues
-          groomName: cust.groom_name || '',
-          brideName: cust.bride_name || '',
-          weddingDate: cust.wedding_date || '',
-          theme: inv ? (inv.theme_version_id || 'Classic White') : 'Classic White',
-          amount: 50000,
-          status: inv ? (inv.status === 'published' ? 'deployed' : 'paid') : 'paid',
-          createdAt: cust.created_at ? cust.created_at.split('T')[0] : '',
-          notes: cust.memo || ''
-        }
-      })
 
       let noticesList = []
       try {
@@ -559,36 +558,33 @@ export const useAppStore = create<AppState>((set, get) => ({
   setOrders: (orders) => set({ orders }),
   updateOrder: async (id, updates) => {
     try {
-      const state = get()
-      const order = state.orders.find(o => o.id === id)
-      if (order) {
-        if (order.invitationId) {
-          const invStatus = updates.status === 'deployed' ? 'published' : (updates.status === 'paid' ? 'draft' : 'paused')
-          await supabase.from('invitations').update({
-            status: invStatus,
-            updated_at: new Date().toISOString()
-          }).eq('id', order.invitationId)
-        }
+      const orderUpdates: any = {}
+      if (updates.amount !== undefined) orderUpdates.amount = updates.amount
+      if (updates.status !== undefined) orderUpdates.status = updates.status
+      if (updates.notes !== undefined) orderUpdates.notes = updates.notes
 
-        const custSeg = id.replace('ORD-', '').toLowerCase()
-        const { data: custs } = await supabase.from('customers').select('id, memo')
-        const targetCustomer = custs?.find(c => c.id.substring(0, 8) === custSeg)
+      if (Object.keys(orderUpdates).length > 0) {
+        const { error } = await supabase.from('orders').update(orderUpdates).eq('id', id)
+        logSupabaseError('updateOrder', error)
+      }
 
-        if (targetCustomer) {
+      // 고객 기본 정보(이름/예식일)는 orders 가 아니라 customers 소유이므로,
+      // 주문에 연결된 customer_id 를 찾아 함께 갱신한다.
+      if (updates.groomName || updates.brideName || updates.weddingDate) {
+        const state = get()
+        const order = state.orders.find(o => o.id === id)
+        const { data: orderRow } = await supabase.from('orders').select('customer_id').eq('id', id).maybeSingle()
+        const customerId = orderRow?.customer_id
+        if (customerId) {
           const customerUpdates: any = {}
-          if (updates.status) {
-            customerUpdates.status = updates.status === 'deployed' ? 'published' : 'draft'
-          }
           if (updates.groomName) customerUpdates.groom_name = updates.groomName
           if (updates.brideName) customerUpdates.bride_name = updates.brideName
           if (updates.weddingDate) customerUpdates.wedding_date = updates.weddingDate
-          if (updates.notes !== undefined) customerUpdates.memo = updates.notes
-
-          await supabase.from('customers').update(customerUpdates).eq('id', targetCustomer.id)
+          await supabase.from('customers').update(customerUpdates).eq('id', customerId)
         }
       }
     } catch (err) {
-      console.error('Error updating order database mappings:', err)
+      console.error('Error updating order:', err)
     }
 
     set((state) => ({
@@ -855,11 +851,6 @@ export const sampleBGMs: BGM[] = [
   { id: 'bgm5', name: 'Perfect', artist: 'Ed Sheeran', duration: '4:23', url: '/bgm/perfect.mp3', isRecommended: true },
 ]
 
-export const sampleOrders: Order[] = [
-  { id: 'ORD001', invitationId: 'INV001', customerName: '김철수', groomName: '김철수', brideName: '이영희', weddingDate: '2025-03-15', theme: 'Classic White', amount: 50000, status: 'deployed', createdAt: '2025-01-10', notes: '' },
-  { id: 'ORD002', invitationId: 'INV002', customerName: '박민수', groomName: '박민수', brideName: '최수진', weddingDate: '2025-04-20', theme: 'Romantic Rose', amount: 50000, status: 'paid', createdAt: '2025-01-12', notes: '배경음악 변경 요청' },
-  { id: 'ORD003', invitationId: 'INV003', customerName: '정대호', groomName: '정대호', brideName: '한지민', weddingDate: '2025-02-28', theme: 'Modern Minimal', amount: 50000, status: 'deployed', createdAt: '2025-01-08', notes: '' },
-]
 
 export const sampleFaqs: FAQ[] = [
   { id: 'faq1', question: '청첩장 제작은 얼마나 걸리나요?', answer: '기본 템플릿을 사용할 경우 결제 완료 후 10분 내로 즉시 제작되어 배포가 가능합니다.', category: '제작', createdAt: '2025-01-01' },

@@ -21,7 +21,7 @@ export default function CreateOrderPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [customerName, setCustomerName] = useState('')
   const [amount, setAmount] = useState('50000')
-  const [status, setStatus] = useState<'pending' | 'paid' | 'deployed'>('paid')
+  const [status, setStatus] = useState<'registered' | 'form_sent' | 'form_completed' | 'in_production' | 'design_review' | 'published' | 'delivered'>('registered')
   const [notes, setNotes] = useState('')
   const [selectedThemeId, setSelectedThemeId] = useState('')
 
@@ -57,11 +57,12 @@ export default function CreateOrderPage() {
     try {
       const themeObj = availableThemes.find(t => t.id === selectedThemeId) || availableThemes[0]
       
-      // 1. Generate invitation ID
-      const randId = typeof window !== 'undefined' && window.crypto?.randomUUID 
-        ? window.crypto.randomUUID() 
-        : 'inv-admin-' + Math.random().toString(36).substring(2, 15)
-      const invitationId = `custom__${randId}`
+      // 1. Generate invitation ID — invitations.id 는 uuid 컬럼이라 유효한 UUID 형식이어야 한다
+      // ('custom__' 접두사를 붙이면 insert 자체가 실패한다 — 이전 버그).
+      if (typeof window === 'undefined' || !window.crypto?.randomUUID) {
+        throw new Error('이 브라우저에서는 청첩장 ID를 생성할 수 없습니다. 최신 브라우저로 다시 시도해주세요.')
+      }
+      const invitationId = window.crypto.randomUUID()
 
       // Default wedding date is 3 months from now
       const defaultDate = new Date()
@@ -111,26 +112,24 @@ export default function CreateOrderPage() {
       if (inviteError) throw inviteError
 
       // 3. Create Default Order Data
-      const orderId = 'ORD-' + Math.floor(100000 + Math.random() * 900000)
-      const newOrder = {
-        id: orderId,
-        invitationId: invitationId,
-        customerName: customerName,
-        groomName: '신랑',
-        brideName: '신부',
-        weddingDate: defaultDateStr,
-        theme: themeObj.name,
-        amount: parseInt(amount) || 50000,
-        status: status,
-        createdAt: new Date().toISOString().split('T')[0],
-        notes: notes
-      }
-
-      const { error: orderError } = await supabase.from('orders').insert(newOrder)
+      // 이 화면은 customers 레코드 없이 청첩장을 바로 만들기 때문에 customer_id 는 비워두고,
+      // 관리자가 입력한 이름은 external_order_ref 에 참고용으로 남긴다(§1-B).
+      const { data: insertedOrder, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          invitation_id: invitationId,
+          external_order_ref: customerName,
+          product_type: 'mobile',
+          amount: parseInt(amount) || 50000,
+          status: status,
+          notes: notes,
+        })
+        .select('id')
+        .single()
       if (orderError) throw orderError
 
       toast.success('수동 주문 및 청첩장 초안이 정상 생성되었습니다!')
-      router.push(`/admin/orders/${orderId}`)
+      router.push(`/admin/orders/${insertedOrder.id}`)
     } catch (err: any) {
       console.error('Error creating manual order:', err)
       
@@ -204,9 +203,13 @@ export default function CreateOrderPage() {
                       <SelectValue placeholder="상태 선택" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="pending">결제대기 (Pending)</SelectItem>
-                      <SelectItem value="paid">결제완료 (Paid)</SelectItem>
-                      <SelectItem value="deployed">배포중 (Deployed)</SelectItem>
+                      <SelectItem value="registered">고객 등록</SelectItem>
+                      <SelectItem value="form_sent">폼 발송</SelectItem>
+                      <SelectItem value="form_completed">폼 작성완료</SelectItem>
+                      <SelectItem value="in_production">제작중</SelectItem>
+                      <SelectItem value="design_review">디자인 피드백중</SelectItem>
+                      <SelectItem value="published">발행완료</SelectItem>
+                      <SelectItem value="delivered">전달완료</SelectItem>
                     </SelectContent>
                   </Select>
                 </Field>

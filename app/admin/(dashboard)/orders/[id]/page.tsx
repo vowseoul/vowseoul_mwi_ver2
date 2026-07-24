@@ -185,28 +185,54 @@ export default function OrderDetailPage() {
 
       if (orderError) throw orderError
       if (orderData) {
-        setOrder(orderData)
+        // orders 는 더 이상 고객/청첩장 정보를 중복 보관하지 않는다(§1-B 재설계).
+        // 표시용 이름/예식일은 customer_id 로 customers 를 조회해 채운다.
+        let customer: any = null
+        if (orderData.customer_id) {
+          const { data: custData, error: custError } = await supabase
+            .from('customers')
+            .select('*')
+            .eq('id', orderData.customer_id)
+            .maybeSingle()
+          logSupabaseError('order detail: customer', custError)
+          customer = custData
+        }
+
+        const mergedOrder = {
+          id: orderData.id,
+          invitationId: orderData.invitation_id,
+          customerName: customer ? `${customer.groom_name} & ${customer.bride_name}` : (orderData.external_order_ref || '고객 미지정'),
+          groomName: customer?.groom_name || '',
+          brideName: customer?.bride_name || '',
+          weddingDate: customer?.wedding_date || '',
+          amount: orderData.amount,
+          status: orderData.status,
+          notes: orderData.notes || '',
+          theme: '', // handleSave 저장 시 currentInvitation 의 테마에서 다시 계산됨
+          createdAt: orderData.created_at ? orderData.created_at.split('T')[0] : '',
+        }
+        setOrder(mergedOrder)
 
         // 2. Load Invitation
         let inviteData = null
         const { data: fetchInvite, error: inviteError } = await supabase
           .from('invitations')
           .select('*')
-          .eq('id', orderData.invitationId)
+          .eq('id', orderData.invitation_id)
           .single()
 
         if (inviteError) {
           if (inviteError.code === 'PGRST116') {
-            console.warn(`Invitation ${orderData.invitationId} not found, generating default fallback.`)
+            console.warn(`Invitation ${orderData.invitation_id} not found, generating default fallback.`)
             inviteData = {
-              id: orderData.invitationId,
-              groomName: orderData.groomName || '신랑',
+              id: orderData.invitation_id,
+              groomName: mergedOrder.groomName || '신랑',
               groomNameEn: 'Groom',
               groomParentRelation: '의 아들',
-              brideName: orderData.brideName || '신부',
+              brideName: mergedOrder.brideName || '신부',
               brideNameEn: 'Bride',
               brideParentRelation: '의 딸',
-              weddingDate: orderData.weddingDate || new Date().toISOString().split('T')[0],
+              weddingDate: mergedOrder.weddingDate || new Date().toISOString().split('T')[0],
               weddingTime: '12:00',
               venueName: '예식장',
               venueHall: '그랜드홀',
@@ -224,8 +250,8 @@ export default function OrderDetailPage() {
               guestbookType: 'text',
               bgmId: null,
               kakaoThumbnail: null,
-              kakaoTitle: `${orderData.groomName || '신랑'} ♥ ${orderData.brideName || '신부'} 결혼합니다`,
-              kakaoDescription: `${orderData.weddingDate || ''} 결혼식에 초대합니다.`,
+              kakaoTitle: `${mergedOrder.groomName || '신랑'} ♥ ${mergedOrder.brideName || '신부'} 결혼합니다`,
+              kakaoDescription: `${mergedOrder.weddingDate || ''} 결혼식에 초대합니다.`,
               bankAccounts: [],
               contacts: [],
               status: 'draft',
@@ -261,25 +287,18 @@ export default function OrderDetailPage() {
     if (!order || !currentInvitation) return
     setIsSaving(true)
     try {
-      const matchedTheme = themes.find(t => t.id === currentInvitation.themeId) || 
+      const matchedTheme = themes.find(t => t.id === currentInvitation.themeId) ||
                            sampleThemes.find(t => t.id === currentInvitation.themeId)
       const themeName = matchedTheme ? matchedTheme.name : (order.theme || 'Classic White')
 
-      const updatedOrderData = {
-        customerName: order.customerName,
-        amount: order.amount,
-        status: order.status,
-        notes: order.notes,
-        weddingDate: currentInvitation.weddingDate || order.weddingDate,
-        groomName: currentInvitation.groomName || '신랑',
-        brideName: currentInvitation.brideName || '신부',
-        theme: themeName
-      }
-
-      // 1. Update Order in DB
+      // orders 테이블 실제 컬럼만 저장 (고객명/예식일/테마는 customers/invitations 소유 — §1-B)
       const { error: orderError } = await supabase
         .from('orders')
-        .update(updatedOrderData)
+        .update({
+          amount: order.amount,
+          status: order.status,
+          notes: order.notes,
+        })
         .eq('id', orderId)
 
       if (orderError) throw orderError
@@ -291,8 +310,8 @@ export default function OrderDetailPage() {
 
       if (inviteError) throw inviteError
 
-      // 3. Update local state and store
-      const fullUpdatedOrder = { ...order, ...updatedOrderData }
+      // 3. Update local state and store (표시용 필드는 그대로 유지, 테마명만 갱신)
+      const fullUpdatedOrder = { ...order, theme: themeName }
       setOrder(fullUpdatedOrder)
       useAppStore.setState((state) => ({
         orders: state.orders.map(o => o.id === orderId ? fullUpdatedOrder : o)
@@ -730,11 +749,13 @@ export default function OrderDetailPage() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="pending">대기중</SelectItem>
-                            <SelectItem value="paid">결제완료</SelectItem>
-                            <SelectItem value="deployed">배포중</SelectItem>
-                            <SelectItem value="expired">만료됨</SelectItem>
-                            <SelectItem value="refunded">환불</SelectItem>
+                            <SelectItem value="registered">고객 등록</SelectItem>
+                            <SelectItem value="form_sent">폼 발송</SelectItem>
+                            <SelectItem value="form_completed">폼 작성완료</SelectItem>
+                            <SelectItem value="in_production">제작중</SelectItem>
+                            <SelectItem value="design_review">디자인 피드백중</SelectItem>
+                            <SelectItem value="published">발행완료</SelectItem>
+                            <SelectItem value="delivered">전달완료</SelectItem>
                           </SelectContent>
                         </Select>
                       </Field>

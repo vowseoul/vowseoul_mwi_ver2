@@ -135,9 +135,9 @@
 
 **작업량**: 반나절. 스키마 변경 없음 → 리스크 낮음.
 
-### 1-B. 아예 없는 5개 — 스키마를 만든다
+### 1-B. 아예 없는 5개 — 스키마를 만든다 — ✅ 완료
 
-`orders` / `bgms` / `faqs` / `notices` / `inquiries` 는 어떤 SQL 파일에도 정의가 없다.
+`orders` / `bgms` / `faqs` / `notices` / `inquiries` 는 어떤 SQL 파일에도 정의가 없었다.
 
 **`orders` — 결제 트랜잭션이 아니라 "제작 의뢰 + 이행 상태 기록"으로 정의 확정.**
 실제 결제는 네이버 스마트스토어에서 앱 밖에서 끝난 채로 넘어온다(§실제 비즈니스 프로세스 참조).
@@ -170,12 +170,64 @@ CREATE TABLE orders (
 
 > `app/admin/(dashboard)/orders/[id]/page.tsx`(3,431줄, 코드베이스 최대 파일)는
 > 관리자가 legacy 테마 청첩장을 직접 편집하는 화면을 겸하고 있다.
-> **orders 재설계와 이 화면의 편집 UI는 분리해서 다뤄야 한다** — 후자는 §4-1의
-> legacy 렌더러 이관이 끝나야 정리된다.
+> **orders 재설계와 이 화면의 편집 UI는 분리해서 다뤘다** — 편집 UI 자체(§4-1의
+> legacy 렌더러 이관 대상)는 그대로 두고, orders 관련 필드 접근·저장 로직만 교정.
 
-**남은 결정**: `bgms` 를 테이블로 둘지, `settings` 의 JSONB 항목으로 둘지.
+**적용 완료**:
+- `supabase/migrations/20260724000002_orders_and_content_tables.sql` — 5개 테이블 +
+  RLS(개방 정책) 생성. 사용자가 Supabase 프로젝트에 직접 적용함(이 세션은 anon
+  key만 있어 DDL을 실행할 권한이 없음 — CREATE TABLE/ALTER TABLE 은 PostgREST로
+  노출되지 않는다).
+- `lib/store.ts` — `orders` 합성 로직(customers 순회해 가짜 주문 생성) 제거,
+  실제 `orders` 테이블 조회로 교체 + customer_id 조인으로 표시용 이름/예식일 채움.
+  `updateOrder` 의 `id.replace('ORD-','')` UUID 앞8자 역추적 해킹 제거, 실제
+  `orders` 테이블 직접 업데이트로 교체. 미사용 `sampleOrders` 픽스처 삭제.
+- `Order.status` 타입을 5가지 결제 상태(pending/paid/deployed/expired/refunded)에서
+  7가지 이행 단계(registered~delivered)로 교체 — `admin/orders/page.tsx`,
+  `admin/orders/create/page.tsx`, `admin/orders/[id]/page.tsx`,
+  `admin/(dashboard)/page.tsx`(대시보드 홈 통계) 전부의 상태 배지·필터·드롭다운 갱신.
+- `admin/orders/page.tsx` 의 "주문 내역 수정" 다이얼로그가 orders에 더 이상 존재하지
+  않는 `groomName`/`brideName`/`weddingDate`/`theme`/`id`/`createdAt` 를 직접
+  써왔던 것을 금액/상태/메모만 남기도록 축소(고객·청첩장 정보는 customers/invitations
+  화면에서 관리).
+- `admin/orders/create/page.tsx` — orders insert를 새 스키마로 교정하는 과정에서
+  **이 화면의 청첩장 생성 자체가 원래부터 깨져 있던 버그**를 발견해 함께 고침:
+  `invitationId = \`custom__${uuid}\`` 형태가 `invitations.id`(uuid 컬럼)에 들어갈
+  수 없는 값이었다 — prefix 제거로 수정. (단, `defaultInvitation` 객체가 여전히
+  `content_data` 필드키 대신 camelCase 컬럼을 직접 쓰고 `customer_id`/`public_slug`/
+  `dashboard_slug`/`dashboard_password`/`block_order` 등 NOT NULL 컬럼을 채우지
+  않아 **여전히 실패한다** — 이건 orders와 무관한 별개의 사전 버그이며 별도
+  작업이 필요하다. 아래 "이번 세션에서 새로 발견한 이슈" 참고.)
+- `app/contact/page.tsx` — `inquiries.id` 에 `inq_xxxxxxxx`(비-UUID) 를 직접 넣던
+  버그 수정(DB 기본값으로 생성하도록 제거) + 폼이 실제로 수집하는 `subject` 컬럼이
+  최초 마이그레이션 설계에 없어 후속 마이그레이션
+  (`20260724000003_inquiries_subject_column.sql`)으로 추가.
+- `admin/assets/page.tsx` 의 BGM 저장이 `bgm_${Date.now()}` 형태의 비-UUID id를
+  쓰던 버그 수정(`crypto.randomUUID()`로 교체) + 실제로 수집하는 `genre`/`hashtags`
+  컬럼이 없어 같은 후속 마이그레이션에 추가. `isRecommended`(코드 주석상 "Deprecated")
+  는 저장하지 않도록 함.
+- `faqs`/`notices` 의 `addFaq`/`updateFaq`/`addNotice`/`updateNotice`(store.ts) 는
+  호출하는 UI가 전혀 없음을 확인(`/admin/faq`, `/admin/notice` 는 `/admin`으로
+  리다이렉트하는 5줄짜리 스텁) — 죽은 코드라 손대지 않음. 공개 `/faq`,`/notice`
+  페이지의 읽기 전용 조회만 실제로 동작하며, 관리 UI가 없어 `sampleFaqs`/
+  `sampleNotices` 폴백이 사실상 유일한 콘텐츠 소스인 상태는 §2-2 그대로 남음.
 
-**작업량**: 마이그레이션/RLS 1일 + 코드 정합(admin/orders 3개 화면 재작성) 1~2일.
+각 변경은 curl로 실 스키마에 직접 insert/select 왕복 + 브라우저로 `/admin/orders`,
+`/admin/orders/[id]`, `/contact` 실제 폼 제출까지 확인 후 테스트 데이터 정리함.
+
+**남은 결정**: `bgms` 를 별도 테이블로 유지할지, `settings` JSONB 로 옮길지(현재는
+테이블로 확정 적용됨 — 재검토 원하면 마이그레이션 필요).
+
+#### 이번 세션에서 새로 발견한 이슈 (orders와 무관, 별도 처리 필요)
+
+- **`admin/orders/create/page.tsx` 의 청첩장 생성이 원래부터 실패한다.**
+  `defaultInvitation` 객체가 `groomName`/`brideName`/`weddingDate` 등을 `invitations`
+  테이블의 최상위 컬럼인 것처럼 넣지만 실제로는 `content_data` jsonb 안에 필드키로
+  들어가야 하고, `customer_id`(NOT NULL)/`public_slug`/`dashboard_slug`/
+  `dashboard_password`/`block_order`/`expires_at`(전부 NOT NULL) 를 아예 채우지
+  않는다. "수동 청첩장 추가" 버튼을 누르면 항상 `PGRST204`(컬럼 없음) 로 실패한다.
+  `/admin/customers/[customerId]`의 "초안 자동생성" 다이얼로그는 이 문제를 이미
+  올바르게 처리하고 있으므로, 그 패턴을 참고해 다시 만드는 게 맞다.
 
 ### 1-C. 마이그레이션 체계 부재 — ✅ 완료
 
