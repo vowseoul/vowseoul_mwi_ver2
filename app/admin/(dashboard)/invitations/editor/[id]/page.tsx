@@ -1,23 +1,60 @@
-'use client'
+import { redirect } from "next/navigation"
+import { supabase } from "@/lib/supabase"
+import type { ThemeRow } from "@/lib/theme-template"
+import CustomizeClient from "./customize-client"
 
-import React, { useEffect, use } from 'react'
-import { useRouter } from 'next/navigation'
-import { Loader2 } from 'lucide-react'
+/**
+ * 청첩장 편집 진입점.
+ * - render_engine === 'template' → 전용 커스터마이즈 편집기(색/폰트 오버라이드 + 미리보기)
+ * - 그 외(legacy) → 기존 /editor/[id] 로 리다이렉트 (동작 보존)
+ */
+export const dynamic = "force-dynamic"
+export const revalidate = 0
 
-export default function AdminEditorRedirectPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
-  const router = useRouter()
+export default async function Page({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
 
-  useEffect(() => {
-    if (id) {
-      router.replace(`/editor/${id}`)
+  const { data: invitation } = await supabase
+    .from("invitations")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle()
+
+  if (!invitation) redirect(`/editor/${id}`)
+
+  const { data: customer } = invitation.customer_id
+    ? await supabase.from("customers").select("*").eq("id", invitation.customer_id).maybeSingle()
+    : { data: null }
+
+  let themeRow: ThemeRow | null = null
+  if (invitation.theme_version_id) {
+    const { data: version } = await supabase
+      .from("theme_versions")
+      .select("theme_id")
+      .eq("id", invitation.theme_version_id)
+      .maybeSingle()
+    if (version?.theme_id) {
+      const { data: theme } = await supabase
+        .from("themes")
+        .select("*")
+        .eq("id", version.theme_id)
+        .maybeSingle()
+      themeRow = (theme as ThemeRow) ?? null
     }
-  }, [id, router])
+  }
+
+  // 템플릿 엔진이 아니면 기존 편집기로
+  if (!(themeRow?.render_engine === "template" && themeRow.template_html)) {
+    redirect(`/editor/${id}`)
+  }
 
   return (
-    <div className="w-full h-[60vh] flex flex-col items-center justify-center font-sans">
-      <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      <p className="text-muted-foreground text-sm mt-4">청첩장 편집기로 이동하고 있습니다...</p>
-    </div>
+    <CustomizeClient
+      invitationId={id}
+      publicSlug={String(invitation.public_slug ?? "")}
+      themeRow={themeRow}
+      invitation={invitation}
+      customer={customer}
+    />
   )
 }

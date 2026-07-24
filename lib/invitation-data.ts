@@ -14,6 +14,37 @@ import type { FieldData } from "@/components/invitation/invitation-frame"
 /** gallery_images 처럼 배열/객체가 섞여 들어올 수 있는 원본 데이터 타입 */
 export type RawInvitationData = Record<string, unknown>
 
+/** customers 에서 기본값으로 끌어올 필드키 (컬럼명이 필드키와 동일) */
+const CUSTOMER_FIELD_KEYS = [
+  "groom_name", "bride_name", "wedding_date", "wedding_time", "venue_name", "venue_address",
+] as const
+
+/**
+ * 청첩장 렌더용 원본 데이터 병합.
+ * customers 기본값 위에 content_data(레거시 camelCase는 필드키로 정규화 후)를 덮어쓴다.
+ * 발행 경로와 편집기 미리보기가 이 함수를 공유해 결과가 어긋나지 않도록 한다.
+ */
+export function mergeInvitationRaw(
+  invitation: Record<string, unknown>,
+  customer: Record<string, unknown> | null,
+): RawInvitationData {
+  const fromCustomer: RawInvitationData = {}
+  if (customer) {
+    for (const key of CUSTOMER_FIELD_KEYS) {
+      const v = customer[key]
+      if (v != null && v !== "") fromCustomer[key] = v
+    }
+  }
+  const contentData = (invitation.content_data && typeof invitation.content_data === "object")
+    ? invitation.content_data as RawInvitationData
+    : {}
+
+  // content_data 를 먼저 정규화해야 레거시 값도 고객 기본값보다 우선한다
+  const raw: RawInvitationData = { ...fromCustomer, ...normalizeLegacyKeys(contentData) }
+  if (invitation.bgm_url) raw.bgm_url = invitation.bgm_url
+  return raw
+}
+
 const MONTHS_EN = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
 const WEEKDAYS_KR = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"]
 

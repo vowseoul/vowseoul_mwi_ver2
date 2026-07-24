@@ -124,3 +124,25 @@ export function buildThemeTokens(row: ThemeRow | null | undefined): TokenMap {
 
   return tokens
 }
+
+/** customization_overrides(jsonb) 에서 '--' CSS 변수만 추출 */
+export function extractOverrideTokens(overrides: unknown): TokenMap {
+  const tokens: TokenMap = {}
+  if (overrides && typeof overrides === "object") {
+    for (const [k, v] of Object.entries(overrides as Record<string, unknown>)) {
+      if (k.startsWith("--") && typeof v === "string" && v) tokens[k] = v
+    }
+  }
+  return tokens
+}
+
+/**
+ * 최종 토큰 = 테마 기본(themes.styles) + 청첩장 개별 오버라이드.
+ * 발행 경로와 편집기가 공유한다.
+ */
+export function buildInvitationTokens(
+  themeRow: ThemeRow | null | undefined,
+  overrides: unknown,
+): TokenMap {
+  return { ...buildThemeTokens(themeRow), ...extractOverrideTokens(overrides) }
+}

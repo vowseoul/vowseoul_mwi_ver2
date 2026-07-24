@@ -1,9 +1,8 @@
 import { supabase } from "@/lib/supabase"
 import InvitationClient from "../../invitation/[id]/invitation-client"
 import TemplateInvitationClient from "./template-invitation-client"
-import { buildThemeTokens, type ThemeRow } from "@/lib/theme-template"
-import { normalizeLegacyKeys, type RawInvitationData } from "@/lib/invitation-data"
-import type { TokenMap } from "@/components/invitation/invitation-frame"
+import { buildInvitationTokens, type ThemeRow } from "@/lib/theme-template"
+import { mergeInvitationRaw, type RawInvitationData } from "@/lib/invitation-data"
 import { Metadata, Viewport } from "next"
 
 export const viewport: Viewport = {
@@ -55,41 +54,6 @@ async function loadInvitation(slug: string) {
   return { invitation, customer, themeRow }
 }
 
-/** 고객 정보 + content_data(필드키) 를 병합해 렌더러용 원본 데이터를 만든다 */
-function buildRawData(invitation: Record<string, unknown>, customer: Record<string, unknown> | null): RawInvitationData {
-  const fromCustomer: RawInvitationData = {}
-  if (customer) {
-    for (const key of ['groom_name', 'bride_name', 'wedding_date', 'wedding_time', 'venue_name', 'venue_address'] as const) {
-      const v = customer[key]
-      if (v != null && v !== '') fromCustomer[key] = v
-    }
-  }
-  const contentData = (invitation.content_data && typeof invitation.content_data === 'object')
-    ? invitation.content_data as RawInvitationData
-    : {}
-
-  // content_data 를 먼저 정규화해야 레거시 camelCase 값도 고객 기본값보다 우선한다
-  const normalizedContent = normalizeLegacyKeys(contentData)
-  const raw: RawInvitationData = { ...fromCustomer, ...normalizedContent }
-  if (invitation.bgm_url) raw.bgm_url = invitation.bgm_url
-  return raw
-}
-
-/**
- * 최종 토큰 = 테마 기본 토큰(themes.styles) + 청첩장 개별 오버라이드
- * (청첩장 오버라이드가 우선)
- */
-function buildTokens(invitation: Record<string, unknown>, themeRow: ThemeRow | null): TokenMap {
-  const tokens: TokenMap = { ...buildThemeTokens(themeRow) }
-
-  const overrides = invitation.customization_overrides
-  if (overrides && typeof overrides === 'object') {
-    for (const [k, v] of Object.entries(overrides as Record<string, unknown>)) {
-      if (k.startsWith('--') && typeof v === 'string' && v) tokens[k] = v
-    }
-  }
-  return tokens
-}
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params
@@ -97,7 +61,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   try {
     const { invitation, customer } = await loadInvitation(slug)
     if (invitation) {
-      const raw = buildRawData(invitation, customer)
+      const raw = mergeInvitationRaw(invitation, customer)
       const og = (invitation.og_meta && typeof invitation.og_meta === 'object')
         ? invitation.og_meta as Record<string, string>
         : {}
@@ -169,9 +133,9 @@ export default async function Page({ params }: PageProps) {
     return (
       <TemplateInvitationClient
         themeRow={themeRow}
-        raw={buildRawData(invitation, customer)}
+        raw={mergeInvitationRaw(invitation, customer)}
         invitationId={String(invitation.id)}
-        tokens={buildTokens(invitation, themeRow)}
+        tokens={buildInvitationTokens(themeRow, invitation.customization_overrides)}
       />
     )
   }
