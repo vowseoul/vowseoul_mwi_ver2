@@ -6,7 +6,9 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 // Check if the current browser window is on a public page to avoid lock acquisition conflicts (Web Locks API error)
 const isPublicPage = typeof window !== 'undefined' && (
   window.location.pathname.startsWith('/invitation/') ||
-  window.location.pathname.startsWith('/preview/')
+  window.location.pathname.startsWith('/preview/') ||
+  window.location.pathname.startsWith('/w/') ||
+  window.location.pathname.startsWith('/dashboard/')
 )
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {

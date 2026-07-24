@@ -277,7 +277,7 @@ const [entries, setEntries] = useState([
 테마도 아직 `slot_manifest`에 `guestbook`을 선언하지 않아 실제 청첩장에서의
 end-to-end 클릭 테스트는 다음 테마 등록 시 진행할 것.
 
-### 3-2. [P0] Supabase 클라이언트의 public 경로 목록에 신규 발행 경로 누락
+### 3-2. [P0] Supabase 클라이언트의 public 경로 목록에 신규 발행 경로 누락 — ✅ 완료
 
 `lib/supabase.ts:7-10`
 
@@ -288,7 +288,8 @@ const isPublicPage = window.location.pathname.startsWith('/invitation/')
 
 주석은 "public 페이지에서 Web Locks API 충돌을 피하기 위함"이라 밝히고 있는데,
 **템플릿 엔진의 실제 발행 경로 `/w/[slug]` 와 하객 대시보드 `/dashboard/[slug]` 가 빠져 있다.**
-→ 신 렌더러로 발행된 청첩장에서 세션 락 충돌이 재발할 수 있다.
+→ `/w/` 와 `/dashboard/` 를 `isPublicPage` 체크에 추가. `/w/[slug]` 브라우저 로드 시
+콘솔 에러 없음 확인.
 
 ### 3-3. [P0] 에러를 수신하지 않는 쿼리 19곳 — ✅ 완료
 
