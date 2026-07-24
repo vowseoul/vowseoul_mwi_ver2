@@ -39,6 +39,23 @@ export interface WeddingInvitation {
   customStyles?: Record<string, any>
   /** 템플릿 테마 컬러/폰트 토큰 오버라이드 ('--accent' 등). customization_overrides 에 저장 */
   tokenOverrides?: Record<string, string>
+
+  /**
+   * DB 원본 식별/설정 필드 보존용.
+   * 이 값들이 없으면 mapToDb 가 기본값(customer_id '000...', public_slug=id 등)으로
+   * 덮어써서 저장이 실패하거나 링크가 손상된다.
+   */
+  customer_id?: string
+  public_slug?: string
+  dashboard_slug?: string
+  dashboard_password?: string
+  expires_at?: string
+  block_order?: any
+  /**
+   * DB content_data 원본. 레거시 편집기는 camelCase 일부만 다루므로,
+   * 저장 시 이 원본 위에 덮어써야 필드키(groom_name, wedding_programs 등)가 유실되지 않는다.
+   */
+  contentData?: Record<string, any>
 }
 
 export interface BankAccount {
@@ -123,7 +140,7 @@ export interface Notice {
 }
 
 // customization_overrides 에서 '--' CSS 변수 키만 추출
-function extractTokenOverrides(overrides: any): Record<string, string> {
+export function extractTokenOverrides(overrides: any): Record<string, string> {
   const out: Record<string, string> = {}
   if (overrides && typeof overrides === 'object') {
     for (const [k, v] of Object.entries(overrides)) {
@@ -143,6 +160,15 @@ export function mapFromDb(dbRecord: any): WeddingInvitation {
     colorSet: dbRecord.customization_overrides?.colorSet || 'default',
     fontSet: dbRecord.customization_overrides?.fontSet || 'default',
     tokenOverrides: extractTokenOverrides(dbRecord.customization_overrides),
+
+    // DB 원본 필드 보존 (저장 시 기본값으로 덮어써지는 것을 방지)
+    contentData: dbRecord.content_data || {},
+    customer_id: dbRecord.customer_id,
+    public_slug: dbRecord.public_slug,
+    dashboard_slug: dbRecord.dashboard_slug,
+    dashboard_password: dbRecord.dashboard_password,
+    expires_at: dbRecord.expires_at,
+    block_order: dbRecord.block_order,
     status: dbRecord.status,
     createdAt: dbRecord.created_at,
     publishedUrl: dbRecord.published_at ? `${dbRecord.public_slug}` : null,
@@ -179,6 +205,40 @@ export function mapFromDb(dbRecord: any): WeddingInvitation {
   }
 }
 
+/**
+ * themeId(테마 id 또는 theme_version_id)를 유효한 theme_version_id 로 해석한다.
+ * - 이미 theme_versions.id 이면 그대로 사용
+ * - themes.id 이면 최신 버전을 찾고, 없으면 v1 자동 생성
+ * - 어느 쪽도 아니면(예: 'classic-white' 샘플) null (FK 오류 방지 → 발행 시 레거시 폴백)
+ */
+export async function resolveThemeVersionId(themeRef?: string | null): Promise<string | null> {
+  if (!themeRef) return null
+
+  const { data: asVersion } = await supabase
+    .from('theme_versions').select('id').eq('id', themeRef).maybeSingle()
+  if (asVersion?.id) return asVersion.id
+
+  const { data: theme } = await supabase
+    .from('themes').select('id').eq('id', themeRef).maybeSingle()
+  if (!theme?.id) return null
+
+  const { data: latest } = await supabase
+    .from('theme_versions').select('id')
+    .eq('theme_id', themeRef).order('version_number', { ascending: false }).limit(1).maybeSingle()
+  if (latest?.id) return latest.id
+
+  const { data: created, error } = await supabase
+    .from('theme_versions')
+    .insert({
+      theme_id: themeRef, version_number: 1,
+      design_tokens: {}, block_variant_selections: {}, default_block_order: [],
+      status: 'active', change_note: '디자인 페이지 저장 시 자동 생성된 초기 버전',
+    })
+    .select('id').single()
+  if (error) { console.error('theme_version 자동 생성 실패:', error.message); return null }
+  return created?.id ?? null
+}
+
 // Helper to map WeddingInvitation to DB record (pack content_data)
 export function mapToDb(inv: any) {
   if (!inv) return null as any
@@ -201,6 +261,9 @@ export function mapToDb(inv: any) {
       ...(inv.tokenOverrides || {}),
     },
     content_data: {
+      // 원본 content_data 를 먼저 펼쳐 필드키(groom_name, wedding_programs 등)를 보존.
+      // 레거시 편집기가 다루는 camelCase 값만 아래에서 덮어쓴다
+      ...(inv.contentData || {}),
       groomName: inv.groomName || '',
       groomNameEn: inv.groomNameEn || '',
       groomParentRelation: inv.groomParentRelation || '',
@@ -432,9 +495,15 @@ export const useAppStore = create<AppState>((set, get) => ({
         id = userId ? `${userId}__${randId}` : randId
       }
 
+      // themeId 는 테마 id 이거나 theme_version_id 일 수 있다.
+      // 저장 전에 반드시 유효한 theme_version_id 로 해석한다
+      // (그대로 저장하면 발행 시 테마 체인 조회가 실패해 레거시로 폴백된다)
+      const resolvedThemeVersionId = await resolveThemeVersionId(current.themeId)
+
       const flatInvitation = {
         ...current,
         id,
+        themeId: resolvedThemeVersionId,
       } as any
 
       const dbPayload = mapToDb(flatInvitation)
