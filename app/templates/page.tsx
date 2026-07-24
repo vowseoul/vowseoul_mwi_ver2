@@ -108,14 +108,14 @@ export default function TemplatesPage() {
                                 샘플 미리보기
                               </Link>
                             </Button>
-                            <Button 
+                            <Button
                               size="sm"
                               asChild
                             >
-                              <Link href={`/editor/new?theme=${theme.id}`}>
+                              <a href="https://mkt.shopping.naver.com/link/6a20207aa4d80c5688e963db" target="_blank" rel="noopener noreferrer">
                                 <FileText className="mr-1.5 h-4 w-4" />
-                                청첩장 만들기
-                              </Link>
+                                이 템플릿으로 구매하기
+                              </a>
                             </Button>
                           </div>
                         </div>
@@ -147,10 +147,12 @@ export default function TemplatesPage() {
               원하는 템플릿을 찾지 못하셨나요?
             </h2>
             <p className="mt-3 text-muted-foreground">
-              직접 디자인하기 기능으로 처음부터 나만의 청첩장을 만들어보세요.
+              스토어에서 상담을 통해 나만의 청첩장을 만들어보세요.
             </p>
             <Button size="lg" className="mt-6" asChild>
-              <Link href="/editor/new">직접 디자인하기</Link>
+              <a href="https://mkt.shopping.naver.com/link/6a20207aa4d80c5688e963db" target="_blank" rel="noopener noreferrer">
+                스토어 바로가기
+              </a>
             </Button>
           </div>
         </section>

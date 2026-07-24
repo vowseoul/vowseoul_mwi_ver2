@@ -689,12 +689,6 @@ if (typeof window !== 'undefined') {
     if (session?.user) {
       store.setUser(session.user)
       store.setAuth(true, session.user.email === 'vovvseoul@gmail.com')
-      
-      // Only load user invitations if we are on a page that needs them (mypage, editor, etc.) to prevent Web Locks error on other pages
-      const path = window.location.pathname
-      if (path.startsWith('/mypage') || path.startsWith('/my-invitations') || path.startsWith('/editor')) {
-        store.loadUserInvitations()
-      }
     } else {
       store.setUser(null)
       store.setAuth(false, false)
