@@ -593,11 +593,33 @@ jsonb 컬럼을 `any` 로 느슨하게 다루는 기존 코드 다수(레거시 
 13. ~~Supabase 타입 생성 + 핵심 어댑터 단위 테스트~~ · §4-8, §5 ✅ 완료
     (타입은 CLI 대신 마이그레이션 기반 수기 작성, 클라이언트엔 아직 미적용)
 
-### 4차 — legacy 청산 (별도 계획)
-14. 남은 legacy 테마 2개(봄날의 세레나데, 모던 에센스 — 여전히 `themes`/`/templates`
-    갤러리에 활성 상태) 를 템플릿 엔진으로 이관
+### 4차 — legacy 청산 (진행 중)
+
+14. ~~남은 legacy 테마 2개(봄날의 세레나데, 모던 에센스)를 템플릿 엔진으로 이관~~
+    · ✅ **이관 대신 삭제로 처리**(사용자 결정). 두 테마 모두 `theme_versions`
+    포함 DB에서 완전히 삭제했고, 남은 invitations 3건은 전부 Soft Envelope 사용 중이라
+    참조 무결성 문제 없음(cascade 삭제 확인). `/templates`, `admin/assets/themes`
+    양쪽 다 남은 3개(Soft Envelope/Romantic Film/Color Atelier)만 정상 표시되는 것을
+    브라우저로 확인. → **이제 `themes` 테이블에 `render_engine='legacy'` 행이
+    0개**다.
+
 15. legacy 렌더러 4벌(`invitation-client.tsx`/`mobile-preview.tsx`/`orders/[id]`/
-    `preview/template/[id]`) + `store.ts` 데이터 계층 제거 · §4-1, §4-6
+    `preview/template/[id]`) + `store.ts` 데이터 계층 제거 · §4-1, §4-6 — **보류**
+    (사용자가 이번 세션에서는 코드 삭제를 미루기로 결정, 아래 발견 사항 참고)
+
+    > ⚠️ **삭제 전 반드시 처리해야 할 선행 작업 발견**: `/invitation/[id]`
+    > (legacy 렌더러 라우트)가 여전히 3곳에서 "배포된 청첩장 보기/링크 복사"
+    > 용도로 하드코딩되어 있다 — 그리고 이 3곳 전부 **template 엔진 청첩장에도
+    > 무조건 이 legacy 라우트를 가리킨다** (진짜 발행 URL인 `/w/{public_slug}`
+    > 가 아님):
+    > - `app/admin/(dashboard)/orders/page.tsx:126` — "링크 복사하기"
+    > - `app/admin/(dashboard)/orders/[id]/page.tsx:687` — "배포된 화면 보기"
+    > - `app/invitation/[id]/dashboard/page.tsx:480` — "청첩장 확인" 백링크
+    >
+    > 지금 남은 invitations 3건이 전부 template 엔진(Soft Envelope)이므로,
+    > legacy 렌더러를 먼저 지우면 이 3개 버튼이 전부 깨진다. **legacy 렌더러
+    > 삭제보다 먼저 이 3곳을 `/w/{invitation.public_slug}` 로 고쳐야 한다.**
+
 16. ~~레거시 편집기 진입 차단~~ · §3-7 ✅ 완료 (이번 세션)
 
 ### 이후 — 보류 항목
@@ -613,5 +635,5 @@ jsonb 컬럼을 `any` 로 느슨하게 다루는 기존 코드 다수(레거시 
 | 1 | ~~`orders` 를 정식 테이블로 만들 것인가~~ | ✅ 확정 — §1-B 스키마대로 "제작 의뢰 이행 기록"으로 재정의. 결제 게이트웨이 불필요(네이버 스마트스토어가 처리) |
 | 2 | `bgms` = 테이블 vs `settings` JSONB | 미결 — 9개 호출 지점 영향 |
 | 3 | ~~`admin/templates` 화면을 `admin/assets/themes` 와 통폐합할 것인가~~ | ✅ 해소 — 애초에 사이드바 nav 에 없는 고아 페이지였음, `admin/users` 와 함께 삭제 |
-| 4 | legacy 테마 2개(봄날의 세레나데/모던 에센스)를 템플릿 엔진으로 이관할 것인가 | 미결 — 이관 전까지 `orders/[id]` 3,431줄 + legacy 렌더러 4벌 유지 필요 |
+| 4 | ~~legacy 테마 2개를 템플릿 엔진으로 이관할 것인가~~ | ✅ 확정 — 이관 대신 **삭제**. `themes` 테이블에 legacy 테마 0개. 단, legacy 렌더러 4벌 코드 자체 삭제는 §4-1의 링크 3곳 수정이 선행돼야 해서 보류 중 |
 | 5 | `statistics` 를 실연동 전까지 숨길 것인가, "샘플" 배지로 남길 것인가 | 미결 — 운영 오판 리스크 |
