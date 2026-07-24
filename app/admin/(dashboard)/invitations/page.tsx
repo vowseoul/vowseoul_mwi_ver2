@@ -105,7 +105,7 @@ export default function InvitationsListPage() {
       setPublicSlug('')
       
       // Redirect to the client-side editor
-      window.location.href = `/editor/${created.id}`
+      window.location.href = `/admin/invitations/editor/${created.id}`
     } catch (err: any) {
       console.error(err)
       toast.error(err.message || '초안 생성에 실패했습니다.')
@@ -324,7 +324,7 @@ export default function InvitationsListPage() {
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1.5">
                         <Button variant="outline" size="sm" asChild className="h-8 text-[11px] gap-1">
-                          <Link href={`/editor/${inv.id}`}>
+                          <Link href={`/admin/invitations/editor/${inv.id}`}>
                             <Edit3 className="w-3.5 h-3.5" /> 편집
                           </Link>
                         </Button>

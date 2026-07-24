@@ -132,6 +132,9 @@ export default function CustomizeClient({
           <button onClick={save} disabled={saving} style={{ padding: "10px 20px", borderRadius: 8, border: "none", cursor: saving ? "wait" : "pointer", background: "#D76C6C", color: "#fff", fontSize: 14, opacity: saving ? 0.6 : 1 }}>
             {saving ? "저장 중…" : "저장"}
           </button>
+          <a href={`/editor/${invitationId}`} style={{ fontSize: 13, color: "#2563eb" }}>
+            콘텐츠·디자인 편집기 열기 →
+          </a>
           {publicSlug && (
             <a href={`/w/${publicSlug}`} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: "#2563eb" }}>
               발행 청첩장 열기 →
