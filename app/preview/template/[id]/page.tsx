@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { DEFAULT_BLOCK_ORDER } from '@/lib/constants'
 import {
   Dialog,
   DialogContent,
@@ -298,7 +299,7 @@ export default function TemplatePreviewPage() {
   }
 
   
-  const defaultOrder = ['hero', 'greeting', 'sequence', 'gallery', 'calendar', 'location', 'contact', 'account', 'rsvp', 'guestbook']
+  const defaultOrder = [...DEFAULT_BLOCK_ORDER]
   const rawOrder = themeStyles.sectionOrder || defaultOrder
   const sectionOrder = rawOrder.includes('sequence')
     ? rawOrder

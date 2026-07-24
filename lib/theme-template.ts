@@ -125,6 +125,25 @@ export function buildThemeTokens(row: ThemeRow | null | undefined): TokenMap {
   return tokens
 }
 
+/** admin/templates, admin/assets 목록 카드가 쓰는 레거시 테마 카드 표시용 색상 */
+export interface ThemeSwatchInput {
+  colorSets?: { colors?: string[] }[] | null
+  styles?: { backgroundColor?: string; textColor?: string; primaryColor?: string } | null
+}
+
+/**
+ * 테마 목록 카드의 대표 배경/텍스트/포인트 색상을 뽑는다.
+ * colorSets[0] 을 우선하고, 없으면 레거시 styles 키로 폴백한다.
+ * 3개 화면(admin/assets, admin/assets/themes/[id], templates)에 흩어져 있던 걸 통합.
+ */
+export function resolveThemeSwatch(theme: ThemeSwatchInput | null | undefined) {
+  return {
+    bg: theme?.colorSets?.[0]?.colors?.[0] || theme?.styles?.backgroundColor || '#FFF8F0',
+    text: theme?.colorSets?.[0]?.colors?.[2] || theme?.styles?.textColor || '#3A3A3A',
+    primary: theme?.colorSets?.[0]?.colors?.[1] || theme?.styles?.primaryColor || '#E8A87C',
+  }
+}
+
 /** customization_overrides(jsonb) 에서 '--' CSS 변수만 추출 */
 export function extractOverrideTokens(overrides: unknown): TokenMap {
   const tokens: TokenMap = {}

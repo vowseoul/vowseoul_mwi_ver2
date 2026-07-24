@@ -361,38 +361,39 @@ export default function StatisticsPage() {
           </CardHeader>
           <CardContent>
             <div className="h-[250px]">
-              {themeUsageData.length === 0 ? (
+              {themeUsageData.length === 0 && (
                 <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                   아직 등록된 청첩장이 없습니다.
                 </div>
-              ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={themeUsageData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={2}
-                    dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    labelLine={false}
-                  >
-                    {themeUsageData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} stroke="hsl(var(--border))" />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px'
-                    }}
-                    formatter={(value: any) => [`${value}%`, '사용률']}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+              )}
+              {themeUsageData.length > 0 && (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={themeUsageData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={2}
+                      dataKey="value"
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      labelLine={false}
+                    >
+                      {themeUsageData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} stroke="hsl(var(--border))" />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px'
+                      }}
+                      formatter={(value: any) => [`${value}%`, '사용률']}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
               )}
             </div>
           </CardContent>
@@ -406,33 +407,34 @@ export default function StatisticsPage() {
           </CardHeader>
           <CardContent>
             <div className="h-[250px]">
-              {bgmUsageData.length === 0 ? (
+              {bgmUsageData.length === 0 && (
                 <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                   집계할 BGM 선택 데이터가 없습니다.
                 </div>
-              ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={bgmUsageData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                  <YAxis 
-                    type="category" 
-                    dataKey="name" 
-                    stroke="hsl(var(--muted-foreground))" 
-                    fontSize={11}
-                    width={100}
-                  />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px'
-                    }}
-                    formatter={(value: any) => [`${value}회`, '선택 횟수']}
-                  />
-                  <Bar dataKey="count" fill="hsl(var(--foreground))" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              )}
+              {bgmUsageData.length > 0 && (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={bgmUsageData} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={11}
+                      width={100}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px'
+                      }}
+                      formatter={(value: any) => [`${value}회`, '선택 횟수']}
+                    />
+                    <Bar dataKey="count" fill="hsl(var(--foreground))" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               )}
             </div>
           </CardContent>

@@ -8,6 +8,7 @@ import { useAppStore, sampleThemes } from '@/lib/store'
 import { NaverMap } from '@/components/naver-map'
 import { supabase, logSupabaseError } from '@/lib/supabase'
 import { cn, getLegibleColor } from '@/lib/utils'
+import { DEFAULT_BLOCK_ORDER } from '@/lib/constants'
 import { toast } from 'sonner'
 import { Logo } from '@/components/logo'
 import { 
@@ -298,7 +299,7 @@ export function MobilePreview({ className, isSticky = true }: { className?: stri
 
   
   // Default section order if missing
-  const defaultOrder = ['hero', 'greeting', 'sequence', 'gallery', 'calendar', 'location', 'contact', 'account', 'rsvp', 'guestbook']
+  const defaultOrder = [...DEFAULT_BLOCK_ORDER]
   const rawOrder = themeStyles.sectionOrder || defaultOrder
   const sectionOrder = rawOrder.includes('sequence')
     ? rawOrder

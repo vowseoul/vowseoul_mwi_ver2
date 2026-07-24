@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { MobilePreview } from '@/components/mobile-preview'
+import { DEFAULT_BLOCK_ORDER } from '@/lib/constants'
 import { useAppStore, sampleThemes, samplePhrases, type BankAccount, type Contact, type Order } from '@/lib/store'
 import { supabase, logSupabaseError } from '@/lib/supabase'
 import { uploadFile } from '@/lib/storage'
@@ -604,7 +605,7 @@ export default function OrderDetailPage() {
   // Reorder Sections
   const handleMoveSection = (index: number, direction: 'up' | 'down') => {
     if (!currentInvitation) return
-    const defaultOrder = ['hero', 'greeting', 'sequence', 'gallery', 'calendar', 'location', 'contact', 'account', 'rsvp', 'guestbook']
+    const defaultOrder = [...DEFAULT_BLOCK_ORDER]
     const rawOrder = currentInvitation.customStyles?.sectionOrder || activeTheme?.styles?.sectionOrder || defaultOrder
     const sectionOrder = rawOrder.includes('sequence')
       ? [...rawOrder]
@@ -3117,7 +3118,7 @@ export default function OrderDetailPage() {
                     <p className="text-xs text-muted-foreground">위/아래 버튼을 클릭하여 모바일 화면 상에 노출될 섹션의 순서를 자유롭게 조정합니다.</p>
                     <div className="space-y-2 max-w-md bg-muted/40 border rounded-lg p-4">
                       {(() => {
-                        const defaultOrder = ['hero', 'greeting', 'sequence', 'gallery', 'calendar', 'location', 'contact', 'account', 'rsvp', 'guestbook']
+                        const defaultOrder = [...DEFAULT_BLOCK_ORDER]
                         const rawOrder = currentInvitation.customStyles?.sectionOrder || activeTheme?.styles?.sectionOrder || defaultOrder
                         const sectionOrder = rawOrder.includes('sequence')
                           ? rawOrder

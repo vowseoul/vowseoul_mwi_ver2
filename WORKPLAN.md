@@ -449,16 +449,18 @@ legacy 엔진 쪽에는 그대로 존재).
 legacy 4벌을 일괄 삭제하는 것이 최종 목표. 중간 단계로 부분 통합은 권하지 않는다
 (어차피 버릴 코드에 리팩터링 비용을 쓰게 됨).
 
-### 4-2. `defaultOrder` 배열 8곳 중복
+### 4-2. `defaultOrder` 배열 8곳 중복 — ✅ 완료
 
 `['hero','greeting','sequence','gallery','calendar','location','contact','account','rsvp','guestbook']`
 
 `assets/themes/[id]/page.tsx:57,166,209` / `orders/[id]/page.tsx:586,3097` /
 `invitation-client.tsx:653` / `preview/template/[id]/page.tsx:300` / `mobile-preview.tsx:300`
 
-→ `lib/constants.ts` 로 단일화 (legacy 정리 전까지의 임시 조치로도 가치 있음).
+`lib/constants.ts` 신설, `DEFAULT_BLOCK_ORDER` 로 8곳 전부 단일화. 각 호출부는
+`[...DEFAULT_BLOCK_ORDER]` 로 복사본을 받는다 — 원본 배열을 직접 참조하면
+드래그 정렬 등에서 mutate 시 다른 화면과 공유되는 상태가 오염될 수 있어서다.
 
-### 4-3. 테마 색상 추출 로직 4파일 중복
+### 4-3. 테마 색상 추출 로직 4파일 중복 — ✅ 완료
 
 ```
 theme.colorSets?.[0]?.colors?.[0] || theme.styles?.backgroundColor || '#FFF8F0'
@@ -466,18 +468,28 @@ theme.colorSets?.[0]?.colors?.[0] || theme.styles?.backgroundColor || '#FFF8F0'
 `admin/assets/page.tsx:338` / `admin/assets/themes/[id]/page.tsx` / `templates/page.tsx:59`
 (`editor/[id]/design/page.tsx` 는 이번 세션에 삭제되어 3곳으로 줄었다)
 
-→ `lib/theme-template.ts` 에 `resolveThemeSwatch(theme)` 로 통합.
-신 엔진의 `buildThemeTokens` 와 폴백 규칙이 다르면 미리보기 색이 어긋나므로 **정합 확인 필요**.
+`lib/theme-template.ts` 에 `resolveThemeSwatch(theme)` 로 통합, 3곳 전부 교체.
+이 함수는 레거시 카드용(`colorSets`/`styles`)이고 신 엔진의 `buildThemeTokens`
+(themes.styles → CSS 변수)와는 별개 경로라 실제 충돌은 없다 — 서로 다른
+화면(레거시 카드 미리보기 vs 템플릿 엔진 렌더)이 각자의 폴백을 쓰는 구조라
+"정합 확인 필요" 우려는 해소.
 
-### 4-4. 샘플 데이터 2벌
+### 4-4. 샘플 데이터 2벌 — ✅ 완료
 
 `lib/sample-invitation.ts` `SAMPLE_RAW` 와 `app/theme-lab/page.tsx:17` `RAW_DATA` 가
-같은 내용을 각각 정의. → `theme-lab` 이 `SAMPLE_RAW` 를 import 하도록.
+같은 내용을 각각 정의하고 있었다. `theme-lab` 이 `SAMPLE_RAW` 를 import 하도록 교체.
 
-### 4-5. Supabase 클라이언트 2벌
+### 4-5. Supabase 클라이언트 2벌 — 조사 결과 의도된 패턴, 통합 안 함
 
 `lib/supabase.ts` 싱글턴 외에 `app/admin/(dashboard)/settings/page.tsx:60` 이
-`createClient` 를 별도 호출(`tempClient`). 인증 옵션이 달라 세션 상태가 갈릴 수 있다.
+`createClient` 를 별도 호출(`tempClient`, `persistSession: false`).
+
+**우연한 중복이 아니었다** — 직원 계정을 `signUp()`으로 생성하는 코드다.
+싱글턴 클라이언트로 `signUp()` 을 호출하면 Supabase Auth 특성상 **현재
+로그인된 관리자 세션이 방금 생성한 신규 직원 계정 세션으로 바뀌어버린다**
+(관리자가 자기도 모르게 로그아웃되고 새 직원으로 로그인됨). `persistSession:
+false` 임시 클라이언트는 이 세션 탈취를 막는 의도된 방어 코드이므로
+**통합하지 않고 그대로 둔다.**
 
 ### 4-6. 데이터 접근 계층 이원화
 
@@ -538,7 +550,8 @@ Supabase 생성 타입(`supabase gen types typescript`)이 없어 컬럼 오타�
 
 ### 3차 — 중복 제거·안전망 (1~2주)
 10. ESLint 설정 복구 · §3-6
-11. `defaultOrder`·색상추출·SAMPLE_RAW·클라이언트 단일화 · §4-2~4-5
+11. ~~`defaultOrder`·색상추출·SAMPLE_RAW·클라이언트 단일화~~ · §4-2~4-5 ✅ 완료
+    (클라이언트 2벌은 조사 후 의도된 방어 코드로 확인, 통합 안 함)
 12. 미들웨어 → `proxy.ts` + 서버 세션 검증 · §3-4, §3-5
 13. Supabase 타입 생성 + 핵심 어댑터 단위 테스트 · §4-8, §5
 

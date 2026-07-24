@@ -13,8 +13,10 @@ import { Switch } from '@/components/ui/switch'
 import { ChevronLeft, Save, Upload, Download, Loader2, Link as LinkIcon, Music, Heart, Copy, Phone, Calendar as CalendarIcon, Share2, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase, logSupabaseError } from '@/lib/supabase'
+import { resolveThemeSwatch } from '@/lib/theme-template'
 import { uploadFile } from '@/lib/storage'
 import { sampleThemes } from '@/lib/store'
+import { DEFAULT_BLOCK_ORDER } from '@/lib/constants'
 import { cn, getLegibleColor } from '@/lib/utils'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
@@ -54,7 +56,7 @@ export default function ThemeEditorPage() {
     heroStyle: 'center',
     heroConnector: '&',
     accountLayout: '1col',
-    sectionOrder: ['hero', 'greeting', 'sequence', 'gallery', 'calendar', 'location', 'contact', 'account', 'rsvp', 'guestbook'] as string[],
+    sectionOrder: [...DEFAULT_BLOCK_ORDER],
     recommendedBgms: [] as string[],
     duotoneEnabled: false,
     heroSubtitleText: 'save the date',
@@ -165,7 +167,7 @@ export default function ThemeEditorPage() {
         heroStyle: data.styles?.heroStyle || 'center',
         heroConnector: data.styles?.heroConnector || '&',
         accountLayout: data.styles?.accountLayout || '1col',
-        sectionOrder: data.styles?.sectionOrder || ['hero', 'greeting', 'sequence', 'gallery', 'calendar', 'location', 'contact', 'account', 'rsvp', 'guestbook'],
+        sectionOrder: data.styles?.sectionOrder || [...DEFAULT_BLOCK_ORDER],
         recommendedBgms: data.recommendedBgms || [],
         duotoneEnabled: data.styles?.duotoneEnabled === true || themeId === 'duotone-contrast',
         heroSubtitleText: data.styles?.heroSubtitleText || 'save the date',
@@ -185,6 +187,7 @@ export default function ThemeEditorPage() {
     } else {
       const sample = sampleThemes.find(t => t.id === themeId)
       if (sample) {
+        const swatch = resolveThemeSwatch(sample)
         setTheme({
           name: sample.name,
           thumbnail: sample.thumbnail,
@@ -194,9 +197,9 @@ export default function ThemeEditorPage() {
           fontEn: 'font-serif',
           fontSize: '16',
           letterSpacing: '-0.02',
-          primaryColor: sample.colorSets?.[0]?.colors?.[1] || '#E8A87C',
-          backgroundColor: sample.colorSets?.[0]?.colors?.[0] || '#FFF8F0',
-          textColor: sample.colorSets?.[0]?.colors?.[2] || '#3A3A3A',
+          primaryColor: swatch.primary,
+          backgroundColor: swatch.bg,
+          textColor: swatch.text,
           secondaryColor: '#D3D3D3',
           secondaryTextColor: '#8A8A8A',
           // Custom style values defaults
@@ -208,7 +211,7 @@ export default function ThemeEditorPage() {
           heroStyle: 'center',
           heroConnector: '&',
           accountLayout: '1col',
-          sectionOrder: ['hero', 'greeting', 'sequence', 'gallery', 'calendar', 'location', 'contact', 'account', 'rsvp', 'guestbook'],
+          sectionOrder: [...DEFAULT_BLOCK_ORDER],
           recommendedBgms: (sample as any).recommendedBgms || [],
           duotoneEnabled: sample.id === 'duotone-contrast' || (sample.styles as any)?.duotoneEnabled === true,
           heroSubtitleText: (sample.styles as any)?.heroSubtitleText || 'save the date',

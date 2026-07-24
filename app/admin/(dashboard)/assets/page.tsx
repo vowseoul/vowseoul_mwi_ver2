@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { sampleThemes, sampleBGMs, Theme, samplePhrases } from '@/lib/store'
 import { supabase, logSupabaseError } from '@/lib/supabase'
+import { resolveThemeSwatch } from '@/lib/theme-template'
 import { Plus, Play, Pause, Trash2, Upload, Loader2, CheckCircle2 } from 'lucide-react'
 import { uploadFile, deleteFile } from '@/lib/storage'
 import Link from 'next/link'
@@ -336,10 +337,7 @@ export default function AssetsPage() {
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {themes.map((theme) => {
-                    // 안전한 렌더링을 위해 colorSets 배열과 그 안의 colors가 존재하는지 확인합니다.
-                    const defaultBg = theme.colorSets?.[0]?.colors?.[0] || theme.styles?.backgroundColor || '#FFF8F0';
-                    const defaultText = theme.colorSets?.[0]?.colors?.[2] || theme.styles?.textColor || '#3A3A3A';
-                    const defaultPrimary = theme.colorSets?.[0]?.colors?.[1] || theme.styles?.primaryColor || '#E8A87C';
+                    const { bg: defaultBg, text: defaultText, primary: defaultPrimary } = resolveThemeSwatch(theme);
                     
                     return (
                       <div 

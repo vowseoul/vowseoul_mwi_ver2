@@ -16,6 +16,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
+import { DEFAULT_BLOCK_ORDER } from "@/lib/constants"
 import { 
   Calendar as CalendarIcon, 
   MapPin, 
@@ -692,7 +693,7 @@ export default function InvitationClient({
     return `${enFamily}, ${krFamily}, ${genericFallback}`;
   }
 
-  const defaultOrder = ['hero', 'greeting', 'sequence', 'gallery', 'calendar', 'location', 'contact', 'account', 'rsvp', 'guestbook']
+  const defaultOrder = [...DEFAULT_BLOCK_ORDER]
   const rawOrder = themeStyles.sectionOrder || defaultOrder
   const sectionOrder = rawOrder.includes('sequence')
     ? rawOrder

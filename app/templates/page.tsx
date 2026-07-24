@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { sampleThemes, Theme } from '@/lib/store'
 import { supabase, logSupabaseError } from '@/lib/supabase'
+import { resolveThemeSwatch } from '@/lib/theme-template'
 import { Eye, FileText, Loader2 } from 'lucide-react'
 
 export default function TemplatesPage() {
@@ -57,9 +58,7 @@ export default function TemplatesPage() {
             ) : (
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {themes.map((theme) => {
-                  const defaultBg = theme.colorSets?.[0]?.colors?.[0] || theme.styles?.backgroundColor || '#FFF8F0';
-                  const defaultText = theme.colorSets?.[0]?.colors?.[2] || theme.styles?.textColor || '#3A3A3A';
-                  const defaultPrimary = theme.colorSets?.[0]?.colors?.[1] || theme.styles?.primaryColor || '#E8A87C';
+                  const { bg: defaultBg, text: defaultText, primary: defaultPrimary } = resolveThemeSwatch(theme);
 
                   return (
                     <div
