@@ -498,7 +498,7 @@ Supabase 생성 타입(`supabase gen types typescript`)이 없어 컬럼 오타�
 비즈니스 프로세스 확인 결과 불필요해진 `login`/`signup`/`mypage`/`my-invitations`/
 `editor/[id]/*` 및 dangling 참조 정리. "이번 세션에서 완료된 작업" 절 참조.
 
-### 1차 — 데이터 경로 복구 (1~2주)
+### 1차 — 데이터 경로 복구 (1~2주) — ✅ 전체 완료
 1. `supabase/migrations/` 도입, 현행 스키마 스냅샷 커밋 · §1-C
 2. 쿼리 에러 수신 래퍼 도입 + `const { data }` 19곳 교정 · §3-3 ← **먼저 해야 나머지 문제가 보인다**
 3. `rsvps`/`guestbook`/`visitor_logs` → 정본 테이블명·컬럼으로 교정 · §1-A
