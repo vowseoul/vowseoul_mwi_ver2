@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
+import { supabase, logSupabaseError } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -130,39 +130,65 @@ export default function CustomerDashboardPage() {
       }
 
       // 1-3. Fetch RSVPs
-      const { data: rsvpsData } = await supabase
-        .from('rsvps')
+      const { data: rsvpsData, error: rsvpsError } = await supabase
+        .from('rsvp_responses')
         .select('*')
-        .eq('invitationId', invitationId)
-        .order('createdAt', { ascending: false })
+        .eq('invitation_id', invitationId)
+        .order('created_at', { ascending: false })
+      logSupabaseError('loadDashboardData: rsvp_responses', rsvpsError)
 
-      let finalRsvps = rsvpsData || []
+      // DB 컬럼(guest_name/is_attending/party_size/meal_choice/shuttle_required/created_at)
+      // → 화면이 기대하는 필드명(name/attendance/guestCount/mealType/shuttleUsed/createdAt)으로 정규화
+      let finalRsvps = (rsvpsData || []).map((r: any) => ({
+        id: r.id,
+        name: r.guest_name,
+        phone: r.phone,
+        attendance: r.is_attending ? 'yes' : 'no',
+        side: r.side,
+        guestCount: r.party_size,
+        mealType: r.meal_choice,
+        shuttleUsed: r.shuttle_required,
+        message: undefined,
+        createdAt: r.created_at,
+      }))
       if (finalRsvps.length === 0) {
         finalRsvps = JSON.parse(localStorage.getItem(`rsvps_${invitationId}`) || '[]')
       }
       setRsvps(finalRsvps)
 
       // 1-4. Fetch Guestbook Messages
-      const { data: gbData } = await supabase
-        .from('guestbook')
+      const { data: gbData, error: gbError } = await supabase
+        .from('guestbook_entries')
         .select('*')
-        .eq('invitationId', invitationId)
-        .order('createdAt', { ascending: false })
+        .eq('invitation_id', invitationId)
+        .order('created_at', { ascending: false })
+      logSupabaseError('loadDashboardData: guestbook_entries', gbError)
 
-      let finalGb = gbData || []
+      let finalGb = (gbData || []).map((g: any) => ({
+        id: g.id,
+        name: g.author_name,
+        message: g.message,
+        is_visible: g.is_visible,
+        createdAt: g.created_at,
+      }))
       if (finalGb.length === 0) {
         finalGb = JSON.parse(localStorage.getItem(`guestbook_comments_${invitationId}`) || '[]')
       }
       setGuestbook(finalGb)
 
       // 1-5. Fetch Visitor Logs
-      const { data: vlogsData } = await supabase
-        .from('visitor_logs')
+      const { data: vlogsData, error: vlogsError } = await supabase
+        .from('visit_logs')
         .select('*')
-        .eq('invitationId', invitationId)
-        .order('visitedAt', { ascending: false })
+        .eq('invitation_id', invitationId)
+        .order('visited_at', { ascending: false })
+      logSupabaseError('loadDashboardData: visit_logs', vlogsError)
 
-      let finalVlogs = vlogsData || []
+      let finalVlogs = (vlogsData || []).map((v: any) => ({
+        id: v.id,
+        visitedDate: (v.visited_at || '').split('T')[0],
+        visitedAt: v.visited_at,
+      }))
       if (finalVlogs.length === 0) {
         finalVlogs = JSON.parse(localStorage.getItem(`visitor_logs_${invitationId}`) || '[]')
       }
@@ -186,9 +212,9 @@ export default function CustomerDashboardPage() {
   const purgeAllCollectedData = async () => {
     try {
       // Supabase 원격 데이터 삭제
-      await supabase.from('rsvps').delete().eq('invitationId', invitationId)
-      await supabase.from('guestbook').delete().eq('invitationId', invitationId)
-      await supabase.from('visitor_logs').delete().eq('invitationId', invitationId)
+      await supabase.from('rsvp_responses').delete().eq('invitation_id', invitationId)
+      await supabase.from('guestbook_entries').delete().eq('invitation_id', invitationId)
+      await supabase.from('visit_logs').delete().eq('invitation_id', invitationId)
 
       // LocalStorage 로컬 데이터 삭제
       localStorage.removeItem(`rsvps_${invitationId}`)
@@ -206,7 +232,7 @@ export default function CustomerDashboardPage() {
     const updatedVal = !currentVal
     try {
       const { error } = await supabase
-        .from('guestbook')
+        .from('guestbook_entries')
         .update({ is_visible: updatedVal })
         .eq('id', id)
 
@@ -230,7 +256,7 @@ export default function CustomerDashboardPage() {
   const handleDeleteItem = async (id: string, type: 'rsvp' | 'guestbook') => {
     try {
       if (type === 'rsvp') {
-        const { error } = await supabase.from('rsvps').delete().eq('id', id)
+        const { error } = await supabase.from('rsvp_responses').delete().eq('id', id)
         if (error) throw error
         
         // LocalStorage fallback
@@ -241,7 +267,7 @@ export default function CustomerDashboardPage() {
         setRsvps(prev => prev.filter(r => r.id !== id))
         toast.success('참석 정보가 영구 삭제되었습니다.')
       } else {
-        const { error } = await supabase.from('guestbook').delete().eq('id', id)
+        const { error } = await supabase.from('guestbook_entries').delete().eq('id', id)
         if (error) throw error
 
         // LocalStorage fallback
@@ -286,7 +312,7 @@ export default function CustomerDashboardPage() {
       r.attendance === 'yes' ? `${r.guestCount}명` : '0명',
       r.attendance === 'yes' ? (r.mealInfo && Object.keys(r.mealInfo).length > 0
         ? Object.entries(r.mealInfo).map(([k, v]) => `${k}:${v}개`).join(', ')
-        : (r.mealType === 'korean' ? '한식' : r.mealType === 'western' ? '양식' : '안함')) : '-',
+        : (r.mealType === 'korean' ? '한식' : r.mealType === 'western' ? '양식' : (r.mealType || '안함'))) : '-',
       r.attendance === 'yes' ? (r.shuttleUsed ? '이용함' : '이용안함') : '-',
       r.message || ''
     ])
@@ -654,7 +680,7 @@ export default function CustomerDashboardPage() {
                                   {Object.entries(rsvp.mealInfo).map(([k, v]) => `${k}:${v}개`).join(', ')}
                                 </span>
                               ) : (
-                                rsvp.mealType === 'korean' ? '한식' : rsvp.mealType === 'western' ? '양식' : '안함'
+                                rsvp.mealType === 'korean' ? '한식' : rsvp.mealType === 'western' ? '양식' : (rsvp.mealType || '안함')
                               )) : '-'}
                             </TableCell>
                             <TableCell className="text-center">

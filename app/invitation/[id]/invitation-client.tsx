@@ -222,7 +222,13 @@ export default function InvitationClient({
     const loadData = async () => {
       // 0. Log visitor count
       try {
-        await supabase.from('visitor_logs').insert({ invitationId: id })
+        // ip_hash 는 서버에서 실 클라이언트 IP 를 해시해야 의미가 있다 (브라우저에서는 알 수 없음).
+        // 현재는 방문 로그 존재 자체만 남기는 플레이스홀더 — WORKPLAN.md §3-1(부속) 참조.
+        const { error: vlogError } = await supabase.from('visit_logs').insert({
+          invitation_id: id,
+          ip_hash: 'unknown',
+        })
+        if (vlogError) throw vlogError
       } catch (err) {
         console.warn('Logging visitor count to DB failed. Recording locally:', err)
         const visitorLogsKey = `visitor_logs_${id}`
@@ -260,13 +266,20 @@ export default function InvitationClient({
           // 2. Fetch guestbook comments
           if (currentInvite.guestbookType !== 'none') {
             const { data: comments, error: commentsError } = await supabase
-              .from('guestbook')
+              .from('guestbook_entries')
               .select('*')
-              .eq('invitationId', id)
-              .order('createdAt', { ascending: false })
+              .eq('invitation_id', id)
+              .order('created_at', { ascending: false })
 
             if (!commentsError && comments) {
-              setGuestbookMessages(comments)
+              // DB 컬럼(author_name/created_at) → 화면이 기대하는 필드명(name/createdAt)으로 정규화
+              setGuestbookMessages(comments.map((c: any) => ({
+                id: c.id,
+                name: c.author_name,
+                message: c.message,
+                createdAt: c.created_at,
+                is_visible: c.is_visible,
+              })))
             } else {
               // Fallback to local storage if table doesn't exist
               const localComments = JSON.parse(localStorage.getItem(`guestbook_comments_${id}`) || '[]')
@@ -391,6 +404,7 @@ export default function InvitationClient({
       }
     }
 
+    // 로컬 폴백용 원본 형태 (기존 대시보드/localStorage 포맷과 호환 유지)
     const newRsvp = {
       id: 'rsvp-' + Math.random().toString(36).substring(2, 9),
       invitationId: id,
@@ -406,8 +420,27 @@ export default function InvitationClient({
       createdAt: new Date().toISOString()
     }
 
+    // rsvp_responses 스키마에 맞춘 실제 저장 페이로드.
+    // ⚠️ 스키마에 개인 메시지 컬럼이 없어 rsvpMessage 는 저장되지 않는다 (WORKPLAN.md §3-1 부속 참고).
+    // 옵션별 식사 수량(mealInfo)은 텍스트로 요약해 meal_choice 에 담는다.
+    const mealChoiceText = attendance === 'yes' && isMealSurvey && Object.keys(rsvpMealInfo).length > 0
+      ? Object.entries(rsvpMealInfo).filter(([, v]) => (v as number) > 0).map(([k, v]) => `${k}:${v}`).join(', ')
+      : (attendance === 'yes' ? (mealType || 'korean') : null)
+
+    const dbPayload = {
+      invitation_id: id,
+      guest_name: rsvpName,
+      phone: rsvpPhone,
+      side: rsvpSide,
+      is_attending: attendance === 'yes',
+      party_size: attendance === 'yes' ? guestCount : 0,
+      meal_required: attendance === 'yes' && mealType !== 'none',
+      meal_choice: mealChoiceText,
+      shuttle_required: attendance === 'yes' && (invitation.customStyles?.rsvpShuttleSurvey ? rsvpShuttleUsed === 'yes' : false),
+    }
+
     try {
-      const { error } = await supabase.from('rsvps').insert(newRsvp)
+      const { error } = await supabase.from('rsvp_responses').insert(dbPayload)
       if (error) throw error
 
       toast.success("참석 의사가 정상적으로 전달되었습니다.")
@@ -454,7 +487,15 @@ export default function InvitationClient({
     }
 
     try {
-      const { error } = await supabase.from('guestbook').insert(newComment)
+      // guestbook_entries.password_hash 는 NOT NULL 이지만, 자기 글 삭제(비밀번호 확인) UI가
+      // 아직 없어 실질적으로 쓰이지 않는다 — 자리표시자로 채운다. 노출 여부는 관리자 대시보드의
+      // is_visible 토글로 관리된다 (WORKPLAN.md §3-1 부속 참고).
+      const { error } = await supabase.from('guestbook_entries').insert({
+        invitation_id: id,
+        author_name: newCommentName,
+        message: newCommentMessage,
+        password_hash: '',
+      })
       if (error) throw error
 
       setGuestbookMessages([newComment, ...guestbookMessages])
