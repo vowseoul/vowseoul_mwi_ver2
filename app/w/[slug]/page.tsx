@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabase"
 import TemplateInvitationClient from "./template-invitation-client"
 import { buildInvitationTokens, type ThemeRow } from "@/lib/theme-template"
 import { mergeInvitationRaw, type RawInvitationData } from "@/lib/invitation-data"
+import { fetchRegisteredFonts, resolveFontFaces } from "@/lib/fonts"
 import { Metadata, Viewport } from "next"
 
 export const viewport: Viewport = {
@@ -129,12 +130,15 @@ export default async function Page({ params }: PageProps) {
 
   // 템플릿 엔진(B + iframe) 테마만 지원한다 (legacy 렌더러는 제거됨)
   if (themeRow?.render_engine === 'template' && themeRow.template_html) {
+    const tokens = buildInvitationTokens(themeRow, invitation.customization_overrides)
+    const fonts = await fetchRegisteredFonts()
     return (
       <TemplateInvitationClient
         themeRow={themeRow}
         raw={mergeInvitationRaw(invitation, customer)}
         invitationId={String(invitation.id)}
-        tokens={buildInvitationTokens(themeRow, invitation.customization_overrides)}
+        tokens={tokens}
+        fontFaces={resolveFontFaces(tokens, fonts)}
       />
     )
   }

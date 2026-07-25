@@ -14,6 +14,7 @@ import {
   toThemeTemplate,
   type ThemeRow,
 } from "@/lib/theme-template"
+import { buildFontStack, fetchRegisteredFonts, resolveFontFaces, type RegisteredFont } from "@/lib/fonts"
 
 /**
  * 템플릿 청첩장 커스터마이즈 편집기.
@@ -219,6 +220,7 @@ export default function CustomizeClient({
   const [showProgram, setShowProgram] = useState(() => isProgramShown(initialRaw.show_wedding_program))
   const [bgmUrl, setBgmUrl] = useState(String(invitation.bgm_url ?? ""))
   const [bgms, setBgms] = useState<{ id: string; name: string; url: string }[]>([])
+  const [fonts, setFonts] = useState<RegisteredFont[]>([])
 
   const [uploadingKey, setUploadingKey] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -228,6 +230,10 @@ export default function CustomizeClient({
     if (!showBgm) return
     supabase.from("bgms").select("id,name,url").then(({ data }) => { if (data) setBgms(data) })
   }, [showBgm])
+
+  useEffect(() => {
+    fetchRegisteredFonts().then(setFonts)
+  }, [])
 
   // 미리보기용 raw: 저장된 값 위에 현재 편집 중인 값을 얹는다 (발행 파이프라인과 동일 함수로 렌더)
   const liveRaw = useMemo(() => ({
@@ -250,6 +256,8 @@ export default function CustomizeClient({
     for (const [k, v] of Object.entries(overrides)) if (v) t[k] = v
     return t
   }, [themeTokens, overrides])
+
+  const fontFaces = useMemo(() => resolveFontFaces(tokens, fonts), [tokens, fonts])
 
   const accent = tokens["--accent"] || "#D76C6C"
   const previewSlots = useMemo(
@@ -549,9 +557,12 @@ export default function CustomizeClient({
               const value = overrides[t.name] || ""
               const placeholder = themeTokens[t.name] || "테마 기본값"
               const setValue = (v: string) => setOverrides((cur) => ({ ...cur, [t.name]: v }))
+              const matchedFontStack = t.type === "font"
+                ? fonts.map((f) => buildFontStack(f, t.name)).find((stack) => stack === value)
+                : undefined
               return (
-                <div key={t.name} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <label style={{ fontSize: 12, color: "#374151", width: 92, flexShrink: 0 }}>{t.label}</label>
+                <div key={t.name} style={{ display: "flex", alignItems: t.type === "font" ? "flex-start" : "center", gap: 8 }}>
+                  <label style={{ fontSize: 12, color: "#374151", width: 92, flexShrink: 0, paddingTop: t.type === "font" ? 6 : 0 }}>{t.label}</label>
                   {t.type === "color" ? (
                     <input
                       type="color"
@@ -560,14 +571,37 @@ export default function CustomizeClient({
                       style={{ width: 34, height: 30, padding: 0, border: "1px solid #d1d5db", borderRadius: 6, cursor: "pointer", background: "#fff" }}
                     />
                   ) : null}
-                  <input
-                    value={value}
-                    onChange={(e) => setValue(e.target.value)}
-                    placeholder={placeholder}
-                    style={{ flex: 1, minWidth: 0, padding: "6px 8px", border: "1px solid #d1d5db", borderRadius: 8, outline: "none", fontSize: 12 }}
-                  />
+                  {t.type === "font" ? (
+                    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+                      {fonts.length > 0 && (
+                        <select
+                          value={matchedFontStack || ""}
+                          onChange={(e) => { if (e.target.value) setValue(e.target.value) }}
+                          style={{ padding: "6px 8px", border: "1px solid #d1d5db", borderRadius: 8, outline: "none", fontSize: 12 }}
+                        >
+                          <option value="">에셋에 등록된 폰트 선택…</option>
+                          {fonts.map((f) => (
+                            <option key={f.id} value={buildFontStack(f, t.name)}>{f.name}</option>
+                          ))}
+                        </select>
+                      )}
+                      <input
+                        value={value}
+                        onChange={(e) => setValue(e.target.value)}
+                        placeholder={placeholder}
+                        style={{ padding: "6px 8px", border: "1px solid #d1d5db", borderRadius: 8, outline: "none", fontSize: 12 }}
+                      />
+                    </div>
+                  ) : (
+                    <input
+                      value={value}
+                      onChange={(e) => setValue(e.target.value)}
+                      placeholder={placeholder}
+                      style={{ flex: 1, minWidth: 0, padding: "6px 8px", border: "1px solid #d1d5db", borderRadius: 8, outline: "none", fontSize: 12 }}
+                    />
+                  )}
                   {value && (
-                    <button onClick={() => setValue("")} title="테마 기본값으로" style={{ border: "none", background: "transparent", cursor: "pointer", color: "#9ca3af", fontSize: 14 }}>×</button>
+                    <button onClick={() => setValue("")} title="테마 기본값으로" style={{ border: "none", background: "transparent", cursor: "pointer", color: "#9ca3af", fontSize: 14, alignSelf: t.type === "font" ? "flex-start" : "center", marginTop: t.type === "font" ? 4 : 0 }}>×</button>
                   )}
                 </div>
               )
@@ -592,7 +626,7 @@ export default function CustomizeClient({
       <div style={{ height: "100%", overflow: "hidden" }}>
         <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 10 }}>실시간 미리보기 (실제 데이터)</div>
         <div style={{ display: "flex", justifyContent: "center", background: "#f3f4f6", borderRadius: 14, padding: "20px 0" }}>
-          <InvitationFrame template={template} data={data} tokens={tokens} slots={previewSlots} width={380} height={680} />
+          <InvitationFrame template={template} data={data} tokens={tokens} slots={previewSlots} fontFaces={fontFaces} width={380} height={680} />
         </div>
       </div>
     </div>

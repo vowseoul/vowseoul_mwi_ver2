@@ -30,12 +30,21 @@ export interface ThemeTemplate {
 export type FieldData = Record<string, string>
 export type TokenMap = Record<string, string>
 export type SlotMap = Record<string, React.ReactNode>
+export interface FontFace {
+  family: string
+  /** 구글 폰트 등 @import 임베드 코드 */
+  embedCode?: string
+  /** 업로드된 TTF/WOFF 파일 URL */
+  fileUrl?: string
+}
 
 interface InvitationFrameProps {
   template: ThemeTemplate
   data: FieldData
   tokens: TokenMap
   slots?: SlotMap
+  /** 에셋 관리에 등록된 커스텀 폰트 중 --font-kr/--font-en 토큰이 가리키는 것들 (실제 로딩용) */
+  fontFaces?: FontFace[]
   /** 프레임 너비. 모바일 청첩장이므로 기본 375px. */
   width?: number
   height?: number
@@ -71,6 +80,7 @@ export function InvitationFrame({
   data,
   tokens,
   slots = {},
+  fontFaces = [],
   width = 375,
   height = 720,
 }: InvitationFrameProps) {
@@ -124,6 +134,27 @@ export function InvitationFrame({
       root.style.setProperty(name.startsWith("--") ? name : `--${name}`, value)
     })
   }, [doc, tokens])
+
+  // 커스텀 폰트 로딩 — 에셋 관리에서 등록한 폰트를 iframe 문서 안에 주입한다.
+  // (iframe은 별도 realm이라 부모 문서에 <link>/<style>을 추가해도 적용되지 않는다)
+  useEffect(() => {
+    if (!doc) return
+    const styleId = "custom-font-faces"
+    let styleEl = doc.getElementById(styleId) as HTMLStyleElement | null
+    if (!styleEl) {
+      styleEl = doc.createElement("style")
+      styleEl.id = styleId
+      doc.head.appendChild(styleEl)
+    }
+    styleEl.textContent = fontFaces
+      .map((f) => {
+        if (f.embedCode) return f.embedCode
+        if (f.fileUrl) return `@font-face { font-family: '${f.family}'; src: url('${f.fileUrl}'); font-display: swap; }`
+        return ""
+      })
+      .filter(Boolean)
+      .join("\n")
+  }, [doc, fontFaces])
 
   return (
     <iframe

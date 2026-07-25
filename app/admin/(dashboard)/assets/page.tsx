@@ -118,10 +118,10 @@ export default function AssetsPage() {
       }
 
       const updatedFonts = [...fonts, newFont]
-      
+
       const { error } = await supabase
         .from('settings')
-        .upsert({ key: 'fonts', value: updatedFonts, updatedAt: new Date().toISOString() })
+        .upsert({ key: 'fonts', value: updatedFonts })
 
       if (error) throw error
 
@@ -151,7 +151,7 @@ export default function AssetsPage() {
       const updatedFonts = fonts.filter(f => f.id !== id)
       const { error } = await supabase
         .from('settings')
-        .upsert({ key: 'fonts', value: updatedFonts, updatedAt: new Date().toISOString() })
+        .upsert({ key: 'fonts', value: updatedFonts })
 
       if (error) throw error
       await fetchFonts()

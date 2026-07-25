@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { InvitationFrame, type TokenMap } from "@/components/invitation/invitation-frame"
+import { InvitationFrame, type FontFace, type TokenMap } from "@/components/invitation/invitation-frame"
 import { buildSlots } from "@/components/invitation/slot-registry"
 import { buildFieldData, normalizeLegacyKeys, type RawInvitationData } from "@/lib/invitation-data"
 import { toThemeTemplate, type ThemeRow } from "@/lib/theme-template"
@@ -18,11 +18,13 @@ export default function TemplateInvitationClient({
   raw,
   invitationId,
   tokens = {},
+  fontFaces = [],
 }: {
   themeRow: ThemeRow
   raw: RawInvitationData
   invitationId: string
   tokens?: TokenMap
+  fontFaces?: FontFace[]
 }) {
   const template = toThemeTemplate(themeRow)
   // 실제 청첩장은 화면 전체를 채운다 (뷰포트 기준)
@@ -50,6 +52,7 @@ export default function TemplateInvitationClient({
         data={data}
         tokens={tokens}
         slots={slots}
+        fontFaces={fontFaces}
         width={size.w}
         height={size.h}
       />
