@@ -69,7 +69,7 @@ const ACCOUNT_FIELD_DEFS: FieldDef[] = [
 const ALL_TEXT_FIELD_DEFS = [...CONTENT_FIELD_DEFS, ...ACCOUNT_FIELD_DEFS]
 const MANAGED_CONTENT_KEYS = new Set([
   ...ALL_TEXT_FIELD_DEFS.map((f) => f.key),
-  "wedding_date", "wedding_time", "gallery_images", "wedding_programs", "show_wedding_program",
+  "wedding_date", "wedding_time", "gallery_images", "gallery_view_type", "gallery_align", "wedding_programs", "show_wedding_program",
 ])
 
 type SequenceRow = { time: string; title: string }
@@ -106,8 +106,73 @@ export default function CustomizeClient({
   invitation: Record<string, unknown>
   customer: Record<string, unknown> | null
 }) {
-  const template = toThemeTemplate(themeRow)
-  const fieldManifest = useMemo(() => getFieldManifest(themeRow), [themeRow])
+  const [activeThemeRow, setActiveThemeRow] = useState<ThemeRow>(themeRow)
+  const [themeVersionId, setThemeVersionId] = useState<string | null>(
+    typeof invitation.theme_version_id === "string" ? invitation.theme_version_id : null
+  )
+  const [availableThemes, setAvailableThemes] = useState<{ id: string; name: string }[]>(
+    () => [{ id: themeRow.id, name: themeRow.name ?? "테마" }]
+  )
+  const [switchingTheme, setSwitchingTheme] = useState(false)
+
+  useEffect(() => {
+    supabase
+      .from("themes")
+      .select("id,name")
+      .eq("render_engine", "template")
+      .order("name")
+      .then(({ data }) => {
+        if (data && data.length > 0) setAvailableThemes(data as { id: string; name: string }[])
+      })
+  }, [])
+
+  const handleThemeChange = async (newThemeId: string) => {
+    if (newThemeId === activeThemeRow.id) return
+    setSwitchingTheme(true)
+    setMessage(null)
+    try {
+      const { data: newTheme, error: themeError } = await supabase
+        .from("themes").select("*").eq("id", newThemeId).single()
+      if (themeError || !newTheme) {
+        setMessage("테마를 불러오지 못했습니다.")
+        return
+      }
+
+      const { data: version } = await supabase
+        .from("theme_versions").select("id")
+        .eq("theme_id", newThemeId)
+        .order("version_number", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      let versionId = version?.id ?? null
+      if (!versionId) {
+        // 이 테마에 버전 행이 아직 없으면(등록 직후 등) 최초 버전을 만들어준다
+        const { data: created, error: createError } = await supabase
+          .from("theme_versions")
+          .insert({
+            theme_id: newThemeId, version_number: 1,
+            design_tokens: {}, block_variant_selections: {}, default_block_order: [],
+            status: "active", change_note: "청첩장 편집기 테마 변경 시 자동 생성된 초기 버전",
+          })
+          .select("id").single()
+        if (createError) {
+          setMessage("테마 버전 생성에 실패했습니다.")
+          return
+        }
+        versionId = created?.id ?? null
+      }
+
+      setActiveThemeRow(newTheme as ThemeRow)
+      setThemeVersionId(versionId)
+      setOverrides({}) // 이전 테마의 색/폰트 오버라이드는 새 테마에 그대로 적용하면 어색하므로 초기화
+    } finally {
+      setSwitchingTheme(false)
+    }
+  }
+
+  const template = toThemeTemplate(activeThemeRow)
+  const fieldManifest = useMemo(() => getFieldManifest(activeThemeRow), [activeThemeRow])
   const slots = template?.slots ?? []
 
   const visibleContentFields = useMemo(
@@ -121,7 +186,7 @@ export default function CustomizeClient({
 
   const initialRaw = useMemo(() => mergeInvitationRaw(invitation, customer), [invitation, customer])
 
-  const themeTokens = useMemo(() => buildThemeTokens(themeRow), [themeRow])
+  const themeTokens = useMemo(() => buildThemeTokens(activeThemeRow), [activeThemeRow])
   const [overrides, setOverrides] = useState<Record<string, string>>(
     () => extractOverrideTokens(invitation.customization_overrides)
   )
@@ -144,6 +209,12 @@ export default function CustomizeClient({
       ? initialRaw.gallery_images.filter((v): v is string => typeof v === "string")
       : []
   )
+  const [galleryViewType, setGalleryViewType] = useState<"slide" | "grid">(
+    () => (initialRaw.gallery_view_type === "grid" ? "grid" : "slide")
+  )
+  const [galleryAlign, setGalleryAlign] = useState<"center" | "bottom">(
+    () => (initialRaw.gallery_align === "bottom" ? "bottom" : "center")
+  )
   const [sequenceRows, setSequenceRows] = useState<SequenceRow[]>(() => normalizeSequenceRows(initialRaw.wedding_programs))
   const [showProgram, setShowProgram] = useState(() => isProgramShown(initialRaw.show_wedding_program))
   const [bgmUrl, setBgmUrl] = useState(String(invitation.bgm_url ?? ""))
@@ -165,10 +236,12 @@ export default function CustomizeClient({
     wedding_date: weddingDate,
     wedding_time: weddingTime,
     gallery_images: galleryImages,
+    gallery_view_type: galleryViewType,
+    gallery_align: galleryAlign,
     wedding_programs: sequenceRows,
     show_wedding_program: showProgram ? "예" : "아니오",
     bgm_url: bgmUrl,
-  }), [initialRaw, content, weddingDate, weddingTime, galleryImages, sequenceRows, showProgram, bgmUrl])
+  }), [initialRaw, content, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign, sequenceRows, showProgram, bgmUrl])
 
   const data = useMemo(() => buildFieldData(liveRaw), [liveRaw])
 
@@ -231,6 +304,8 @@ export default function CustomizeClient({
       wedding_date: weddingDate,
       wedding_time: weddingTime,
       gallery_images: galleryImages,
+      gallery_view_type: galleryViewType,
+      gallery_align: galleryAlign,
       wedding_programs: sequenceRows,
       show_wedding_program: showProgram ? "예" : "아니오",
     }
@@ -241,6 +316,7 @@ export default function CustomizeClient({
         content_data: contentPayload,
         customization_overrides: { ...preservedOverrideKeys, ...cleanTokens },
         bgm_url: bgmUrl || null,
+        theme_version_id: themeVersionId,
         updated_at: new Date().toISOString(),
       })
       .eq("id", invitationId)
@@ -256,13 +332,37 @@ export default function CustomizeClient({
   }
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 420px", gap: 24, padding: 24, fontFamily: "system-ui, sans-serif" }}>
+    // 바깥 레이아웃(admin main)에 overflow-auto 가 있어도 flex 자식 높이가 콘텐츠에 맞춰 늘어나는 바람에
+    // 실제로는 브라우저 창(window)이 스크롤되는 문제가 있다 — position:sticky 는 "가장 가까운
+    // 스크롤 컨테이너"를 기준으로 계산되므로 그 컨테이너가 window 인지 main 인지 어긋나면 어디에도
+    // 제대로 붙지 않는다. 그래서 sticky 대신, 높이를 뷰포트 기준으로 고정하고 왼쪽 패널만 자체
+    // 스크롤시키는 방식(assets/themes/[id] 페이지와 동일 패턴)으로 우측 미리보기를 항상 고정한다.
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 420px", gap: 24, padding: 24, height: "calc(100vh - 100px)", fontFamily: "system-ui, sans-serif" }}>
       {/* 편집 */}
-      <div style={{ minWidth: 0, maxWidth: 720 }}>
+      <div style={{ minWidth: 0, maxWidth: 720, height: "100%", overflowY: "auto" }}>
         <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>청첩장 커스터마이즈</h1>
         <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 20 }}>
-          {groom && bride ? `${groom} ♥ ${bride}` : "청첩장"} · 테마: {themeRow.name}
+          {groom && bride ? `${groom} ♥ ${bride}` : "청첩장"}
         </p>
+
+        <Section title="테마">
+          <select
+            value={activeThemeRow.id}
+            onChange={(e) => handleThemeChange(e.target.value)}
+            disabled={switchingTheme}
+            style={inputStyle}
+          >
+            {availableThemes.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+          {switchingTheme && (
+            <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 6 }}>테마를 불러오는 중…</p>
+          )}
+          <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 6 }}>
+            테마를 바꾸면 이 청첩장의 색·폰트 오버라이드는 초기화됩니다. 저장을 눌러야 최종 반영됩니다.
+          </p>
+        </Section>
 
         <Section title="예식 일시 · 장소">
           <Row>
@@ -316,6 +416,44 @@ export default function CustomizeClient({
 
         {showGallery && (
           <Section title="갤러리">
+            <Field label="갤러리 형태">
+              <div style={{ display: "flex", gap: 16 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                  <input
+                    type="radio" name="galleryViewType" checked={galleryViewType === "slide"}
+                    onChange={() => setGalleryViewType("slide")}
+                  />
+                  슬라이드형
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                  <input
+                    type="radio" name="galleryViewType" checked={galleryViewType === "grid"}
+                    onChange={() => setGalleryViewType("grid")}
+                  />
+                  그리드형
+                </label>
+              </div>
+            </Field>
+            {galleryViewType === "slide" && (
+              <Field label="사진 정렬 (슬라이드형)">
+                <div style={{ display: "flex", gap: 16 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                    <input
+                      type="radio" name="galleryAlign" checked={galleryAlign === "center"}
+                      onChange={() => setGalleryAlign("center")}
+                    />
+                    중앙정렬
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                    <input
+                      type="radio" name="galleryAlign" checked={galleryAlign === "bottom"}
+                      onChange={() => setGalleryAlign("bottom")}
+                    />
+                    하단정렬
+                  </label>
+                </div>
+              </Field>
+            )}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: 8, marginBottom: 10 }}>
               {galleryImages.map((url, i) => (
                 <div key={i} style={{ position: "relative", aspectRatio: "1/1", borderRadius: 8, overflow: "hidden", border: "1px solid #e5e7eb" }}>
@@ -450,8 +588,8 @@ export default function CustomizeClient({
         </div>
       </div>
 
-      {/* 미리보기 */}
-      <div style={{ position: "sticky", top: 24, alignSelf: "start" }}>
+      {/* 미리보기 — 이 컬럼 자체는 스크롤되지 않으므로(왼쪽만 overflowY:auto) 항상 화면에 고정된다 */}
+      <div style={{ height: "100%", overflow: "hidden" }}>
         <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 10 }}>실시간 미리보기 (실제 데이터)</div>
         <div style={{ display: "flex", justifyContent: "center", background: "#f3f4f6", borderRadius: 14, padding: "20px 0" }}>
           <InvitationFrame template={template} data={data} tokens={tokens} slots={previewSlots} width={380} height={680} />

@@ -54,11 +54,13 @@
   position: absolute;
   inset: 0;
   z-index: 10;
+  /* 배경색(--bg) 토큰을 따라가도록 — 예전에는 기본 배경색(#9EB7CE)을 rgba 로 하드코딩해서
+     테마 배경색을 바꿔도 이 그라데이션은 그대로였다 */
   background: linear-gradient(
     to top,
-    rgba(158, 183, 206, 1) 0%,
-    rgba(158, 183, 206, 0) 70%,
-    rgba(158, 183, 206, 0.3) 100%
+    var(--bg, #9EB7CE) 0%,
+    transparent 70%,
+    color-mix(in srgb, var(--bg, #9EB7CE) 30%, transparent) 100%
   );
 }
 

@@ -269,41 +269,53 @@ function CalendarIsland({ accent, data, raw }: SlotProps) {
   )
 }
 
-/* ----------------------------- Gallery ----------------------------- */
+/* ----------------------------- Gallery -----------------------------
+ * 뷰 타입 2종(이전 버전 invitation-client.tsx 구조 참고):
+ *  - slide: 가로 스크롤 스냅 스트립. 감싸는 박스 여백/모서리 없이 object-fit:cover 로
+ *    사진 형태와 무관하게 꽉 채워 배치하고, gallery_align('center'|'bottom')으로
+ *    세로 크롭 기준점을 고른다(인물 전신 사진 등에서 하단을 살리고 싶을 때 사용).
+ *  - grid : 2열 그리드, object-cover (정방형 썸네일)
+ * raw.gallery_view_type ('slide' | 'grid', 기본 slide) 로 선택.
+ * 모서리 둥글기(border-radius)는 두 방식 모두 사용하지 않는다.
+ * ------------------------------------------------------------------ */
 const SAMPLE_GALLERY = [
   "https://images.unsplash.com/photo-1519741497674-611481863552?w=500&q=80",
   "https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=500&q=80",
   "https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?w=500&q=80",
   "https://images.unsplash.com/photo-1522673607200-164d1b6ce486?w=500&q=80",
 ]
-function GalleryIsland({ accent, raw }: SlotProps) {
+function GalleryIsland({ raw }: SlotProps) {
   const rawImages = raw?.gallery_images
   const images = Array.isArray(rawImages) && rawImages.length > 0
     ? rawImages.filter((u): u is string => typeof u === "string")
     : SAMPLE_GALLERY
-  const [idx, setIdx] = useState(0)
-  const go = (d: number) => setIdx((i) => (i + d + images.length) % images.length)
-  return (
-    <div style={{ width: "100%" }}>
-      <div style={{ position: "relative", aspectRatio: "4/3", overflow: "hidden", borderRadius: 8, background: "#eee" }}>
-        <img src={images[idx]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-        <button onClick={() => go(-1)} style={navBtn("left", accent)}>‹</button>
-        <button onClick={() => go(1)} style={navBtn("right", accent)}>›</button>
-      </div>
-      <div style={{ display: "flex", justifyContent: "center", gap: 6, marginTop: 10 }}>
-        {images.map((_, i) => (
-          <span key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: i === idx ? accent : "#d5cec7" }} />
+  const isGrid = raw?.gallery_view_type === "grid"
+  const objectPosition = raw?.gallery_align === "bottom" ? "center bottom" : "center center"
+
+  if (isGrid) {
+    return (
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, width: "100%" }}>
+        {images.map((src, i) => (
+          <div key={i} style={{ aspectRatio: "1/1", overflow: "hidden" }}>
+            <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition }} />
+          </div>
         ))}
       </div>
+    )
+  }
+
+  return (
+    <div style={{ display: "flex", gap: 8, overflowX: "auto", width: "100%", paddingBottom: 8, scrollSnapType: "x mandatory" }}>
+      {images.map((src, i) => (
+        <div
+          key={i}
+          style={{ width: 220, height: 280, flexShrink: 0, scrollSnapAlign: "center", overflow: "hidden" }}
+        >
+          <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition }} />
+        </div>
+      ))}
     </div>
   )
-}
-function navBtn(side: "left" | "right", accent: string): React.CSSProperties {
-  return {
-    position: "absolute", top: "50%", [side]: 8, transform: "translateY(-50%)",
-    width: 30, height: 30, borderRadius: "50%", border: "none", cursor: "pointer",
-    background: "rgba(255,255,255,.85)", color: accent, fontSize: 18, lineHeight: "30px",
-  }
 }
 
 /* ----------------------------- Account ----------------------------- */
