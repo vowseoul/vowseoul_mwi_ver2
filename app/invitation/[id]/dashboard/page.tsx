@@ -477,7 +477,7 @@ export default function CustomerDashboardPage() {
               모바일 청첩장 대시보드
             </span>
           </div>
-          <Link href={`/invitation/${invitationId}`}>
+          <Link href={invitation.public_slug ? `/w/${invitation.public_slug}` : "#"}>
             <Button variant="ghost" size="sm" className="text-xs gap-1.5 hover:bg-muted">
               <ArrowLeft className="w-3.5 h-3.5" /> 청첩장 확인
             </Button>

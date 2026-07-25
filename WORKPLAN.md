@@ -441,30 +441,26 @@ effect 안에서 곧바로 setState 하거나 렌더 중 `Math.random()` 호출�
 
 ## 4. [P1] 중복·불일치
 
-### 4-1. 레거시 렌더러 4벌 복제 — 가장 큰 부채
+### 4-1. 레거시 렌더러 4벌 복제 — ✅ 완료 (삭제)
 
-| 파일 | 줄 수 | 성격 |
-|---|---|---|
-| `app/invitation/[id]/invitation-client.tsx` | 2,755 | 원본 |
-| `components/mobile-preview.tsx` | 2,147 | 거의 동일한 복제본 |
-| `app/admin/(dashboard)/orders/[id]/page.tsx` | 3,431 | 미리보기 로직 내장 |
-| `app/preview/template/[id]/page.tsx` | 872 | 부분 복제 |
+| 파일 | 줄 수 | 성격 | 처리 |
+|---|---|---|---|
+| `app/invitation/[id]/invitation-client.tsx` | 2,755 | 원본 | 삭제 |
+| `components/mobile-preview.tsx` | 2,147 | 거의 동일한 복제본 | 삭제 |
+| `app/admin/(dashboard)/orders/[id]/page.tsx` | 3,431 | 미리보기 로직 내장 | legacy 편집 UI(기본정보/내용&사진/상세기능/스타일커스텀 탭 + MobilePreview) 제거, 주문 관리 탭 + 청첩장 편집기 바로가기만 남기고 재작성 (105줄) |
+| `app/preview/template/[id]/page.tsx` | 872 | 부분 복제 | 삭제 (`/templates` 의 "샘플 미리보기"는 `/preview/theme/[id]` 로 교체) |
 
-섹션 렌더 분기(`isConcept*`, 섹션 키 문자열) 출현 횟수가 앞 두 파일에서 각각 27회로 동일하다.
-= **미리보기와 발행이 어긋나는 원인이 여전히 남아 있다** (템플릿 엔진이 해결한 문제가
-legacy 엔진 쪽에는 그대로 존재).
+선행 조건이던 §6-15의 링크 3곳(`/invitation/{id}` → `/w/{public_slug}`) 수정을 먼저 마친 뒤
+진행. 부수적으로 `app/w/[slug]/page.tsx` 의 legacy 폴백 분기, `app/invitation/[id]/page.tsx`
+(뷰 라우트 — `dashboard/` 형제 라우트는 실사용 중이라 유지), `components/invitation/editor-preview.tsx`
+(어떤 화면도 import하지 않던 완전 고아 컴포넌트)도 함께 제거했고, `lib/store.ts` 의
+`WeddingInvitation`/`BankAccount`/`Contact` 타입과 `currentInvitation`/`loadInvitation`/
+`saveInvitation`/`mapFromDb`/`mapToDb`/`resolveThemeVersionId`/`sampleInvitations` 등
+이 렌더러들만 참조하던 데이터 계층도 전부 정리(§4-6 관련, orders/statistics 등 실사용
+중인 부분은 그대로 유지).
 
-> **갱신**: 이번 세션에 `/editor/[id]/*`(소비자 셀프서비스 에디터, ~3,600줄)를 삭제했다.
-> 이는 위 4벌과는 별개의 **5번째 복제본**이었고, 어떤 admin 플로우와도 연결돼 있지
->않아 안전하게 제거했다. 위 4벌(`invitation-client.tsx`/`mobile-preview.tsx`/
-> `orders/[id]/page.tsx`/`preview/template/[id]/page.tsx`)은 그대로 남아 있으며,
-> 특히 `orders/[id]/page.tsx` 는 이제 **legacy 테마 청첩장을 편집하는 유일한
-> admin 화면**이라는 게 명확해졌다(§3-7 참조) — 삭제 대상이 아니라 §7-#4 결정 전까지
-> 유지해야 하는 화면이다.
-
-→ 신 엔진(`components/invitation/invitation-frame.tsx`)으로 테마를 전량 이관한 뒤
-legacy 4벌을 일괄 삭제하는 것이 최종 목표. 중간 단계로 부분 통합은 권하지 않는다
-(어차피 버릴 코드에 리팩터링 비용을 쓰게 됨).
+빌드(`next build`)·타입체크·`vitest`(33개) 전부 통과, `/w/{slug}` 실제 발행 청첩장과
+`/templates` → `/preview/theme/{id}` 샘플 미리보기를 브라우저로 재확인함.
 
 ### 4-2. `defaultOrder` 배열 8곳 중복 — ✅ 완료
 
@@ -604,21 +600,20 @@ jsonb 컬럼을 `any` 로 느슨하게 다루는 기존 코드 다수(레거시 
     0개**다.
 
 15. legacy 렌더러 4벌(`invitation-client.tsx`/`mobile-preview.tsx`/`orders/[id]`/
-    `preview/template/[id]`) + `store.ts` 데이터 계층 제거 · §4-1, §4-6 — **보류**
-    (사용자가 이번 세션에서는 코드 삭제를 미루기로 결정, 아래 발견 사항 참고)
+    `preview/template/[id]`) + `store.ts` 데이터 계층 제거 · §4-1, §4-6 — **✅ 완료**
 
-    > ⚠️ **삭제 전 반드시 처리해야 할 선행 작업 발견**: `/invitation/[id]`
-    > (legacy 렌더러 라우트)가 여전히 3곳에서 "배포된 청첩장 보기/링크 복사"
-    > 용도로 하드코딩되어 있다 — 그리고 이 3곳 전부 **template 엔진 청첩장에도
-    > 무조건 이 legacy 라우트를 가리킨다** (진짜 발행 URL인 `/w/{public_slug}`
-    > 가 아님):
-    > - `app/admin/(dashboard)/orders/page.tsx:126` — "링크 복사하기"
-    > - `app/admin/(dashboard)/orders/[id]/page.tsx:687` — "배포된 화면 보기"
-    > - `app/invitation/[id]/dashboard/page.tsx:480` — "청첩장 확인" 백링크
-    >
-    > 지금 남은 invitations 3건이 전부 template 엔진(Soft Envelope)이므로,
-    > legacy 렌더러를 먼저 지우면 이 3개 버튼이 전부 깨진다. **legacy 렌더러
-    > 삭제보다 먼저 이 3곳을 `/w/{invitation.public_slug}` 로 고쳐야 한다.**
+    선행 작업으로 하드코딩된 legacy 링크 3곳을 먼저 `/w/{public_slug}`(또는
+    `/dashboard/{public_slug}`)로 교정한 뒤 진행했다:
+    - `app/admin/(dashboard)/orders/page.tsx:126,140` — "링크 복사하기"/"대시보드 링크 복사"
+      (invitation_id 로 public_slug 를 조회하도록 수정)
+    - `app/admin/(dashboard)/orders/[id]/page.tsx:677,687` — "대시보드 링크 복사"/
+      "배포된 화면 보기" (대시보드 링크는 원래 인증 우회 버그였던 `/invitation/{id}/dashboard`
+      직링크 대신 비밀번호 게이트 `/dashboard/{public_slug}` 로 교정)
+    - `app/invitation/[id]/dashboard/page.tsx:480` — "청첩장 확인" 백링크
+
+    이후 4벌 삭제 + `app/w/[slug]/page.tsx` legacy 폴백 분기 제거 + 고아 컴포넌트
+    (`editor-preview.tsx`) 제거 + `lib/store.ts` 레거시 데이터 계층 정리까지 완료.
+    상세는 §4-1 참고.
 
 16. ~~레거시 편집기 진입 차단~~ · §3-7 ✅ 완료 (이번 세션)
 
@@ -635,5 +630,5 @@ jsonb 컬럼을 `any` 로 느슨하게 다루는 기존 코드 다수(레거시 
 | 1 | ~~`orders` 를 정식 테이블로 만들 것인가~~ | ✅ 확정 — §1-B 스키마대로 "제작 의뢰 이행 기록"으로 재정의. 결제 게이트웨이 불필요(네이버 스마트스토어가 처리) |
 | 2 | `bgms` = 테이블 vs `settings` JSONB | 미결 — 9개 호출 지점 영향 |
 | 3 | ~~`admin/templates` 화면을 `admin/assets/themes` 와 통폐합할 것인가~~ | ✅ 해소 — 애초에 사이드바 nav 에 없는 고아 페이지였음, `admin/users` 와 함께 삭제 |
-| 4 | ~~legacy 테마 2개를 템플릿 엔진으로 이관할 것인가~~ | ✅ 확정 — 이관 대신 **삭제**. `themes` 테이블에 legacy 테마 0개. 단, legacy 렌더러 4벌 코드 자체 삭제는 §4-1의 링크 3곳 수정이 선행돼야 해서 보류 중 |
+| 4 | ~~legacy 테마 2개를 템플릿 엔진으로 이관할 것인가~~ | ✅ 확정 — 이관 대신 **삭제**. `themes` 테이블에 legacy 테마 0개. legacy 렌더러 4벌 코드 자체도 §6-15 에서 링크 3곳 수정 후 삭제 완료 |
 | 5 | `statistics` 를 실연동 전까지 숨길 것인가, "샘플" 배지로 남길 것인가 | 미결 — 운영 오판 리스크 |

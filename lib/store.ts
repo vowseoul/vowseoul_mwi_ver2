@@ -1,78 +1,6 @@
 import { create } from 'zustand'
 import { supabase, logSupabaseError } from './supabase'
 
-export interface WeddingInvitation {
-  id: string
-  groomName: string
-  groomNameEn: string
-  groomParentRelation: string
-  brideName: string
-  brideNameEn: string
-  brideParentRelation: string
-  weddingDate: string
-  weddingTime: string
-  venueName: string
-  venueHall: string
-  venueAddress: string
-  themeId: string
-  colorSet: string
-  fontSet: string
-  mainImage: string | null
-  invitationMessage: string
-  galleryImages: string[]
-  galleryViewType: 'grid' | 'slide'
-  trafficInfo: string
-  parkingInfo: string
-  rsvpEnabled: boolean
-  rsvpMealEnabled?: boolean
-  rsvpCommentEnabled?: boolean
-  guestbookType: 'text' | 'audio' | 'none'
-  bgmId: string | null
-  kakaoThumbnail: string | null
-  kakaoTitle: string
-  kakaoDescription: string
-  bankAccounts: BankAccount[]
-  contacts: Contact[]
-  status: 'draft' | 'paid' | 'published' | 'expired'
-  createdAt: string
-  publishedUrl: string | null
-  customStyles?: Record<string, any>
-  /** 템플릿 테마 컬러/폰트 토큰 오버라이드 ('--accent' 등). customization_overrides 에 저장 */
-  tokenOverrides?: Record<string, string>
-
-  /**
-   * DB 원본 식별/설정 필드 보존용.
-   * 이 값들이 없으면 mapToDb 가 기본값(customer_id '000...', public_slug=id 등)으로
-   * 덮어써서 저장이 실패하거나 링크가 손상된다.
-   */
-  customer_id?: string
-  public_slug?: string
-  dashboard_slug?: string
-  dashboard_password?: string
-  expires_at?: string
-  block_order?: any
-  /**
-   * DB content_data 원본. 레거시 편집기는 camelCase 일부만 다루므로,
-   * 저장 시 이 원본 위에 덮어써야 필드키(groom_name, wedding_programs 등)가 유실되지 않는다.
-   */
-  contentData?: Record<string, any>
-}
-
-export interface BankAccount {
-  id: string
-  bank: string
-  accountNumber: string
-  accountHolder: string
-  relation: 'groom' | 'bride' | 'groomParent' | 'brideParent'
-}
-
-export interface Contact {
-  id: string
-  name: string
-  phone: string
-  relation: string
-}
-
 export interface Theme {
   id: string
   name: string
@@ -141,178 +69,11 @@ export interface Notice {
   createdAt: string
 }
 
-// customization_overrides 에서 '--' CSS 변수 키만 추출
-export function extractTokenOverrides(overrides: any): Record<string, string> {
-  const out: Record<string, string> = {}
-  if (overrides && typeof overrides === 'object') {
-    for (const [k, v] of Object.entries(overrides)) {
-      if (k.startsWith('--') && typeof v === 'string' && v) out[k] = v
-    }
-  }
-  return out
-}
-
-// Helper to map DB record to WeddingInvitation (unpack content_data)
-export function mapFromDb(dbRecord: any): WeddingInvitation {
-  if (!dbRecord) return null as any
-  const content = dbRecord.content_data || {}
-  return {
-    id: dbRecord.id,
-    themeId: dbRecord.theme_version_id || 'classic-white',
-    colorSet: dbRecord.customization_overrides?.colorSet || 'default',
-    fontSet: dbRecord.customization_overrides?.fontSet || 'default',
-    tokenOverrides: extractTokenOverrides(dbRecord.customization_overrides),
-
-    // DB 원본 필드 보존 (저장 시 기본값으로 덮어써지는 것을 방지)
-    contentData: dbRecord.content_data || {},
-    customer_id: dbRecord.customer_id,
-    public_slug: dbRecord.public_slug,
-    dashboard_slug: dbRecord.dashboard_slug,
-    dashboard_password: dbRecord.dashboard_password,
-    expires_at: dbRecord.expires_at,
-    block_order: dbRecord.block_order,
-    status: dbRecord.status,
-    createdAt: dbRecord.created_at,
-    publishedUrl: dbRecord.published_at ? `${dbRecord.public_slug}` : null,
-    
-    // content_data fields
-    groomName: content.groomName || '',
-    groomNameEn: content.groomNameEn || '',
-    groomParentRelation: content.groomParentRelation || '',
-    brideName: content.brideName || '',
-    brideNameEn: content.brideNameEn || '',
-    brideParentRelation: content.brideParentRelation || '',
-    weddingDate: content.weddingDate || '',
-    weddingTime: content.weddingTime || '',
-    venueName: content.venueName || '',
-    venueHall: content.venueHall || '',
-    venueAddress: content.venueAddress || '',
-    mainImage: content.mainImage || content.main_image || null,
-    invitationMessage: content.invitationMessage || '',
-    galleryImages: content.galleryImages || [],
-    galleryViewType: content.galleryViewType || 'slide',
-    trafficInfo: content.trafficInfo || '',
-    parkingInfo: content.parkingInfo || '',
-    rsvpEnabled: content.rsvpEnabled !== false,
-    rsvpMealEnabled: content.rsvpMealEnabled !== false,
-    rsvpCommentEnabled: content.rsvpCommentEnabled !== false,
-    guestbookType: content.guestbookType || 'text',
-    bgmId: content.bgmId || null,
-    kakaoThumbnail: content.kakaoThumbnail || null,
-    kakaoTitle: content.kakaoTitle || '',
-    kakaoDescription: content.kakaoDescription || '',
-    bankAccounts: content.bankAccounts || [],
-    contacts: content.contacts || [],
-    customStyles: content.customStyles || {},
-  }
-}
-
-/**
- * themeId(테마 id 또는 theme_version_id)를 유효한 theme_version_id 로 해석한다.
- * - 이미 theme_versions.id 이면 그대로 사용
- * - themes.id 이면 최신 버전을 찾고, 없으면 v1 자동 생성
- * - 어느 쪽도 아니면(예: 'classic-white' 샘플) null (FK 오류 방지 → 발행 시 레거시 폴백)
- */
-export async function resolveThemeVersionId(themeRef?: string | null): Promise<string | null> {
-  if (!themeRef) return null
-
-  const { data: asVersion } = await supabase
-    .from('theme_versions').select('id').eq('id', themeRef).maybeSingle()
-  if (asVersion?.id) return asVersion.id
-
-  const { data: theme } = await supabase
-    .from('themes').select('id').eq('id', themeRef).maybeSingle()
-  if (!theme?.id) return null
-
-  const { data: latest } = await supabase
-    .from('theme_versions').select('id')
-    .eq('theme_id', themeRef).order('version_number', { ascending: false }).limit(1).maybeSingle()
-  if (latest?.id) return latest.id
-
-  const { data: created, error } = await supabase
-    .from('theme_versions')
-    .insert({
-      theme_id: themeRef, version_number: 1,
-      design_tokens: {}, block_variant_selections: {}, default_block_order: [],
-      status: 'active', change_note: '디자인 페이지 저장 시 자동 생성된 초기 버전',
-    })
-    .select('id').single()
-  if (error) { console.error('theme_version 자동 생성 실패:', error.message); return null }
-  return created?.id ?? null
-}
-
-// Helper to map WeddingInvitation to DB record (pack content_data)
-export function mapToDb(inv: any) {
-  if (!inv) return null as any
-  return {
-    id: inv.id,
-    customer_id: inv.customerId || inv.customer_id || '00000000-0000-0000-0000-000000000000',
-    theme_version_id: inv.themeId || inv.theme_version_id || null,
-    public_slug: inv.public_slug || inv.publicSlug || inv.id || 'slug',
-    dashboard_slug: inv.dashboard_slug || `dash-${inv.public_slug || inv.id || 'slug'}`,
-    dashboard_password: inv.dashboard_password || '1234',
-    status: inv.status || 'draft',
-    expires_at: inv.expires_at || new Date(Date.now() + 30*24*60*60*1000).toISOString(),
-    block_order: inv.block_order || ["cover", "greeting", "couple-info", "event-info", "gallery", "map", "account", "rsvp", "guestbook"],
-    
-    // Packed JSONB fields
-    customization_overrides: {
-      colorSet: inv.colorSet || 'default',
-      fontSet: inv.fontSet || 'default',
-      // 템플릿 테마 컬러/폰트 토큰 오버라이드 ('--' 키). 발행 경로가 이 값을 읽는다
-      ...(inv.tokenOverrides || {}),
-    },
-    content_data: {
-      // 원본 content_data 를 먼저 펼쳐 필드키(groom_name, wedding_programs 등)를 보존.
-      // 레거시 편집기가 다루는 camelCase 값만 아래에서 덮어쓴다
-      ...(inv.contentData || {}),
-      groomName: inv.groomName || '',
-      groomNameEn: inv.groomNameEn || '',
-      groomParentRelation: inv.groomParentRelation || '',
-      brideName: inv.brideName || '',
-      brideNameEn: inv.brideNameEn || '',
-      brideParentRelation: inv.brideParentRelation || '',
-      weddingDate: inv.weddingDate || '',
-      weddingTime: inv.weddingTime || '',
-      venueName: inv.venueName || '',
-      venueHall: inv.venueHall || '',
-      venueAddress: inv.venueAddress || '',
-      invitationMessage: inv.invitationMessage || '',
-      galleryImages: inv.galleryImages || [],
-      galleryViewType: inv.galleryViewType || 'slide',
-      trafficInfo: inv.trafficInfo || '',
-      parkingInfo: inv.parkingInfo || '',
-      rsvpEnabled: inv.rsvpEnabled !== false,
-      rsvpMealEnabled: inv.rsvpMealEnabled !== false,
-      rsvpCommentEnabled: inv.rsvpCommentEnabled !== false,
-      guestbookType: inv.guestbookType || 'text',
-      bgmId: inv.bgmId || null,
-      kakaoThumbnail: inv.kakaoThumbnail || null,
-      kakaoTitle: inv.kakaoTitle || '',
-      kakaoDescription: inv.kakaoDescription || '',
-      bankAccounts: inv.bankAccounts || [],
-      contacts: inv.contacts || [],
-      customStyles: inv.customStyles || {},
-    }
-  }
-}
 
 interface AppState {
   // Data fetching
   fetchData: () => Promise<void>
-  
-  // Current invitation being edited
-  currentInvitation: Partial<WeddingInvitation> | null
-  setCurrentInvitation: (invitation: Partial<WeddingInvitation> | null) => void
-  updateCurrentInvitation: (updates: Partial<WeddingInvitation>) => void
-  loadInvitation: (id: string) => Promise<void>
-  saveInvitation: () => Promise<string | null>
-  
-  // User's invitations
-  invitations: WeddingInvitation[]
-  setInvitations: (invitations: WeddingInvitation[]) => void
-  addInvitation: (invitation: WeddingInvitation) => Promise<void>
-  
+
   // Themes
   themes: Theme[]
   setThemes: (themes: Theme[]) => void
@@ -352,7 +113,6 @@ interface AppState {
   setAuth: (isAuthenticated: boolean, isAdmin: boolean) => void
   user: any | null
   setUser: (user: any | null) => void
-  loadUserInvitations: () => Promise<void>
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -456,98 +216,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  currentInvitation: null,
-  setCurrentInvitation: (invitation) => set({ currentInvitation: invitation }),
-  updateCurrentInvitation: (updates) => set((state) => ({
-    currentInvitation: state.currentInvitation 
-      ? { ...state.currentInvitation, ...updates }
-      : updates
-  })),
-  loadInvitation: async (id) => {
-    try {
-      const { data, error } = await supabase
-        .from('invitations')
-        .select('*')
-        .eq('id', id)
-        .single()
-
-      if (error) throw error
-
-      if (data) {
-        const mapped = mapFromDb(data)
-        set({ currentInvitation: mapped })
-      }
-    } catch (e) {
-      console.error('Error loading invitation from Supabase:', e)
-    }
-  },
-  saveInvitation: async (): Promise<string | null> => {
-    const state = get()
-    const current = state.currentInvitation
-    if (!current) return null
-
-    try {
-      let id = current.id
-      const isNew = !id || id === 'new'
-
-      if (isNew) {
-        const userId = state.user?.id
-        const randId = typeof window !== 'undefined' && window.crypto?.randomUUID 
-          ? window.crypto.randomUUID() 
-          : 'inv-' + Math.random().toString(36).substring(2, 15)
-        
-        id = userId ? `${userId}__${randId}` : randId
-      }
-
-      // themeId 는 테마 id 이거나 theme_version_id 일 수 있다.
-      // 저장 전에 반드시 유효한 theme_version_id 로 해석한다
-      // (그대로 저장하면 발행 시 테마 체인 조회가 실패해 레거시로 폴백된다)
-      const resolvedThemeVersionId = await resolveThemeVersionId(current.themeId)
-
-      const flatInvitation = {
-        ...current,
-        id,
-        themeId: resolvedThemeVersionId,
-      } as any
-
-      const dbPayload = mapToDb(flatInvitation)
-
-      if (isNew) {
-        const { error } = await supabase.from('invitations').insert(dbPayload)
-        if (error) throw error
-      } else {
-        const { error } = await supabase.from('invitations').update(dbPayload).eq('id', id)
-        if (error) throw error
-      }
-
-      set((state) => {
-        const updatedInvitation = { ...current, id } as WeddingInvitation
-        const updatedList = isNew 
-          ? [...state.invitations, updatedInvitation]
-          : state.invitations.map(inv => inv.id === id ? updatedInvitation : inv)
-        
-        return {
-          currentInvitation: updatedInvitation,
-          invitations: updatedList
-        }
-      })
-
-      return id || null
-    } catch (e) {
-      console.error('Error saving invitation to Supabase:', e)
-      return null
-    }
-  },
-  
-  invitations: [],
-  setInvitations: (invitations) => set({ invitations }),
-  addInvitation: async (invitation) => {
-    await supabase.from('invitations').insert(invitation)
-    set((state) => ({
-      invitations: [...state.invitations, invitation]
-    }))
-  },
-  
   themes: [],
   setThemes: (themes) => set({ themes }),
   
@@ -665,23 +333,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   setAuth: (isAuthenticated, isAdmin) => set({ isAuthenticated, isAdmin }),
   user: null as any | null,
   setUser: (user) => set({ user }),
-  loadUserInvitations: async () => {
-    const state = get()
-    const userId = state.user?.id
-    if (!userId) return
-
-    try {
-      const { data, error } = await supabase.from('invitations').select('*')
-      if (data) {
-        const userInvites = data
-          .filter((inv: any) => inv.id.startsWith(userId + '__'))
-          .map(mapFromDb)
-        set({ invitations: userInvites })
-      }
-    } catch (err) {
-      console.error('Error loading user invitations:', err)
-    }
-  },
 }))
 
 if (typeof window !== 'undefined') {
@@ -856,51 +507,6 @@ export const sampleFaqs: FAQ[] = [
   { id: 'faq1', question: '청첩장 제작은 얼마나 걸리나요?', answer: '기본 템플릿을 사용할 경우 결제 완료 후 10분 내로 즉시 제작되어 배포가 가능합니다.', category: '제작', createdAt: '2025-01-01' },
   { id: 'faq2', question: '완성된 청첩장을 수정할 수 있나요?', answer: '네, 결제 후에도 언제든지 내용을 수정하실 수 있으며, 변경 사항은 실시간으로 반영됩니다.', category: '수정', createdAt: '2025-01-02' },
   { id: 'faq3', question: '환불 규정이 어떻게 되나요?', answer: '결제 후 7일 이내, 청첩장을 한 번도 공유하지 않은 경우에 한하여 전액 환불이 가능합니다.', category: '결제', createdAt: '2025-01-03' },
-]
-
-export const sampleInvitations: WeddingInvitation[] = [
-  {
-    id: 'INV001',
-    groomName: '김철수',
-    groomNameEn: 'Kim Cheolsu',
-    groomParentRelation: '아버지 김영수, 어머니 박미영의 장남',
-    brideName: '이영희',
-    brideNameEn: 'Lee Younghee',
-    brideParentRelation: '아버지 이정호, 어머니 최순희의 차녀',
-    weddingDate: '2025-03-15',
-    weddingTime: '14:00',
-    venueName: '그랜드 하얏트 서울',
-    venueHall: '그랜드볼룸',
-    venueAddress: '서울특별시 용산구 소월로 322',
-    themeId: 'classic-white',
-    colorSet: 'ivory',
-    fontSet: 'serif',
-    mainImage: null,
-    invitationMessage: '서로 다른 길을 걸어온 저희 두 사람이\n이제 하나의 길을 함께 걸어가려 합니다.\n귀한 걸음으로 축복해 주시면 감사하겠습니다.',
-    galleryImages: [],
-    galleryViewType: 'slide',
-    trafficInfo: '지하철 6호선 이태원역 1번 출구에서 도보 5분',
-    parkingInfo: '호텔 지하주차장 이용 가능 (3시간 무료)',
-    rsvpEnabled: true,
-    rsvpMealEnabled: true,
-    rsvpCommentEnabled: true,
-    guestbookType: 'text',
-    bgmId: 'bgm1',
-    kakaoThumbnail: null,
-    kakaoTitle: '철수 ♥ 영희 결혼합니다',
-    kakaoDescription: '2025년 3월 15일 오후 2시',
-    bankAccounts: [
-      { id: '1', bank: '신한은행', accountNumber: '110-123-456789', accountHolder: '김철수', relation: 'groom' },
-      { id: '2', bank: '국민은행', accountNumber: '123-456-789012', accountHolder: '이영희', relation: 'bride' },
-    ],
-    contacts: [
-      { id: '1', name: '김철수', phone: '010-1234-5678', relation: '신랑' },
-      { id: '2', name: '이영희', phone: '010-8765-4321', relation: '신부' },
-    ],
-    status: 'published',
-    createdAt: '2025-01-10',
-    publishedUrl: 'https://vow.seoul/inv/abc123',
-  },
 ]
 
 export const sampleNotices: Notice[] = [

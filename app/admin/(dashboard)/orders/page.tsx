@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
 import { useAppStore, type Order, sampleThemes } from '@/lib/store'
-import { supabase } from '@/lib/supabase'
+import { supabase, logSupabaseError } from '@/lib/supabase'
 import { Search, CalendarIcon, Eye, Plus, Settings, MoreVertical, Link2, Pencil, Copy, Trash2, Loader2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
@@ -118,12 +118,27 @@ export default function OrdersPage() {
   }, [orders])
 
   // Action Handlers
+  const fetchPublicSlug = async (invitationId: string): Promise<string | null> => {
+    const { data, error } = await supabase
+      .from('invitations')
+      .select('public_slug')
+      .eq('id', invitationId)
+      .maybeSingle()
+    logSupabaseError('orders: fetch public_slug', error)
+    return data?.public_slug || null
+  }
+
   const handleCopyLink = async (invitationId: string) => {
     if (!invitationId) {
       toast.error('청첩장 ID가 유효하지 않습니다.')
       return
     }
-    const url = `${window.location.origin}/invitation/${invitationId}`
+    const slug = await fetchPublicSlug(invitationId)
+    if (!slug) {
+      toast.error('발행 슬러그가 없어 청첩장 링크를 만들 수 없습니다.')
+      return
+    }
+    const url = `${window.location.origin}/w/${slug}`
     try {
       await navigator.clipboard.writeText(url)
       toast.success('청첩장 링크가 클립보드에 복사되었습니다.')
@@ -137,7 +152,12 @@ export default function OrdersPage() {
       toast.error('청첩장 ID가 유효하지 않습니다.')
       return
     }
-    const url = `${window.location.origin}/invitation/${invitationId}/dashboard`
+    const slug = await fetchPublicSlug(invitationId)
+    if (!slug) {
+      toast.error('발행 슬러그가 없어 대시보드 링크를 만들 수 없습니다.')
+      return
+    }
+    const url = `${window.location.origin}/dashboard/${slug}`
     try {
       await navigator.clipboard.writeText(url)
       toast.success('고객 대시보드 링크가 클립보드에 복사되었습니다.')

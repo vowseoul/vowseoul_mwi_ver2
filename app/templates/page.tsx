@@ -103,7 +103,7 @@ export default function TemplatesPage() {
                               size="sm"
                               asChild
                             >
-                              <Link href={`/preview/template/${theme.id}`}>
+                              <Link href={`/preview/theme/${theme.id}`}>
                                 <Eye className="mr-1.5 h-4 w-4" />
                                 샘플 미리보기
                               </Link>

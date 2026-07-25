@@ -1,5 +1,4 @@
 import { supabase } from "@/lib/supabase"
-import InvitationClient from "../../invitation/[id]/invitation-client"
 import TemplateInvitationClient from "./template-invitation-client"
 import { buildInvitationTokens, type ThemeRow } from "@/lib/theme-template"
 import { mergeInvitationRaw, type RawInvitationData } from "@/lib/invitation-data"
@@ -128,7 +127,7 @@ export default async function Page({ params }: PageProps) {
     )
   }
 
-  // ── 새 템플릿 엔진 (B + iframe) ───────────────────────────────
+  // 템플릿 엔진(B + iframe) 테마만 지원한다 (legacy 렌더러는 제거됨)
   if (themeRow?.render_engine === 'template' && themeRow.template_html) {
     return (
       <TemplateInvitationClient
@@ -140,28 +139,14 @@ export default async function Page({ params }: PageProps) {
     )
   }
 
-  // ── 기존 레거시 렌더러 (기본값) ────────────────────────────────
-  let initialThemes: unknown[] = []
-  let initialFonts: unknown[] = []
-  try {
-    const [themesResult, fontsResult] = await Promise.all([
-      supabase.from('themes').select('*'),
-      supabase.from('settings').select('*').eq('key', 'fonts'),
-    ])
-    initialThemes = themesResult.data || []
-    if (fontsResult.data && fontsResult.data.length > 0) {
-      initialFonts = fontsResult.data[0].value || []
-    }
-  } catch (err) {
-    console.error('Error fetching legacy renderer data:', err)
-  }
-
   return (
-    <InvitationClient
-      id={String(invitation.id)}
-      initialInvitation={invitation}
-      initialThemes={initialThemes}
-      initialFonts={initialFonts}
-    />
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans p-4">
+      <div className="text-center space-y-2">
+        <h2 className="text-lg font-semibold text-slate-800">지원되지 않는 테마</h2>
+        <p className="text-sm text-slate-500">
+          이 청첩장의 테마를 표시할 수 없습니다. 관리자에게 문의해주세요.
+        </p>
+      </div>
+    </div>
   )
 }
