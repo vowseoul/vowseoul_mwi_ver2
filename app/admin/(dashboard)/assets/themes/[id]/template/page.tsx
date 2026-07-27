@@ -8,6 +8,16 @@ import { buildSlots } from "@/components/invitation/slot-registry"
 import { buildFieldData } from "@/lib/invitation-data"
 import { SAMPLE_RAW } from "@/lib/sample-invitation"
 import { buildThemeTokens, TOKEN_FIELDS, type ThemeRow } from "@/lib/theme-template"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
+import { ExternalLink, Loader2, Save, Sparkles, X } from "lucide-react"
+import { toast } from "sonner"
 
 /**
  * 템플릿(B+iframe) 테마 편집기.
@@ -35,7 +45,6 @@ export default function TemplateThemeEditor() {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState<string | null>(null)
 
   const [name, setName] = useState("")
   const [renderEngine, setRenderEngine] = useState<"legacy" | "template">("template")
@@ -92,11 +101,11 @@ export default function TemplateThemeEditor() {
     setFieldManifest(fields)
     // 알려진 슬롯만 매니페스트에 반영
     setSlotManifest(slots.filter((s) => KNOWN_SLOTS.includes(s)))
-    setMessage(`추출 완료 · 필드 ${fields.length}개 / 슬롯 ${slots.length}개`)
+    toast.success(`추출 완료 · 필드 ${fields.length}개 / 슬롯 ${slots.length}개`)
   }
 
   const save = async () => {
-    setSaving(true); setMessage(null)
+    setSaving(true)
     // 토큰은 themes.styles 에 '--' 키로 저장 (레거시 키는 그대로 보존)
     const cleanTokens: Record<string, string> = {}
     for (const [k, v] of Object.entries(tokenValues)) {
@@ -113,7 +122,11 @@ export default function TemplateThemeEditor() {
       styles: { ...otherStyles, ...cleanTokens },
     }).eq("id", id)
     setSaving(false)
-    setMessage(error ? `저장 실패: ${error.message}` : "저장되었습니다.")
+    if (error) {
+      toast.error(`저장 실패: ${error.message}`)
+    } else {
+      toast.success("저장되었습니다.")
+    }
   }
 
   const previewTemplate: ThemeTemplate = useMemo(
@@ -134,157 +147,193 @@ export default function TemplateThemeEditor() {
   )
 
   if (loading) {
-    return <div style={{ padding: 40, fontFamily: "system-ui" }}>불러오는 중…</div>
+    return <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">불러오는 중…</div>
   }
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 420px", gap: 24, padding: 24, fontFamily: "system-ui, sans-serif" }}>
+    // 청첩장 커스터마이즈 화면과 동일한 이유로 position:sticky 대신 뷰포트 기준 고정 높이 +
+    // 왼쪽 패널만 자체 스크롤시키는 방식을 쓴다 (admin main의 overflow-auto가 실제 스크롤 컨테이너가
+    // 아니라서 sticky가 기준을 잃는 문제).
+    <div className="grid h-[calc(100vh-100px)] grid-cols-[minmax(0,1fr)_420px] gap-6 font-sans">
       {/* 편집 폼 */}
-      <div style={{ minWidth: 0 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>템플릿 테마 편집</h1>
-        <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 20 }}>
-          디자이너가 추출한 HTML/CSS를 붙여넣고, 자동 추출로 필드·슬롯을 채운 뒤 저장하세요.
-        </p>
-
-        <Field label="테마 이름">
-          <input value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
-        </Field>
-
-        <Field label="렌더 엔진">
-          <div style={{ display: "flex", gap: 12 }}>
-            {(["template", "legacy"] as const).map((v) => (
-              <label key={v} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, cursor: "pointer" }}>
-                <input type="radio" name="engine" checked={renderEngine === v} onChange={() => setRenderEngine(v)} />
-                {v === "template" ? "template (새 iframe 렌더러)" : "legacy (기존 렌더러)"}
-              </label>
-            ))}
-          </div>
-        </Field>
-
-        <Field label="TEMPLATE_HTML">
-          <textarea value={html} onChange={(e) => setHtml(e.target.value)} spellCheck={false} style={{ ...textareaStyle, height: 200 }} />
-        </Field>
-
-        <Field label="TEMPLATE_CSS">
-          <textarea value={css} onChange={(e) => setCss(e.target.value)} spellCheck={false} style={{ ...textareaStyle, height: 200 }} />
-        </Field>
-
-        <div style={{ display: "flex", gap: 8, margin: "8px 0 20px" }}>
-          <button onClick={autoExtract} style={btn("#111827")}>필드·슬롯 자동 추출</button>
-          <button onClick={applyPreview} style={btn("#374151")}>미리보기 적용</button>
+      <div className="min-w-0 h-full overflow-y-auto pr-1">
+        <div className="mb-6">
+          <h1 className="text-2xl font-semibold text-foreground">템플릿 테마 편집</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            디자이너가 추출한 HTML/CSS를 붙여넣고, 자동 추출로 필드·슬롯을 채운 뒤 저장하세요.
+          </p>
         </div>
 
-        <Field label={`슬롯 매니페스트 (${slotManifest.length})`}>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-            {KNOWN_SLOTS.map((s) => (
-              <label key={s} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={slotManifest.includes(s)}
-                  onChange={(e) => setSlotManifest((cur) => e.target.checked ? [...cur, s] : cur.filter((x) => x !== s))}
-                />
-                {s}
-              </label>
-            ))}
-          </div>
-        </Field>
+        <div className="space-y-6">
+          <Card>
+            <CardContent>
+              <FieldGroup className="space-y-4">
+                <Field>
+                  <FieldLabel htmlFor="themeName">테마 이름</FieldLabel>
+                  <Input id="themeName" value={name} onChange={(e) => setName(e.target.value)} />
+                </Field>
 
-        <Field label="디자인 토큰 (에셋 설정)">
-          <p style={{ fontSize: 11.5, color: "#6b7280", marginBottom: 10, lineHeight: 1.6 }}>
-            테마 CSS의 <code>var(--토큰, 기본값)</code> 을 덮어씁니다. 비워두면 템플릿 원본 색/폰트가 그대로 유지됩니다.
-            변경 시 우측 미리보기에 즉시 반영되며, 저장하면 발행 청첩장에도 동일하게 적용됩니다.
-          </p>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            {TOKEN_FIELDS.map((t) => {
-              const value = tokenValues[t.name] || ""
-              const setValue = (v: string) => setTokenValues((cur) => ({ ...cur, [t.name]: v }))
-              return (
-                <div key={t.name} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <label style={{ fontSize: 12, color: "#374151", width: 92, flexShrink: 0 }}>{t.label}</label>
-                  {t.type === "color" ? (
-                    <>
-                      <input
-                        type="color"
-                        value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : "#ffffff"}
-                        onChange={(e) => setValue(e.target.value)}
-                        style={{ width: 34, height: 30, padding: 0, border: "1px solid #d1d5db", borderRadius: 6, cursor: "pointer", background: "#fff" }}
-                      />
-                      <input
-                        value={value}
-                        onChange={(e) => setValue(e.target.value)}
-                        placeholder="미지정"
-                        style={{ ...inputStyle, flex: 1, fontSize: 12, padding: "6px 8px" }}
-                      />
-                    </>
-                  ) : (
-                    <input
-                      value={value}
-                      onChange={(e) => setValue(e.target.value)}
-                      placeholder="예: 'Noto Serif KR', serif"
-                      style={{ ...inputStyle, flex: 1, fontSize: 12, padding: "6px 8px" }}
-                    />
-                  )}
-                  {value && (
-                    <button
-                      onClick={() => setValue("")}
-                      title="초기화"
-                      style={{ border: "none", background: "transparent", cursor: "pointer", color: "#9ca3af", fontSize: 14, padding: "0 2px" }}
-                    >
-                      ×
-                    </button>
-                  )}
+                <Field>
+                  <FieldLabel>렌더 엔진</FieldLabel>
+                  <RadioGroup
+                    value={renderEngine}
+                    onValueChange={(v) => setRenderEngine(v as "legacy" | "template")}
+                    className="flex flex-row gap-6"
+                  >
+                    <div className="flex items-center gap-2">
+                      <RadioGroupItem value="template" id="engine-template" />
+                      <Label htmlFor="engine-template" className="font-normal cursor-pointer">template (새 iframe 렌더러)</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <RadioGroupItem value="legacy" id="engine-legacy" />
+                      <Label htmlFor="engine-legacy" className="font-normal cursor-pointer">legacy (기존 렌더러)</Label>
+                    </div>
+                  </RadioGroup>
+                </Field>
+              </FieldGroup>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-medium">템플릿 소스</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FieldGroup className="space-y-4">
+                <Field>
+                  <FieldLabel htmlFor="templateHtml">TEMPLATE_HTML</FieldLabel>
+                  <Textarea
+                    id="templateHtml"
+                    value={html}
+                    onChange={(e) => setHtml(e.target.value)}
+                    spellCheck={false}
+                    className="h-48 font-mono text-xs"
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="templateCss">TEMPLATE_CSS</FieldLabel>
+                  <Textarea
+                    id="templateCss"
+                    value={css}
+                    onChange={(e) => setCss(e.target.value)}
+                    spellCheck={false}
+                    className="h-48 font-mono text-xs"
+                  />
+                </Field>
+
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={autoExtract}>
+                    <Sparkles className="h-3.5 w-3.5" /> 필드·슬롯 자동 추출
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={applyPreview}>
+                    미리보기 적용
+                  </Button>
                 </div>
-              )
-            })}
-          </div>
-        </Field>
+              </FieldGroup>
+            </CardContent>
+          </Card>
 
-        <Field label={`필드 매니페스트 (${fieldManifest.length})`}>
-          <div style={{ fontSize: 12, color: "#4b5563", lineHeight: 1.7, wordBreak: "break-all", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 10px" }}>
-            {fieldManifest.length ? fieldManifest.join(", ") : "— (자동 추출을 실행하세요)"}
-          </div>
-        </Field>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-medium">슬롯 매니페스트 ({slotManifest.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-4">
+                {KNOWN_SLOTS.map((s) => (
+                  <div key={s} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`slot-${s}`}
+                      checked={slotManifest.includes(s)}
+                      onCheckedChange={(checked) =>
+                        setSlotManifest((cur) => checked ? [...cur, s] : cur.filter((x) => x !== s))
+                      }
+                    />
+                    <Label htmlFor={`slot-${s}`} className="font-normal cursor-pointer">{s}</Label>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 20 }}>
-          <button onClick={save} disabled={saving} style={{ ...btn("#D76C6C"), opacity: saving ? 0.6 : 1 }}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-medium">디자인 토큰 (에셋 설정)</CardTitle>
+              <CardDescription>
+                테마 CSS의 <code>var(--토큰, 기본값)</code>을 덮어씁니다. 비워두면 템플릿 원본 색/폰트가 그대로 유지됩니다.
+                변경 시 우측 미리보기에 즉시 반영되며, 저장하면 발행 청첩장에도 동일하게 적용됩니다.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {TOKEN_FIELDS.map((t) => {
+                  const value = tokenValues[t.name] || ""
+                  const setValue = (v: string) => setTokenValues((cur) => ({ ...cur, [t.name]: v }))
+                  return (
+                    <Field key={t.name}>
+                      <FieldLabel>{t.label}</FieldLabel>
+                      <div className="flex items-center gap-2">
+                        {t.type === "color" && (
+                          <input
+                            type="color"
+                            value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : "#ffffff"}
+                            onChange={(e) => setValue(e.target.value)}
+                            className="h-9 w-10 shrink-0 cursor-pointer rounded-md border border-input bg-transparent p-1"
+                          />
+                        )}
+                        <Input
+                          value={value}
+                          onChange={(e) => setValue(e.target.value)}
+                          placeholder={t.type === "color" ? "미지정" : "예: 'Noto Serif KR', serif"}
+                          className="flex-1"
+                        />
+                        {value && (
+                          <Button type="button" variant="ghost" size="icon-sm" title="초기화" onClick={() => setValue("")}>
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </Field>
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-medium">필드 매니페스트 ({fieldManifest.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs leading-relaxed text-muted-foreground break-all">
+                {fieldManifest.length ? fieldManifest.join(", ") : "— (자동 추출을 실행하세요)"}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="sticky bottom-0 mt-6 flex items-center gap-3 border-t bg-background py-4">
+          <Button onClick={save} disabled={saving} className="gap-2">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {saving ? "저장 중…" : "저장"}
-          </button>
-          <a href={`/preview/theme/${id}`} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: "#2563eb" }}>
-            새 탭에서 미리보기 →
-          </a>
-          {message && <span style={{ fontSize: 13, color: "#059669" }}>{message}</span>}
+          </Button>
+          <Button variant="outline" asChild>
+            <a href={`/preview/theme/${id}`} target="_blank" rel="noreferrer" className="gap-2">
+              새 탭에서 미리보기 <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          </Button>
         </div>
       </div>
 
-      {/* 실시간 미리보기 */}
-      <div style={{ position: "sticky", top: 24, alignSelf: "start" }}>
-        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 10 }}>실시간 미리보기</div>
-        <div style={{ display: "flex", justifyContent: "center", background: "#f3f4f6", borderRadius: 14, padding: "20px 0" }}>
+      {/* 실시간 미리보기 — 왼쪽만 자체 스크롤되므로 항상 화면에 고정된다 */}
+      <div className="h-full overflow-hidden">
+        <div className="mb-2.5 text-xs text-muted-foreground">실시간 미리보기</div>
+        <div className="flex justify-center rounded-2xl bg-muted/40 py-5">
           {applied.html
             ? <InvitationFrame template={previewTemplate} data={previewData} tokens={tokens} slots={previewSlots} width={380} height={680} />
-            : <div style={{ fontSize: 13, color: "#9ca3af", padding: 40 }}>HTML을 입력하고 &lsquo;미리보기 적용&rsquo;을 누르세요.</div>}
+            : <div className="p-10 text-sm text-muted-foreground">HTML을 입력하고 &lsquo;미리보기 적용&rsquo;을 누르세요.</div>}
         </div>
       </div>
     </div>
   )
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6 }}>{label}</label>
-      {children}
-    </div>
-  )
-}
-
-const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "9px 12px", border: "1px solid #d1d5db", borderRadius: 8, outline: "none", fontSize: 14,
-}
-const textareaStyle: React.CSSProperties = {
-  width: "100%", padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, outline: "none",
-  fontFamily: "ui-monospace, Menlo, monospace", fontSize: 12, lineHeight: 1.6, resize: "vertical",
-}
-function btn(bg: string): React.CSSProperties {
-  return { padding: "9px 16px", borderRadius: 8, border: "none", cursor: "pointer", background: bg, color: "#fff", fontSize: 13 }
 }

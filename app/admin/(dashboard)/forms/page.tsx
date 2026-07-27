@@ -273,10 +273,10 @@ export default function FormTemplatesPage() {
         }
         return (
           <div className="space-y-3">
-            <div className="bg-slate-50 border border-slate-200/50 p-3 rounded-xl flex items-start gap-2">
+            <div className="bg-muted border border-border/50 p-3 rounded-xl flex items-start gap-2">
               <span className="text-sm">🎵</span>
               <div>
-                <p className="text-xs font-bold text-slate-800">배경음악(BGM) 선택 (미리보기)</p>
+                <p className="text-xs font-bold text-foreground">배경음악(BGM) 선택 (미리보기)</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5 leading-relaxed">
                   모바일 청첩장에 사용할 BGM을 미리 들어보고 선택해 보세요.
                 </p>
@@ -298,7 +298,7 @@ export default function FormTemplatesPage() {
                       "flex items-center justify-between p-2.5 rounded-xl border transition-all duration-200 select-none text-xs",
                       isSelected 
                         ? "bg-primary/5 border-primary shadow-xs font-semibold" 
-                        : "bg-white border-slate-200 hover:border-slate-300"
+                        : "bg-white border-border hover:border-muted-foreground/40"
                     )}
                   >
                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -308,7 +308,7 @@ export default function FormTemplatesPage() {
                         onClick={() => handlePlayPause(audioId)}
                         className={cn(
                           "w-7 h-7 rounded-full flex items-center justify-center transition-colors shrink-0 shadow-xs",
-                          isPlaying ? "bg-primary text-white" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                          isPlaying ? "bg-primary text-white" : "bg-muted hover:bg-accent text-muted-foreground"
                         )}
                       >
                         {isPlaying ? (
@@ -325,7 +325,7 @@ export default function FormTemplatesPage() {
                       </button>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
-                          <span className="font-semibold text-slate-800 truncate">{displayTitle}</span>
+                          <span className="font-semibold text-foreground truncate">{displayTitle}</span>
                           {isPlaying && (
                             <span className="text-[8px] font-bold text-primary animate-pulse shrink-0 bg-primary/10 px-1.5 py-0.5 rounded">
                               재생 중
@@ -335,7 +335,7 @@ export default function FormTemplatesPage() {
                         {tags.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-1">
                             {tags.map((tag: string, tIdx: number) => (
-                              <span key={tIdx} className="bg-slate-100 text-slate-500 border border-slate-200/60 text-[8px] px-1 rounded">
+                              <span key={tIdx} className="bg-muted text-muted-foreground border border-border/60 text-[8px] px-1 rounded">
                                 {tag}
                               </span>
                             ))}
@@ -449,7 +449,7 @@ export default function FormTemplatesPage() {
                     </p>
                     <div className={cn(
                       "w-4 h-4 rounded-full border flex items-center justify-center shrink-0 mt-0.5 transition-colors",
-                      isSelected ? "border-primary bg-primary text-primary-foreground" : "border-slate-300"
+                      isSelected ? "border-primary bg-primary text-primary-foreground" : "border-input"
                     )}>
                       {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                     </div>
@@ -479,7 +479,7 @@ export default function FormTemplatesPage() {
                 </span>
                 <div className={cn(
                   "w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors",
-                  isCustomActive ? "border-primary bg-primary text-primary-foreground" : "border-slate-300"
+                  isCustomActive ? "border-primary bg-primary text-primary-foreground" : "border-input"
                 )}>
                   {isCustomActive && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                 </div>
@@ -517,10 +517,10 @@ export default function FormTemplatesPage() {
                     "relative flex flex-col rounded-xl border-2 overflow-hidden cursor-pointer transition-all duration-200 select-none group text-xs",
                     isSelected
                       ? "border-primary bg-primary/5 shadow-xs scale-[1.01]"
-                      : "border-slate-200 bg-white hover:border-slate-300"
+                      : "border-border bg-white hover:border-muted-foreground/40"
                   )}
                 >
-                  <div className="aspect-[4/3] w-full overflow-hidden bg-slate-100 relative">
+                  <div className="aspect-[4/3] w-full overflow-hidden bg-muted relative">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={choice.image}
@@ -535,10 +535,10 @@ export default function FormTemplatesPage() {
                       </div>
                     )}
                   </div>
-                  <div className="p-2 text-center border-t border-slate-100 bg-slate-50/50">
+                  <div className="p-2 text-center border-t border-border bg-muted/50">
                     <span className={cn(
                       "text-[11px] transition-colors",
-                      isSelected ? "text-primary font-bold" : "text-slate-600"
+                      isSelected ? "text-primary font-bold" : "text-muted-foreground"
                     )}>
                       {choice.text}
                     </span>
@@ -586,7 +586,7 @@ export default function FormTemplatesPage() {
                     id={id}
                     checked={isChecked}
                     onChange={(e) => handleCheckboxChange(opt, e.target.checked)}
-                    className="w-4 h-4 text-primary focus:ring-primary border-slate-300 rounded"
+                    className="w-4 h-4 text-primary focus:ring-primary border-input rounded"
                   />
                   <span>{opt}</span>
                 </label>
@@ -644,7 +644,7 @@ export default function FormTemplatesPage() {
                     value={opt}
                     checked={isChecked}
                     onChange={() => handlePreviewInputChange(field.field_key, opt)}
-                    className="w-4 h-4 text-primary focus:ring-primary border-slate-300"
+                    className="w-4 h-4 text-primary focus:ring-primary border-input"
                   />
                   <span>{opt}</span>
                 </label>
@@ -664,7 +664,7 @@ export default function FormTemplatesPage() {
               checked={isToggled}
               onCheckedChange={(checked) => handlePreviewInputChange(field.field_key, checked ? '예' : '아니오')}
             />
-            <span className="text-xs font-medium text-slate-700">
+            <span className="text-xs font-medium text-muted-foreground">
               {isToggled ? '예' : '아니오'}
             </span>
           </div>
@@ -1016,7 +1016,7 @@ export default function FormTemplatesPage() {
                               모바일 포함
                             </Badge>
                           ) : (
-                            <Badge className="bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-100 text-[10px] scale-90 px-1.5 py-0 h-4">
+                            <Badge className="bg-muted text-muted-foreground border-border hover:bg-muted text-[10px] scale-90 px-1.5 py-0 h-4">
                               지류 단독
                             </Badge>
                           )}
@@ -1197,11 +1197,11 @@ export default function FormTemplatesPage() {
             <div className="py-4 space-y-6">
               {/* Progress Indicator */}
               <div className="space-y-1 bg-muted/40 p-3 rounded-lg border border-border">
-                <div className="flex justify-between items-center text-xs font-medium text-slate-600">
+                <div className="flex justify-between items-center text-xs font-medium text-muted-foreground">
                   <span>단계 {previewStep + 1} / {stepKeys.length} ({currentStepKey})</span>
                   <span>{Math.round(((previewStep + 1) / stepKeys.length) * 100)}% 완료</span>
                 </div>
-                <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden mt-1">
+                <div className="w-full bg-muted h-1.5 rounded-full overflow-hidden mt-1">
                   <div 
                     className="bg-primary h-full transition-all duration-300" 
                     style={{ width: `${Math.round(((previewStep + 1) / stepKeys.length) * 100)}%` }} 
@@ -1235,7 +1235,7 @@ export default function FormTemplatesPage() {
                             <div
                               key={idx}
                               onClick={() => setPreviewZoomImage(img)}
-                              className="relative group cursor-pointer overflow-hidden rounded-xl border border-slate-200 shadow-2xs bg-slate-50 transition-all duration-200 hover:shadow-md hover:border-primary/50"
+                              className="relative group cursor-pointer overflow-hidden rounded-xl border border-border shadow-2xs bg-muted transition-all duration-200 hover:shadow-md hover:border-primary/50"
                             >
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
@@ -1256,17 +1256,17 @@ export default function FormTemplatesPage() {
                     return (
                       <React.Fragment key={field.field_key}>
                         {showSectionHeader && (
-                          <div className="pt-5 pb-2 border-b-2 border-slate-800 mt-6 first:mt-0 mb-3 flex items-center gap-2">
-                            <div className="w-2 h-4.5 bg-slate-900 rounded-sm shrink-0" />
-                            <h4 className="text-sm font-extrabold text-slate-900 tracking-tight">
+                          <div className="pt-5 pb-2 border-b-2 border-border mt-6 first:mt-0 mb-3 flex items-center gap-2">
+                            <div className="w-2 h-4.5 bg-foreground rounded-sm shrink-0" />
+                            <h4 className="text-sm font-extrabold text-foreground tracking-tight">
                               {currentSection}
                             </h4>
                           </div>
                         )}
 
-                        <div className="p-4 rounded-xl border border-slate-200/80 bg-white shadow-2xs space-y-2.5 my-2">
+                        <div className="p-4 rounded-xl border border-border/80 bg-white shadow-2xs space-y-2.5 my-2">
                           <Field>
-                            <FieldLabel htmlFor={`preview-${field.field_key}`} className="text-xs font-bold text-slate-800 tracking-tight flex items-center gap-1">
+                            <FieldLabel htmlFor={`preview-${field.field_key}`} className="text-xs font-bold text-foreground tracking-tight flex items-center gap-1">
                               <span>{field.label}</span>
                               {field.is_required && <span className="text-rose-500 font-bold ml-0.5">*</span>}
                             </FieldLabel>
@@ -1286,7 +1286,7 @@ export default function FormTemplatesPage() {
                             return (
                               <div
                                 key={childField.field_key}
-                                className={`transition-all duration-300 ease-in-out overflow-hidden border-l-2 border-primary pl-3.5 ml-1 mt-2 bg-slate-50 p-3 rounded-r-lg border-y border-r border-slate-200/60 ${
+                                className={`transition-all duration-300 ease-in-out overflow-hidden border-l-2 border-primary pl-3.5 ml-1 mt-2 bg-muted p-3 rounded-r-lg border-y border-r border-border/60 ${
                                   isTriggered 
                                     ? 'max-h-[500px] opacity-100 py-2.5' 
                                     : 'max-h-0 opacity-0 py-0 pointer-events-none'
@@ -1296,7 +1296,7 @@ export default function FormTemplatesPage() {
                                   <span>↳</span> 하위 세부 항목
                                 </div>
                                 <Field>
-                                  <FieldLabel htmlFor={`preview-${childField.field_key}`} className="text-xs font-bold text-slate-700">
+                                  <FieldLabel htmlFor={`preview-${childField.field_key}`} className="text-xs font-bold text-muted-foreground">
                                     {childField.label}
                                     {childField.is_required && <span className="text-rose-500 font-bold ml-0.5">*</span>}
                                   </FieldLabel>

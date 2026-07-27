@@ -172,14 +172,14 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
       const imageList: string[] = Array.isArray(rawVal) ? rawVal : (typeof rawVal === 'string' && rawVal.startsWith('http') ? [rawVal] : (rawVal ? [rawVal] : []))
       
       if (imageList.length === 0) {
-        return <div className="text-xs text-muted-foreground italic bg-slate-50 p-2.5 rounded-lg border border-slate-200/60">(첨부된 이미지 없음)</div>
+        return <div className="text-xs text-muted-foreground italic bg-muted p-2.5 rounded-lg border border-border/60">(첨부된 이미지 없음)</div>
       }
 
       return (
         <div className="space-y-2">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
             {imageList.map((imgUrl, idx) => (
-              <div key={idx} className="relative group rounded-xl overflow-hidden border border-slate-200 bg-slate-50 shadow-2xs">
+              <div key={idx} className="relative group rounded-xl overflow-hidden border border-border bg-muted shadow-2xs">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={imgUrl} alt={`첨부 이미지 ${idx + 1}`} className="w-full h-32 object-cover" />
                 <button
@@ -199,7 +199,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
     if (field.field_type === 'timentext') {
       const formatted = formatTimeTextValue(rawVal)
       return (
-        <div className="text-xs font-semibold text-slate-800 leading-relaxed bg-slate-50 p-2.5 rounded-lg border border-slate-200/80 whitespace-pre-wrap select-text cursor-text">
+        <div className="text-xs font-semibold text-foreground leading-relaxed bg-muted p-2.5 rounded-lg border border-border/80 whitespace-pre-wrap select-text cursor-text">
           {formatted || '(미입력 항목)'}
         </div>
       )
@@ -207,14 +207,14 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
 
     if (!displayVal) {
       return (
-        <div className="text-xs text-slate-400 italic bg-slate-50/60 p-2.5 rounded-lg border border-slate-200/50">
+        <div className="text-xs text-muted-foreground italic bg-muted/60 p-2.5 rounded-lg border border-border/50">
           (미입력 항목)
         </div>
       )
     }
 
     return (
-      <div className="text-xs font-semibold text-slate-800 leading-relaxed bg-slate-50 p-2.5 rounded-lg border border-slate-200/80 whitespace-pre-wrap select-text cursor-text">
+      <div className="text-xs font-semibold text-foreground leading-relaxed bg-muted p-2.5 rounded-lg border border-border/80 whitespace-pre-wrap select-text cursor-text">
         {displayVal}
       </div>
     )
@@ -352,7 +352,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
                     "flex items-center justify-between p-2.5 rounded-xl border transition-all text-xs",
                     isSelected 
                       ? "bg-primary/5 border-primary shadow-xs font-semibold" 
-                      : "bg-white border-border hover:bg-slate-50/50"
+                      : "bg-white border-border hover:bg-muted/50"
                   )}
                 >
                   <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -362,7 +362,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
                       onClick={() => handlePlayPause(audioId)}
                       className={cn(
                         "w-7 h-7 rounded-full flex items-center justify-center transition-colors shrink-0",
-                        isPlaying ? "bg-primary text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                        isPlaying ? "bg-primary text-white" : "bg-muted text-muted-foreground hover:bg-accent"
                       )}
                     >
                       {isPlaying ? (
@@ -379,7 +379,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
                     </button>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-medium text-slate-700 truncate">{displayTitle}</span>
+                        <span className="font-medium text-muted-foreground truncate">{displayTitle}</span>
                         {isPlaying && (
                           <span className="text-[8px] font-bold text-primary animate-pulse shrink-0 bg-primary/10 px-1 rounded">
                             재생 중
@@ -389,7 +389,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
                       {tags.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-0.5">
                           {tags.map((tag: string, tIdx: number) => (
-                            <span key={tIdx} className="bg-slate-100 text-slate-500 border border-slate-200/60 text-[8px] font-medium px-1 rounded">
+                            <span key={tIdx} className="bg-muted text-muted-foreground border border-border/60 text-[8px] font-medium px-1 rounded">
                               {tag}
                             </span>
                           ))}
@@ -550,10 +550,10 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
                     "relative flex flex-col rounded-xl border overflow-hidden cursor-pointer transition-all text-xs group",
                     isSelected
                       ? "border-primary bg-primary/5 shadow-xs font-semibold"
-                      : "border-border bg-white hover:border-slate-300"
+                      : "border-border bg-white hover:border-muted-foreground/40"
                   )}
                 >
-                  <div className="aspect-[4/3] w-full overflow-hidden bg-slate-100 relative">
+                  <div className="aspect-[4/3] w-full overflow-hidden bg-muted relative">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={choice.image}
@@ -568,10 +568,10 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
                       </div>
                     )}
                   </div>
-                  <div className="p-2 text-center border-t border-slate-100 bg-slate-50/50">
+                  <div className="p-2 text-center border-t border-border bg-muted/50">
                     <span className={cn(
                       "text-[11px] transition-colors",
-                      isSelected ? "text-primary font-bold" : "text-slate-600"
+                      isSelected ? "text-primary font-bold" : "text-muted-foreground"
                     )}>
                       {choice.text}
                     </span>
@@ -720,7 +720,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
                     <React.Fragment key={field.field_key}>
                       {showSectionHeader && (
                         <div className="col-span-1 md:col-span-2 pt-4 pb-1 border-b border-border mt-3 first:mt-0">
-                          <h3 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <h3 className="text-xs font-bold text-foreground flex items-center gap-1.5">
                             <span className="w-1.5 h-3 bg-primary rounded-full" />
                             {currentSection}
                           </h3>
@@ -728,7 +728,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
                       )}
                       <div className="space-y-1">
                         <div className="flex justify-between items-center">
-                          <span className="text-[11px] font-semibold text-slate-700">
+                          <span className="text-[11px] font-semibold text-muted-foreground">
                             {field.label_override || field.label}
                             {field.is_required && <span className="text-red-500 ml-0.5">*</span>}
                           </span>

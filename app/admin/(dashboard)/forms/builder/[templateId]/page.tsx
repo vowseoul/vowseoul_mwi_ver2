@@ -614,7 +614,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
         {/* Left Side: Fields Library (5/12 width) */}
         <div className="lg:col-span-5 space-y-4">
           <Card className="max-h-[75vh] overflow-y-auto scrollbar-hide">
-            <CardHeader className="sticky top-0 bg-white dark:bg-slate-900 z-10 border-b border-border shadow-sm p-4 pb-2">
+            <CardHeader className="sticky top-0 bg-card z-10 border-b border-border shadow-sm p-4 pb-2">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-primary" /> 필드 라이브러리 목록
               </CardTitle>
@@ -787,7 +787,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                 + 새 단계 추가
               </Button>
             </CardHeader>
-            <CardContent className="p-4 flex-1 overflow-y-auto space-y-6 scrollbar-hide bg-slate-50/50">
+            <CardContent className="p-4 flex-1 overflow-y-auto space-y-6 scrollbar-hide bg-muted/50">
               {selectedFields.length === 0 ? (
                 <div className="h-[40vh] flex flex-col items-center justify-center text-center text-muted-foreground border-2 border-dashed border-border rounded-xl">
                   <AlertCircle className="w-10 h-10 mb-3 text-muted-foreground/60" />
@@ -798,9 +798,9 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                 getPagesAndSections().map((page, pIdx) => (
                   <div key={`page-${pIdx}`} className="bg-card rounded-xl border border-border/80 shadow-sm overflow-hidden">
                     {/* Page Header */}
-                    <div className="bg-slate-100/80 px-4 py-3 border-b border-border flex items-center justify-between">
+                    <div className="bg-muted px-4 py-3 border-b border-border flex items-center justify-between">
                       <div className="flex items-center gap-2 flex-1 max-w-md">
-                        <span className="text-xs font-bold text-slate-500 shrink-0">단계 {pIdx + 1}:</span>
+                        <span className="text-xs font-bold text-muted-foreground shrink-0">단계 {pIdx + 1}:</span>
                         <input
                           key={`page-input-${page.title}`}
                           type="text"
@@ -812,7 +812,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                               e.currentTarget.blur();
                             }
                           }}
-                          className="font-bold text-sm text-foreground bg-transparent border-b border-transparent hover:border-slate-300 focus:border-primary focus:outline-none px-1"
+                          className="font-bold text-sm text-foreground bg-transparent border-b border-transparent hover:border-muted-foreground/40 focus:border-primary focus:outline-none px-1"
                         />
                       </div>
                       <div className="flex items-center gap-2">
@@ -860,7 +860,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                           {/* Section Header */}
                           <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-2 flex-1 max-w-sm">
-                              <span className="text-[10px] font-bold text-slate-400">📂</span>
+                              <span className="text-[10px] font-bold text-muted-foreground">📂</span>
                               <input
                                 key={`section-input-${page.title}-${section.title}`}
                                 type="text"
@@ -872,7 +872,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                     e.currentTarget.blur();
                                   }
                                 }}
-                                className="font-semibold text-xs text-slate-700 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-primary focus:outline-none px-1"
+                                className="font-semibold text-xs text-muted-foreground bg-transparent border-b border-transparent hover:border-muted-foreground/40 focus:border-primary focus:outline-none px-1"
                               />
                             </div>
                             
@@ -958,7 +958,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                   {/* Field Summary Row */}
                                   <div className="flex items-center justify-between p-2 hover:bg-muted/5 transition-colors">
                                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                      <div className="cursor-grab text-slate-400 active:cursor-grabbing shrink-0 text-sm font-mono select-none px-1">
+                                      <div className="cursor-grab text-muted-foreground active:cursor-grabbing shrink-0 text-sm font-mono select-none px-1">
                                         ⠿
                                       </div>
                                       <div className="min-w-0 flex items-center gap-2">
@@ -1135,9 +1135,9 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                             {field.options?.image_choices?.length > 0 && (
                                               <div className="grid grid-cols-2 gap-2 bg-background p-2 rounded border border-border max-h-48 overflow-y-auto">
                                                 {field.options.image_choices.map((choice: any, idx: number) => (
-                                                  <div key={idx} className="relative flex flex-col items-center p-1.5 rounded bg-slate-50 border border-slate-100 group">
+                                                  <div key={idx} className="relative flex flex-col items-center p-1.5 rounded bg-muted border border-border group">
                                                     <img src={choice.image} alt={choice.text} className="w-full h-16 object-cover rounded" />
-                                                    <span className="text-[9px] text-slate-600 font-semibold truncate max-w-full mt-1">{choice.text}</span>
+                                                    <span className="text-[9px] text-muted-foreground font-semibold truncate max-w-full mt-1">{choice.text}</span>
                                                     <button
                                                       type="button"
                                                       onClick={() => {
@@ -1155,8 +1155,8 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                             )}
 
                                             {/* Form to add a new image choice */}
-                                            <div className="flex flex-col gap-1.5 border border-dashed border-border/80 p-2 rounded bg-slate-50/50 mt-1">
-                                              <span className="text-[9px] font-bold text-slate-500">새 선택지 추가</span>
+                                            <div className="flex flex-col gap-1.5 border border-dashed border-border/80 p-2 rounded bg-muted/50 mt-1">
+                                              <span className="text-[9px] font-bold text-muted-foreground">새 선택지 추가</span>
                                               <div className="flex gap-2 items-center">
                                                 <input
                                                   type="file"
@@ -1278,9 +1278,9 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                             {field.options?.music_files?.length > 0 && (
                                               <div className="flex flex-col gap-2 bg-background p-2 rounded border border-border mt-1 max-h-60 overflow-y-auto">
                                                 {field.options.music_files.map((file: any, idx: number) => (
-                                                  <div key={idx} className="flex flex-col gap-2 text-[10px] bg-slate-50 p-2.5 rounded-lg border border-slate-100 relative">
-                                                    <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5">
-                                                      <span className="font-semibold text-slate-700 truncate max-w-[150px]">{file.name}</span>
+                                                  <div key={idx} className="flex flex-col gap-2 text-[10px] bg-muted p-2.5 rounded-lg border border-border relative">
+                                                    <div className="flex items-center justify-between gap-2 border-b border-border pb-1.5">
+                                                      <span className="font-semibold text-muted-foreground truncate max-w-[150px]">{file.name}</span>
                                                       <div className="flex items-center gap-2">
                                                         <audio className="hidden" src={file.url} id={`audio-preview-${field.field_library_id}-${idx}`} />
                                                         <button
@@ -1314,7 +1314,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                                     </div>
                                                     <div className="grid grid-cols-2 gap-2">
                                                       <div className="flex flex-col gap-0.5">
-                                                        <span className="text-[8px] font-medium text-slate-400">곡 제목 (화면 표시용)</span>
+                                                        <span className="text-[8px] font-medium text-muted-foreground">곡 제목 (화면 표시용)</span>
                                                         <input
                                                           type="text"
                                                           value={file.title !== undefined ? file.title : file.name.replace(/\.[^/.]+$/, "")}
@@ -1329,7 +1329,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                                         />
                                                       </div>
                                                       <div className="flex flex-col gap-0.5">
-                                                        <span className="text-[8px] font-medium text-slate-400">무드 태그 (#태그)</span>
+                                                        <span className="text-[8px] font-medium text-muted-foreground">무드 태그 (#태그)</span>
                                                         <input
                                                           type="text"
                                                           value={file.tags || ''}
@@ -1438,7 +1438,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                       {/* Reference Images */}
                                       <div className="pt-2 border-t border-border/40 flex flex-col gap-1.5">
                                         <div className="flex items-center justify-between">
-                                          <span className="text-[10px] font-medium text-slate-500">안내용 첨부 이미지 (고객 노출용, 여러 장 가능)</span>
+                                          <span className="text-[10px] font-medium text-muted-foreground">안내용 첨부 이미지 (고객 노출용, 여러 장 가능)</span>
                                           <label className="cursor-pointer bg-primary/10 hover:bg-primary/20 text-primary text-[9px] font-semibold px-2 py-0.5 rounded transition-colors shrink-0">
                                             이미지 추가
                                             <input

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { uploadFile } from "@/lib/storage"
 import { InvitationFrame, type TokenMap } from "@/components/invitation/invitation-frame"
@@ -15,6 +15,17 @@ import {
   type ThemeRow,
 } from "@/lib/theme-template"
 import { buildFontStack, fetchRegisteredFonts, resolveFontFaces, type RegisteredFont } from "@/lib/fonts"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
+import { Button } from "@/components/ui/button"
+import { ExternalLink, Image as ImageIcon, Loader2, Plus, Save, X } from "lucide-react"
+import { toast } from "sonner"
 
 /**
  * 템플릿 청첩장 커스터마이즈 편집기.
@@ -59,12 +70,12 @@ const CONTENT_FIELD_DEFS: FieldDef[] = [
 
 /** slot_manifest 에 'account' 가 있을 때만 노출 (필드키 마커가 아니라 슬롯 데이터라 field_manifest 에 없음) */
 const ACCOUNT_FIELD_DEFS: FieldDef[] = [
-  { key: "account_groom_bank", label: "신랑측 은행", type: "text" },
-  { key: "account_groom_number", label: "신랑측 계좌번호", type: "text" },
-  { key: "account_groom_holder", label: "신랑측 예금주", type: "text" },
-  { key: "account_bride_bank", label: "신부측 은행", type: "text" },
-  { key: "account_bride_number", label: "신부측 계좌번호", type: "text" },
-  { key: "account_bride_holder", label: "신부측 예금주", type: "text" },
+  { key: "account_groom_bank", label: "은행", type: "text" },
+  { key: "account_groom_number", label: "계좌번호", type: "text" },
+  { key: "account_groom_holder", label: "예금주", type: "text" },
+  { key: "account_bride_bank", label: "은행", type: "text" },
+  { key: "account_bride_number", label: "계좌번호", type: "text" },
+  { key: "account_bride_holder", label: "예금주", type: "text" },
 ]
 
 const ALL_TEXT_FIELD_DEFS = [...CONTENT_FIELD_DEFS, ...ACCOUNT_FIELD_DEFS]
@@ -130,12 +141,11 @@ export default function CustomizeClient({
   const handleThemeChange = async (newThemeId: string) => {
     if (newThemeId === activeThemeRow.id) return
     setSwitchingTheme(true)
-    setMessage(null)
     try {
       const { data: newTheme, error: themeError } = await supabase
         .from("themes").select("*").eq("id", newThemeId).single()
       if (themeError || !newTheme) {
-        setMessage("테마를 불러오지 못했습니다.")
+        toast.error("테마를 불러오지 못했습니다.")
         return
       }
 
@@ -158,7 +168,7 @@ export default function CustomizeClient({
           })
           .select("id").single()
         if (createError) {
-          setMessage("테마 버전 생성에 실패했습니다.")
+          toast.error("테마 버전 생성에 실패했습니다.")
           return
         }
         versionId = created?.id ?? null
@@ -224,7 +234,6 @@ export default function CustomizeClient({
 
   const [uploadingKey, setUploadingKey] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState<string | null>(null)
 
   useEffect(() => {
     if (!showBgm) return
@@ -271,7 +280,7 @@ export default function CustomizeClient({
       const url = await uploadFile(file, "invitations/content")
       setField(key, url)
     } catch {
-      setMessage("이미지 업로드에 실패했습니다.")
+      toast.error("이미지 업로드에 실패했습니다.")
     } finally {
       setUploadingKey(null)
     }
@@ -283,14 +292,14 @@ export default function CustomizeClient({
       const urls = await Promise.all(Array.from(files).map((f) => uploadFile(f, "invitations/gallery")))
       setGalleryImages((cur) => [...cur, ...urls])
     } catch {
-      setMessage("갤러리 이미지 업로드에 실패했습니다.")
+      toast.error("갤러리 이미지 업로드에 실패했습니다.")
     } finally {
       setUploadingKey(null)
     }
   }
 
   const save = async () => {
-    setSaving(true); setMessage(null)
+    setSaving(true)
 
     const cleanTokens: Record<string, string> = {}
     for (const [k, v] of Object.entries(overrides)) if (v) cleanTokens[k] = v
@@ -329,14 +338,22 @@ export default function CustomizeClient({
       })
       .eq("id", invitationId)
     setSaving(false)
-    setMessage(error ? `저장 실패: ${error.message}` : "저장되었습니다.")
+    if (error) {
+      toast.error(`저장 실패: ${error.message}`)
+    } else {
+      toast.success("저장되었습니다.")
+    }
   }
 
   const groom = String(data.groom_name ?? "")
   const bride = String(data.bride_name ?? "")
 
   if (!template) {
-    return <div style={{ padding: 40, fontFamily: "system-ui" }}>템플릿 테마를 불러올 수 없습니다.</div>
+    return (
+      <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
+        템플릿 테마를 불러올 수 없습니다.
+      </div>
+    )
   }
 
   return (
@@ -345,287 +362,385 @@ export default function CustomizeClient({
     // 스크롤 컨테이너"를 기준으로 계산되므로 그 컨테이너가 window 인지 main 인지 어긋나면 어디에도
     // 제대로 붙지 않는다. 그래서 sticky 대신, 높이를 뷰포트 기준으로 고정하고 왼쪽 패널만 자체
     // 스크롤시키는 방식(assets/themes/[id] 페이지와 동일 패턴)으로 우측 미리보기를 항상 고정한다.
-    <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 420px", gap: 24, padding: 24, height: "calc(100vh - 100px)", fontFamily: "system-ui, sans-serif" }}>
+    <div className="grid h-[calc(100vh-100px)] grid-cols-[minmax(0,1fr)_420px] gap-6 font-sans">
       {/* 편집 */}
-      <div style={{ minWidth: 0, maxWidth: 720, height: "100%", overflowY: "auto" }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>청첩장 커스터마이즈</h1>
-        <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 20 }}>
-          {groom && bride ? `${groom} ♥ ${bride}` : "청첩장"}
-        </p>
-
-        <Section title="테마">
-          <select
-            value={activeThemeRow.id}
-            onChange={(e) => handleThemeChange(e.target.value)}
-            disabled={switchingTheme}
-            style={inputStyle}
-          >
-            {availableThemes.map((t) => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
-          {switchingTheme && (
-            <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 6 }}>테마를 불러오는 중…</p>
-          )}
-          <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 6 }}>
-            테마를 바꾸면 이 청첩장의 색·폰트 오버라이드는 초기화됩니다. 저장을 눌러야 최종 반영됩니다.
+      <div className="min-w-0 max-w-3xl h-full overflow-y-auto pr-1">
+        <div className="mb-6">
+          <h1 className="text-2xl font-semibold text-foreground">청첩장 커스터마이즈</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {groom && bride ? `${groom} ♥ ${bride}` : "청첩장"}
           </p>
-        </Section>
+        </div>
 
-        <Section title="예식 일시 · 장소">
-          <Row>
-            <Field label="예식일">
-              <input type="date" value={weddingDate} onChange={(e) => setWeddingDate(e.target.value)} style={inputStyle} />
-            </Field>
-            <Field label="예식 시간">
-              <input value={weddingTime} onChange={(e) => setWeddingTime(e.target.value)} placeholder="예: 낮 12시" style={inputStyle} />
-            </Field>
-          </Row>
-          {visibleContentFields.filter((f) => ["venue_name", "venue_hall", "venue_address"].includes(f.key)).map((f) => (
-            <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
-          ))}
-          {visibleContentFields.filter((f) => ["traffic_info", "parking_info"].includes(f.key)).map((f) => (
-            <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
-          ))}
-        </Section>
-
-        <Section title="신랑 · 신부 정보">
-          {visibleContentFields
-            .filter((f) => !["venue_name", "venue_hall", "venue_address", "traffic_info", "parking_info", "greeting_message", "main_image", "groom_photo", "bride_photo"].includes(f.key))
-            .map((f) => (
-              <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
-            ))}
-        </Section>
-
-        {visibleContentFields.some((f) => f.key === "greeting_message") && (
-          <Section title="인사말">
-            <TextField
-              def={{ key: "greeting_message", label: "인사말", type: "textarea" }}
-              value={content.greeting_message || ""}
-              onChange={(v) => setField("greeting_message", v)}
-            />
-          </Section>
-        )}
-
-        {visibleContentFields.some((f) => f.type === "image") && (
-          <Section title="사진">
-            {visibleContentFields.filter((f) => f.type === "image").map((f) => (
-              <ImageField
-                key={f.key}
-                def={f}
-                value={content[f.key] || ""}
-                uploading={uploadingKey === f.key}
-                onUpload={(file) => uploadImageField(f.key, file)}
-                onClear={() => setField(f.key, "")}
-              />
-            ))}
-          </Section>
-        )}
-
-        {showGallery && (
-          <Section title="갤러리">
-            <Field label="갤러리 형태">
-              <div style={{ display: "flex", gap: 16 }}>
-                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
-                  <input
-                    type="radio" name="galleryViewType" checked={galleryViewType === "slide"}
-                    onChange={() => setGalleryViewType("slide")}
-                  />
-                  슬라이드형
-                </label>
-                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
-                  <input
-                    type="radio" name="galleryViewType" checked={galleryViewType === "grid"}
-                    onChange={() => setGalleryViewType("grid")}
-                  />
-                  그리드형
-                </label>
-              </div>
-            </Field>
-            {galleryViewType === "slide" && (
-              <Field label="사진 정렬 (슬라이드형)">
-                <div style={{ display: "flex", gap: 16 }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
-                    <input
-                      type="radio" name="galleryAlign" checked={galleryAlign === "center"}
-                      onChange={() => setGalleryAlign("center")}
-                    />
-                    중앙정렬
-                  </label>
-                  <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
-                    <input
-                      type="radio" name="galleryAlign" checked={galleryAlign === "bottom"}
-                      onChange={() => setGalleryAlign("bottom")}
-                    />
-                    하단정렬
-                  </label>
-                </div>
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-medium">테마</CardTitle>
+              <CardDescription>
+                테마를 바꾸면 이 청첩장의 색·폰트 오버라이드는 초기화됩니다. 저장을 눌러야 최종 반영됩니다.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Field>
+                <Select value={activeThemeRow.id} onValueChange={handleThemeChange} disabled={switchingTheme}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableThemes.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {switchingTheme && <FieldDescription>테마를 불러오는 중…</FieldDescription>}
               </Field>
-            )}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: 8, marginBottom: 10 }}>
-              {galleryImages.map((url, i) => (
-                <div key={i} style={{ position: "relative", aspectRatio: "1/1", borderRadius: 8, overflow: "hidden", border: "1px solid #e5e7eb" }}>
-                  <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  <button
-                    onClick={() => setGalleryImages((cur) => cur.filter((_, idx) => idx !== i))}
-                    title="삭제"
-                    style={{ position: "absolute", top: 3, right: 3, width: 20, height: 20, borderRadius: "50%", border: "none", background: "rgba(0,0,0,.6)", color: "#fff", fontSize: 12, cursor: "pointer" }}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-            <label style={{ fontSize: 12.5, color: "#2563eb", cursor: "pointer" }}>
-              {uploadingKey === "gallery_images" ? "업로드 중…" : "+ 이미지 추가"}
-              <input
-                type="file" accept="image/*" multiple style={{ display: "none" }}
-                disabled={uploadingKey === "gallery_images"}
-                onChange={(e) => { if (e.target.files?.length) addGalleryImages(e.target.files); e.target.value = "" }}
-              />
-            </label>
-          </Section>
-        )}
+            </CardContent>
+          </Card>
 
-        {showSequence && (
-          <Section title="식순">
-            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginBottom: 12, cursor: "pointer" }}>
-              <input type="checkbox" checked={showProgram} onChange={(e) => setShowProgram(e.target.checked)} />
-              식순 섹션 노출
-            </label>
-            {showProgram && (
-              <>
-                {sequenceRows.map((row, i) => (
-                  <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
-                    <input
-                      value={row.time}
-                      onChange={(e) => setSequenceRows((cur) => cur.map((r, idx) => idx === i ? { ...r, time: e.target.value } : r))}
-                      placeholder="12:00" style={{ ...inputStyle, width: 90 }}
-                    />
-                    <input
-                      value={row.title}
-                      onChange={(e) => setSequenceRows((cur) => cur.map((r, idx) => idx === i ? { ...r, title: e.target.value } : r))}
-                      placeholder="신랑 신부 입장" style={{ ...inputStyle, flex: 1 }}
-                    />
-                    <button
-                      onClick={() => setSequenceRows((cur) => cur.filter((_, idx) => idx !== i))}
-                      style={{ border: "none", background: "transparent", color: "#9ca3af", cursor: "pointer", fontSize: 16 }}
-                    >
-                      ×
-                    </button>
-                  </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-medium">예식 일시 · 장소</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FieldGroup className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <Field>
+                    <FieldLabel htmlFor="weddingDate">예식일</FieldLabel>
+                    <Input id="weddingDate" type="date" value={weddingDate} onChange={(e) => setWeddingDate(e.target.value)} />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="weddingTime">예식 시간</FieldLabel>
+                    <Input id="weddingTime" value={weddingTime} onChange={(e) => setWeddingTime(e.target.value)} placeholder="예: 낮 12시" />
+                  </Field>
+                </div>
+                {visibleContentFields.filter((f) => ["venue_name", "venue_hall", "venue_address"].includes(f.key)).map((f) => (
+                  <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
                 ))}
-                <button
-                  onClick={() => setSequenceRows((cur) => [...cur, { time: "", title: "" }])}
-                  style={{ fontSize: 12.5, color: "#2563eb", background: "none", border: "none", cursor: "pointer", padding: 0 }}
-                >
-                  + 순서 추가
-                </button>
-              </>
-            )}
-          </Section>
-        )}
+                {visibleContentFields.filter((f) => ["traffic_info", "parking_info"].includes(f.key)).map((f) => (
+                  <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
+                ))}
+              </FieldGroup>
+            </CardContent>
+          </Card>
 
-        {showAccountFields && (
-          <Section title="마음 전하실 곳 (계좌)">
-            {ACCOUNT_FIELD_DEFS.map((f) => (
-              <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
-            ))}
-          </Section>
-        )}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-medium">신랑 · 신부 정보</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FieldGroup className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {visibleContentFields
+                  .filter((f) => !["venue_name", "venue_hall", "venue_address", "traffic_info", "parking_info", "greeting_message", "main_image", "groom_photo", "bride_photo"].includes(f.key))
+                  .map((f) => (
+                    <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
+                  ))}
+              </FieldGroup>
+            </CardContent>
+          </Card>
 
-        {showBgm && (
-          <Section title="배경음악">
-            <select
-              value={bgms.some((b) => b.url === bgmUrl) ? bgmUrl : ""}
-              onChange={(e) => { if (e.target.value) setBgmUrl(e.target.value) }}
-              style={{ ...inputStyle, marginBottom: 8 }}
-            >
-              <option value="">직접 입력 (아래)</option>
-              {bgms.map((b) => (
-                <option key={b.id} value={b.url}>{b.name}</option>
-              ))}
-            </select>
-            <input value={bgmUrl} onChange={(e) => setBgmUrl(e.target.value)} placeholder="BGM 파일 URL" style={inputStyle} />
-          </Section>
-        )}
-
-        <Section title="디자인 토큰 (색 · 폰트)">
-          <p style={{ fontSize: 12, color: "#9ca3af", marginBottom: 12 }}>비워두면 테마 기본값이 사용됩니다.</p>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            {TOKEN_FIELDS.map((t) => {
-              const value = overrides[t.name] || ""
-              const placeholder = themeTokens[t.name] || "테마 기본값"
-              const setValue = (v: string) => setOverrides((cur) => ({ ...cur, [t.name]: v }))
-              const matchedFontStack = t.type === "font"
-                ? fonts.map((f) => buildFontStack(f, t.name)).find((stack) => stack === value)
-                : undefined
-              return (
-                <div key={t.name} style={{ display: "flex", alignItems: t.type === "font" ? "flex-start" : "center", gap: 8 }}>
-                  <label style={{ fontSize: 12, color: "#374151", width: 92, flexShrink: 0, paddingTop: t.type === "font" ? 6 : 0 }}>{t.label}</label>
-                  {t.type === "color" ? (
-                    <input
-                      type="color"
-                      value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : (/^#[0-9a-fA-F]{6}$/.test(placeholder) ? placeholder : "#ffffff")}
-                      onChange={(e) => setValue(e.target.value)}
-                      style={{ width: 34, height: 30, padding: 0, border: "1px solid #d1d5db", borderRadius: 6, cursor: "pointer", background: "#fff" }}
-                    />
-                  ) : null}
-                  {t.type === "font" ? (
-                    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
-                      {fonts.length > 0 && (
-                        <select
-                          value={matchedFontStack || ""}
-                          onChange={(e) => { if (e.target.value) setValue(e.target.value) }}
-                          style={{ padding: "6px 8px", border: "1px solid #d1d5db", borderRadius: 8, outline: "none", fontSize: 12 }}
-                        >
-                          <option value="">에셋에 등록된 폰트 선택…</option>
-                          {fonts.map((f) => (
-                            <option key={f.id} value={buildFontStack(f, t.name)}>{f.name}</option>
-                          ))}
-                        </select>
-                      )}
-                      <input
-                        value={value}
-                        onChange={(e) => setValue(e.target.value)}
-                        placeholder={placeholder}
-                        style={{ padding: "6px 8px", border: "1px solid #d1d5db", borderRadius: 8, outline: "none", fontSize: 12 }}
-                      />
-                    </div>
-                  ) : (
-                    <input
-                      value={value}
-                      onChange={(e) => setValue(e.target.value)}
-                      placeholder={placeholder}
-                      style={{ flex: 1, minWidth: 0, padding: "6px 8px", border: "1px solid #d1d5db", borderRadius: 8, outline: "none", fontSize: 12 }}
-                    />
-                  )}
-                  {value && (
-                    <button onClick={() => setValue("")} title="테마 기본값으로" style={{ border: "none", background: "transparent", cursor: "pointer", color: "#9ca3af", fontSize: 14, alignSelf: t.type === "font" ? "flex-start" : "center", marginTop: t.type === "font" ? 4 : 0 }}>×</button>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </Section>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 24, position: "sticky", bottom: 0, background: "#fff", padding: "12px 0" }}>
-          <button onClick={save} disabled={saving} style={{ padding: "10px 20px", borderRadius: 8, border: "none", cursor: saving ? "wait" : "pointer", background: "#D76C6C", color: "#fff", fontSize: 14, opacity: saving ? 0.6 : 1 }}>
-            {saving ? "저장 중…" : "저장"}
-          </button>
-          {publicSlug && (
-            <a href={`/w/${publicSlug}`} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: "#2563eb" }}>
-              발행 청첩장 열기 →
-            </a>
+          {visibleContentFields.some((f) => f.key === "greeting_message") && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-medium">인사말</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <TextField
+                  def={{ key: "greeting_message", label: "인사말", type: "textarea" }}
+                  value={content.greeting_message || ""}
+                  onChange={(v) => setField("greeting_message", v)}
+                />
+              </CardContent>
+            </Card>
           )}
-          {message && <span style={{ fontSize: 13, color: message.startsWith("저장되") ? "#059669" : "#dc2626" }}>{message}</span>}
+
+          {visibleContentFields.some((f) => f.type === "image") && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-medium">사진</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <FieldGroup className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  {visibleContentFields.filter((f) => f.type === "image").map((f) => (
+                    <ImageField
+                      key={f.key}
+                      def={f}
+                      value={content[f.key] || ""}
+                      uploading={uploadingKey === f.key}
+                      onUpload={(file) => uploadImageField(f.key, file)}
+                      onClear={() => setField(f.key, "")}
+                    />
+                  ))}
+                </FieldGroup>
+              </CardContent>
+            </Card>
+          )}
+
+          {showGallery && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-medium">갤러리</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <FieldGroup className="space-y-4">
+                  <Field>
+                    <FieldLabel>갤러리 형태</FieldLabel>
+                    <RadioGroup
+                      value={galleryViewType}
+                      onValueChange={(v) => setGalleryViewType(v as "slide" | "grid")}
+                      className="flex flex-row gap-6"
+                    >
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="slide" id="gallery-view-slide" />
+                        <Label htmlFor="gallery-view-slide" className="font-normal cursor-pointer">슬라이드형</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="grid" id="gallery-view-grid" />
+                        <Label htmlFor="gallery-view-grid" className="font-normal cursor-pointer">그리드형</Label>
+                      </div>
+                    </RadioGroup>
+                  </Field>
+
+                  {galleryViewType === "slide" && (
+                    <Field>
+                      <FieldLabel>사진 정렬 (슬라이드형)</FieldLabel>
+                      <RadioGroup
+                        value={galleryAlign}
+                        onValueChange={(v) => setGalleryAlign(v as "center" | "bottom")}
+                        className="flex flex-row gap-6"
+                      >
+                        <div className="flex items-center gap-2">
+                          <RadioGroupItem value="center" id="gallery-align-center" />
+                          <Label htmlFor="gallery-align-center" className="font-normal cursor-pointer">중앙정렬</Label>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <RadioGroupItem value="bottom" id="gallery-align-bottom" />
+                          <Label htmlFor="gallery-align-bottom" className="font-normal cursor-pointer">하단정렬</Label>
+                        </div>
+                      </RadioGroup>
+                    </Field>
+                  )}
+
+                  <Field>
+                    <FieldLabel>사진 목록</FieldLabel>
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(90px,1fr))] gap-2">
+                      {galleryImages.map((url, i) => (
+                        <div key={i} className="relative aspect-square overflow-hidden rounded-md border">
+                          <img src={url} alt="" className="h-full w-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => setGalleryImages((cur) => cur.filter((_, idx) => idx !== i))}
+                            title="삭제"
+                            className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <GalleryUploadButton uploading={uploadingKey === "gallery_images"} onSelect={addGalleryImages} />
+                  </Field>
+                </FieldGroup>
+              </CardContent>
+            </Card>
+          )}
+
+          {showSequence && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-medium">식순</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <FieldGroup className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <Switch id="showProgram" checked={showProgram} onCheckedChange={setShowProgram} />
+                    <Label htmlFor="showProgram" className="font-normal cursor-pointer">식순 섹션 노출</Label>
+                  </div>
+                  {showProgram && (
+                    <div className="space-y-2">
+                      {sequenceRows.map((row, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <Input
+                            value={row.time}
+                            onChange={(e) => setSequenceRows((cur) => cur.map((r, idx) => idx === i ? { ...r, time: e.target.value } : r))}
+                            placeholder="12:00"
+                            className="w-24 shrink-0"
+                          />
+                          <Input
+                            value={row.title}
+                            onChange={(e) => setSequenceRows((cur) => cur.map((r, idx) => idx === i ? { ...r, title: e.target.value } : r))}
+                            placeholder="신랑 신부 입장"
+                            className="flex-1"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => setSequenceRows((cur) => cur.filter((_, idx) => idx !== i))}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={() => setSequenceRows((cur) => [...cur, { time: "", title: "" }])}
+                      >
+                        <Plus className="h-3.5 w-3.5" /> 순서 추가
+                      </Button>
+                    </div>
+                  )}
+                </FieldGroup>
+              </CardContent>
+            </Card>
+          )}
+
+          {showAccountFields && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-medium">마음 전하실 곳 (계좌)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                  <FieldGroup className="space-y-4">
+                    <p className="text-sm font-medium text-muted-foreground">신랑측</p>
+                    {ACCOUNT_FIELD_DEFS.slice(0, 3).map((f) => (
+                      <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
+                    ))}
+                  </FieldGroup>
+                  <FieldGroup className="space-y-4">
+                    <p className="text-sm font-medium text-muted-foreground">신부측</p>
+                    {ACCOUNT_FIELD_DEFS.slice(3, 6).map((f) => (
+                      <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
+                    ))}
+                  </FieldGroup>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {showBgm && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-medium">배경음악</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <FieldGroup className="space-y-3">
+                  <Field>
+                    <Select
+                      value={bgms.some((b) => b.url === bgmUrl) ? bgmUrl : "custom"}
+                      onValueChange={(v) => { if (v !== "custom") setBgmUrl(v) }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="custom">직접 입력 (아래)</SelectItem>
+                        {bgms.map((b) => (
+                          <SelectItem key={b.id} value={b.url}>{b.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field>
+                    <Input value={bgmUrl} onChange={(e) => setBgmUrl(e.target.value)} placeholder="BGM 파일 URL" />
+                  </Field>
+                </FieldGroup>
+              </CardContent>
+            </Card>
+          )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-medium">디자인 토큰 (색 · 폰트)</CardTitle>
+              <CardDescription>비워두면 테마 기본값이 사용됩니다.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {TOKEN_FIELDS.map((t) => {
+                  const value = overrides[t.name] || ""
+                  const placeholder = themeTokens[t.name] || "테마 기본값"
+                  const setValue = (v: string) => setOverrides((cur) => ({ ...cur, [t.name]: v }))
+                  const matchedFontStack = t.type === "font"
+                    ? fonts.map((f) => buildFontStack(f, t.name)).find((stack) => stack === value)
+                    : undefined
+                  return (
+                    <Field key={t.name}>
+                      <FieldLabel>{t.label}</FieldLabel>
+                      <div className="flex items-start gap-2">
+                        {t.type === "color" && (
+                          <input
+                            type="color"
+                            value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : (/^#[0-9a-fA-F]{6}$/.test(placeholder) ? placeholder : "#ffffff")}
+                            onChange={(e) => setValue(e.target.value)}
+                            className="h-9 w-10 shrink-0 cursor-pointer rounded-md border border-input bg-transparent p-1"
+                          />
+                        )}
+                        {t.type === "font" ? (
+                          <div className="flex min-w-0 flex-1 flex-col gap-2">
+                            {fonts.length > 0 && (
+                              <Select
+                                value={matchedFontStack || ""}
+                                onValueChange={(v) => { if (v) setValue(v) }}
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="에셋에 등록된 폰트 선택…" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {fonts.map((f) => (
+                                    <SelectItem key={f.id} value={buildFontStack(f, t.name)}>{f.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                            <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder={placeholder} />
+                          </div>
+                        ) : t.type !== "color" ? (
+                          <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder={placeholder} className="flex-1" />
+                        ) : (
+                          <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder={placeholder} className="min-w-0 flex-1" />
+                        )}
+                        {value && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            title="테마 기본값으로"
+                            onClick={() => setValue("")}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </Field>
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="sticky bottom-0 mt-6 flex items-center gap-3 border-t bg-background py-4">
+          <Button onClick={save} disabled={saving} className="gap-2">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {saving ? "저장 중…" : "저장"}
+          </Button>
+          {publicSlug && (
+            <Button variant="outline" asChild>
+              <a href={`/w/${publicSlug}`} target="_blank" rel="noreferrer" className="gap-2">
+                발행 청첩장 열기 <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* 미리보기 — 이 컬럼 자체는 스크롤되지 않으므로(왼쪽만 overflowY:auto) 항상 화면에 고정된다 */}
-      <div style={{ height: "100%", overflow: "hidden" }}>
-        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 10 }}>실시간 미리보기 (실제 데이터)</div>
-        <div style={{ display: "flex", justifyContent: "center", background: "#f3f4f6", borderRadius: 14, padding: "20px 0" }}>
+      {/* 미리보기 — 이 컬럼 자체는 스크롤되지 않으므로(왼쪽만 overflow-y-auto) 항상 화면에 고정된다 */}
+      <div className="h-full overflow-hidden">
+        <div className="mb-2.5 text-xs text-muted-foreground">실시간 미리보기 (실제 데이터)</div>
+        <div className="flex justify-center rounded-2xl bg-muted/40 py-5">
           <InvitationFrame template={template} data={data} tokens={tokens} slots={previewSlots} fontFaces={fontFaces} width={380} height={680} />
         </div>
       </div>
@@ -633,42 +748,14 @@ export default function CustomizeClient({
   )
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section style={{ marginBottom: 28 }}>
-      <h2 style={{ fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid #e5e7eb" }}>
-        {title}
-      </h2>
-      {children}
-    </section>
-  )
-}
-
-function Row({ children }: { children: React.ReactNode }) {
-  return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>{children}</div>
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginBottom: 12 }}>
-      <label style={{ display: "block", fontSize: 12, color: "#374151", marginBottom: 5 }}>{label}</label>
-      {children}
-    </div>
-  )
-}
-
 function TextField({ def, value, onChange }: { def: FieldDef; value: string; onChange: (v: string) => void }) {
   return (
-    <Field label={def.label}>
+    <Field>
+      <FieldLabel htmlFor={def.key}>{def.label}</FieldLabel>
       {def.type === "textarea" ? (
-        <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={4} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+        <Textarea id={def.key} value={value} onChange={(e) => onChange(e.target.value)} rows={4} />
       ) : (
-        <input
-          type={def.type === "tel" ? "tel" : "text"}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          style={inputStyle}
-        />
+        <Input id={def.key} type={def.type === "tel" ? "tel" : "text"} value={value} onChange={(e) => onChange(e.target.value)} />
       )}
     </Field>
   )
@@ -677,27 +764,73 @@ function TextField({ def, value, onChange }: { def: FieldDef; value: string; onC
 function ImageField({ def, value, uploading, onUpload, onClear }: {
   def: FieldDef; value: string; uploading: boolean; onUpload: (file: File) => void; onClear: () => void
 }) {
+  const inputRef = useRef<HTMLInputElement>(null)
   return (
-    <Field label={def.label}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{ width: 64, height: 64, borderRadius: 8, overflow: "hidden", background: "#f3f4f6", border: "1px solid #e5e7eb", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          {value ? <img src={value} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ fontSize: 10, color: "#9ca3af" }}>없음</span>}
+    <Field>
+      <FieldLabel>{def.label}</FieldLabel>
+      <div className="flex items-center gap-3">
+        <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted">
+          {value ? (
+            <img src={value} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <ImageIcon className="h-5 w-5 text-muted-foreground" />
+          )}
         </div>
-        <label style={{ fontSize: 12.5, color: "#2563eb", cursor: uploading ? "wait" : "pointer" }}>
-          {uploading ? "업로드 중…" : "이미지 선택"}
-          <input
-            type="file" accept="image/*" style={{ display: "none" }} disabled={uploading}
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f); e.target.value = "" }}
-          />
-        </label>
-        {value && (
-          <button onClick={onClear} style={{ border: "none", background: "transparent", color: "#9ca3af", cursor: "pointer", fontSize: 12 }}>제거</button>
-        )}
+        <div className="flex flex-col items-start gap-1.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={uploading}
+            onClick={() => inputRef.current?.click()}
+            className="gap-1.5"
+          >
+            {uploading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {uploading ? "업로드 중…" : "이미지 선택"}
+          </Button>
+          {value && (
+            <Button type="button" variant="ghost" size="sm" onClick={onClear} className="h-auto px-1 py-0 text-xs text-muted-foreground">
+              제거
+            </Button>
+          )}
+        </div>
       </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        disabled={uploading}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f); e.target.value = "" }}
+      />
     </Field>
   )
 }
 
-const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 8, outline: "none", fontSize: 13,
+function GalleryUploadButton({ uploading, onSelect }: { uploading: boolean; onSelect: (files: FileList) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  return (
+    <div>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={uploading}
+        onClick={() => inputRef.current?.click()}
+        className="gap-1.5"
+      >
+        {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+        {uploading ? "업로드 중…" : "이미지 추가"}
+      </Button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        disabled={uploading}
+        onChange={(e) => { if (e.target.files?.length) onSelect(e.target.files); e.target.value = "" }}
+      />
+    </div>
+  )
 }

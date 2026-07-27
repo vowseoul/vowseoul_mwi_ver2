@@ -202,7 +202,7 @@ function PublicFormContent({ slug }: { slug: string }) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans">
+      <div className="min-h-screen bg-muted flex items-center justify-center font-sans">
         <div className="text-center space-y-4">
           <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
           <p className="text-muted-foreground text-sm font-light">정보 수집 양식을 불러오고 있습니다...</p>
@@ -213,7 +213,7 @@ function PublicFormContent({ slug }: { slug: string }) {
 
   if (error || !instance) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans p-4">
+      <div className="min-h-screen bg-muted flex items-center justify-center font-sans p-4">
         <Card className="w-full max-w-md text-center py-8">
           <CardContent className="space-y-4">
             <AlertCircle className="w-12 h-12 text-destructive mx-auto" />
@@ -235,7 +235,7 @@ function PublicFormContent({ slug }: { slug: string }) {
   // Check if form is expired
   if (instance.status === 'expired' || (instance.expires_at && new Date() > new Date(instance.expires_at))) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans p-4">
+      <div className="min-h-screen bg-muted flex items-center justify-center font-sans p-4">
         <Card className="w-full max-w-md text-center py-8">
           <CardContent className="space-y-4">
             <AlertCircle className="w-12 h-12 text-amber-500 mx-auto" />
@@ -257,14 +257,14 @@ function PublicFormContent({ slug }: { slug: string }) {
   // Password Lock Screen
   if (!isUnlocked) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans px-4">
+      <div className="min-h-screen bg-muted flex items-center justify-center font-sans px-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center pb-2">
             <div className="mx-auto mb-4 flex justify-center">
               <Logo className="h-6 w-auto" />
             </div>
             <CardTitle className="text-xl font-bold flex items-center justify-center gap-2">
-              <Lock className="w-5 h-5 text-slate-500" /> 정보 수집 폼 접속
+              <Lock className="w-5 h-5 text-muted-foreground" /> 정보 수집 폼 접속
             </CardTitle>
             <CardDescription className="text-xs">
               본 양식은 비밀번호로 보안 설정되어 있습니다.<br />
@@ -303,14 +303,14 @@ function PublicFormContent({ slug }: { slug: string }) {
   // Submitted Screen
   if (isSubmitted) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans px-4">
+      <div className="min-h-screen bg-muted flex items-center justify-center font-sans px-4">
         <Card className="w-full max-w-md text-center py-8">
           <CardContent className="space-y-6">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto text-green-600">
               <CheckCircle2 className="w-8 h-8" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-xl font-bold text-slate-900">제출 완료!</h2>
+              <h2 className="text-xl font-bold text-foreground">제출 완료!</h2>
               <p className="text-sm text-muted-foreground px-4">
                 축하드립니다! 모바일 청첩장 제작을 위한 예식 기본 정보 수집이 완료되었습니다.<br /><br />
                 운영진이 보내주신 세부 내용을 확인하여 신속하게 초안 작업을 진행하겠습니다.
@@ -598,10 +598,10 @@ function PublicFormContent({ slug }: { slug: string }) {
         }
         return (
           <div className="space-y-3">
-            <div className="bg-slate-50 border border-slate-200/50 p-3.5 rounded-2xl flex items-start gap-2.5">
+            <div className="bg-muted border border-border/50 p-3.5 rounded-2xl flex items-start gap-2.5">
               <span className="text-lg">🎵</span>
               <div>
-                <p className="text-xs font-bold text-slate-800">배경음악(BGM) 선택</p>
+                <p className="text-xs font-bold text-foreground">배경음악(BGM) 선택</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5 leading-relaxed">
                   모바일 청첩장에 감성을 더해줄 BGM 곡을 선택해 주세요. 각 음원을 재생해보고 마음에 드는 음악을 고르실 수 있습니다.
                 </p>
@@ -623,7 +623,7 @@ function PublicFormContent({ slug }: { slug: string }) {
                       "flex items-center justify-between p-3.5 rounded-2xl border transition-all duration-300 select-none",
                       isSelected 
                         ? "bg-primary/5 border-primary shadow-sm scale-[1.01]" 
-                        : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
+                        : "bg-white border-border hover:border-muted-foreground/40 hover:bg-muted/50"
                     )}
                   >
                     <div className="flex items-center gap-3.5 min-w-0 flex-1">
@@ -633,7 +633,7 @@ function PublicFormContent({ slug }: { slug: string }) {
                         onClick={() => handlePlayPause(audioId, file.url)}
                         className={cn(
                           "w-9 h-9 rounded-full flex items-center justify-center transition-colors shrink-0 shadow-xs",
-                          isPlaying ? "bg-primary text-white" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                          isPlaying ? "bg-primary text-white" : "bg-muted hover:bg-accent text-muted-foreground"
                         )}
                       >
                         {isPlaying ? (
@@ -650,7 +650,7 @@ function PublicFormContent({ slug }: { slug: string }) {
                       </button>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-slate-800 truncate">{displayTitle}</span>
+                          <span className="text-xs font-bold text-foreground truncate">{displayTitle}</span>
                           {isPlaying && (
                             <span className="text-[9px] font-bold text-primary animate-pulse shrink-0 bg-primary/10 px-1.5 py-0.5 rounded">
                               재생 중
@@ -660,7 +660,7 @@ function PublicFormContent({ slug }: { slug: string }) {
                         {tags.length > 0 ? (
                           <div className="flex flex-wrap gap-1 mt-1.5">
                             {tags.map((tag: string, tIdx: number) => (
-                              <span key={tIdx} className="bg-slate-100 text-slate-500 border border-slate-200/60 text-[9px] font-medium px-1.5 py-0.2 rounded-full">
+                              <span key={tIdx} className="bg-muted text-muted-foreground border border-border/60 text-[9px] font-medium px-1.5 py-0.2 rounded-full">
                                 {tag}
                               </span>
                             ))}
@@ -730,29 +730,29 @@ function PublicFormContent({ slug }: { slug: string }) {
           <div className="space-y-3">
             <div className="space-y-2">
               {items.map((row, idx) => (
-                <div key={idx} className="flex items-center gap-2 bg-slate-50/60 p-2 rounded-xl border border-slate-200/80">
+                <div key={idx} className="flex items-center gap-2 bg-muted/60 p-2 rounded-xl border border-border/80">
                   <div className="shrink-0 w-28 sm:w-32">
                     <Input
                       type="time"
                       value={row.time}
                       onChange={(e) => updateRow(idx, 'time', e.target.value)}
-                      className="h-10 text-xs sm:text-sm font-mono text-center bg-white border-slate-200 focus:border-slate-800"
+                      className="h-10 text-xs sm:text-sm font-mono text-center bg-white border-border focus:border-ring"
                     />
                   </div>
-                  <span className="text-slate-400 font-bold px-0.5">|</span>
+                  <span className="text-muted-foreground font-bold px-0.5">|</span>
                   <Input
                     type="text"
                     value={row.text}
                     placeholder={`식순 ${idx + 1} 내용 (예: ${idx === 0 ? '개식선언 및 입장' : idx === 1 ? '성혼선언문 낭독' : '축가 및 하객 식사 안내'})`}
                     onChange={(e) => updateRow(idx, 'text', e.target.value)}
-                    className="flex-1 h-10 text-xs sm:text-sm bg-white border-slate-200 focus:border-slate-800"
+                    className="flex-1 h-10 text-xs sm:text-sm bg-white border-border focus:border-ring"
                   />
                   {items.length > 1 && (
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="h-10 w-10 text-slate-400 hover:text-red-500 hover:bg-red-50 shrink-0 rounded-lg"
+                      className="h-10 w-10 text-muted-foreground hover:text-red-500 hover:bg-red-50 shrink-0 rounded-lg"
                       onClick={() => removeRow(idx)}
                       title="삭제"
                     >
@@ -767,7 +767,7 @@ function PublicFormContent({ slug }: { slug: string }) {
               type="button"
               variant="outline"
               onClick={addRow}
-              className="w-full h-10 text-xs sm:text-sm gap-1.5 border-dashed border-slate-300 bg-white text-slate-700 hover:border-slate-800 hover:bg-slate-50 font-medium rounded-xl shadow-2xs"
+              className="w-full h-10 text-xs sm:text-sm gap-1.5 border-dashed border-input bg-white text-muted-foreground hover:border-foreground hover:bg-muted font-medium rounded-xl shadow-2xs"
             >
               <Plus className="w-4 h-4 text-primary" /> 식순 항목 추가하기 (+)
             </Button>
@@ -803,7 +803,7 @@ function PublicFormContent({ slug }: { slug: string }) {
                     </p>
                     <div className={cn(
                       "w-4 h-4 rounded-full border flex items-center justify-center shrink-0 mt-0.5 transition-colors",
-                      isSelected ? "border-primary bg-primary text-primary-foreground" : "border-slate-300"
+                      isSelected ? "border-primary bg-primary text-primary-foreground" : "border-input"
                     )}>
                       {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                     </div>
@@ -833,7 +833,7 @@ function PublicFormContent({ slug }: { slug: string }) {
                 </span>
                 <div className={cn(
                   "w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors",
-                  isCustomActive ? "border-primary bg-primary text-primary-foreground" : "border-slate-300"
+                  isCustomActive ? "border-primary bg-primary text-primary-foreground" : "border-input"
                 )}>
                   {isCustomActive && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                 </div>
@@ -870,10 +870,10 @@ function PublicFormContent({ slug }: { slug: string }) {
                     "relative flex flex-col rounded-2xl border-2 overflow-hidden cursor-pointer transition-all duration-300 select-none group",
                     isSelected
                       ? "border-primary bg-primary/5 shadow-md scale-[1.02]"
-                      : "border-slate-200 bg-white hover:border-slate-300 hover:scale-[1.01]"
+                      : "border-border bg-white hover:border-muted-foreground/40 hover:scale-[1.01]"
                   )}
                 >
-                  <div className="aspect-[4/3] w-full overflow-hidden bg-slate-100 relative">
+                  <div className="aspect-[4/3] w-full overflow-hidden bg-muted relative">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={choice.image}
@@ -888,10 +888,10 @@ function PublicFormContent({ slug }: { slug: string }) {
                       </div>
                     )}
                   </div>
-                  <div className="p-3 text-center border-t border-slate-100 bg-slate-50/50">
+                  <div className="p-3 text-center border-t border-border bg-muted/50">
                     <span className={cn(
                       "text-xs font-bold transition-colors",
-                      isSelected ? "text-primary font-black" : "text-slate-700"
+                      isSelected ? "text-primary font-black" : "text-muted-foreground"
                     )}>
                       {choice.text}
                     </span>
@@ -965,7 +965,7 @@ function PublicFormContent({ slug }: { slug: string }) {
                     id={id}
                     checked={isChecked}
                     onChange={(e) => handleCheckboxChange(opt, e.target.checked)}
-                    className="w-4 h-4 text-primary focus:ring-primary border-slate-300 rounded"
+                    className="w-4 h-4 text-primary focus:ring-primary border-input rounded"
                   />
                   <span>{opt}</span>
                 </label>
@@ -1001,7 +1001,7 @@ function PublicFormContent({ slug }: { slug: string }) {
                     value={opt}
                     checked={isChecked}
                     onChange={() => handleInputChange(field.field_key, opt)}
-                    className="w-4 h-4 text-primary focus:ring-primary border-slate-300"
+                    className="w-4 h-4 text-primary focus:ring-primary border-input"
                   />
                   <span>{opt}</span>
                 </label>
@@ -1045,7 +1045,7 @@ function PublicFormContent({ slug }: { slug: string }) {
               checked={isToggled}
               onCheckedChange={(checked) => handleInputChange(field.field_key, checked ? '예' : '아니오')}
             />
-            <span className="text-xs font-medium text-slate-700">
+            <span className="text-xs font-medium text-muted-foreground">
               {isToggled ? '예' : '아니오'}
             </span>
           </div>
@@ -1124,7 +1124,7 @@ function PublicFormContent({ slug }: { slug: string }) {
   const progressPercent = Math.round(((currentStep + 1) / allStepKeys.length) * 100)
 
   return (
-    <div className="min-h-screen bg-slate-50/50 flex flex-col font-sans">
+    <div className="min-h-screen bg-muted/50 flex flex-col font-sans">
       {/* Public Header - Mobile Optimized */}
       <header className="bg-white/95 backdrop-blur-md border-b border-border py-2.5 px-3.5 sm:px-6 flex justify-between items-center shadow-2xs sticky top-0 z-50">
         <div className="flex items-center gap-2 shrink-0">
@@ -1138,7 +1138,7 @@ function PublicFormContent({ slug }: { slug: string }) {
             size="sm"
             onClick={handleSaveDraft}
             disabled={savingDraft}
-            className="h-7 sm:h-8 text-[11px] sm:text-xs text-slate-600 hover:text-slate-900 px-2 sm:px-3 font-medium border border-slate-200/80 sm:border-none rounded-lg shrink-0"
+            className="h-7 sm:h-8 text-[11px] sm:text-xs text-muted-foreground hover:text-foreground px-2 sm:px-3 font-medium border border-border/80 sm:border-none rounded-lg shrink-0"
           >
             {savingDraft ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
             <span className="hidden sm:inline">나중에 이어쓰기 (임시저장)</span>
@@ -1146,11 +1146,11 @@ function PublicFormContent({ slug }: { slug: string }) {
           </Button>
 
           {(instance.customer?.groom_name || instance.customer?.bride_name) && (
-            <div className="text-right border-l border-slate-200 pl-2 sm:pl-3 shrink-0">
+            <div className="text-right border-l border-border pl-2 sm:pl-3 shrink-0">
               <span className="text-[11px] sm:text-xs font-bold text-primary block truncate max-w-[100px] sm:max-w-[200px]">
                 {instance.customer?.groom_name || '신랑'} & {instance.customer?.bride_name || '신부'}
               </span>
-              <span className="text-[9px] text-slate-400 hidden sm:block">
+              <span className="text-[9px] text-muted-foreground hidden sm:block">
                 결혼식 정보 입력 양식
               </span>
             </div>
@@ -1187,7 +1187,7 @@ function PublicFormContent({ slug }: { slug: string }) {
                 </button>
                 {idx < allStepKeys.length - 1 && (
                   <div className={cn(
-                    "h-[1px] flex-1 min-w-[12px] bg-slate-200",
+                    "h-[1px] flex-1 min-w-[12px] bg-border",
                     idx < currentStep && "bg-primary/30"
                   )} />
                 )}
@@ -1200,7 +1200,7 @@ function PublicFormContent({ slug }: { slug: string }) {
               <span>진행단계: {currentStepKey}</span>
               <span>{progressPercent}% 완료</span>
             </div>
-            <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden">
+            <div className="w-full bg-muted h-1 rounded-full overflow-hidden">
               <div className="bg-primary h-full transition-all duration-300" style={{ width: `${progressPercent}%` }} />
             </div>
           </div>
@@ -1235,9 +1235,9 @@ function PublicFormContent({ slug }: { slug: string }) {
                 if (filledFields.length === 0) return null
 
                 return (
-                  <div key={stepKey} className="space-y-2 border-b border-slate-100 pb-4 last:border-b-0 last:pb-0">
+                  <div key={stepKey} className="space-y-2 border-b border-border pb-4 last:border-b-0 last:pb-0">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <h3 className="text-xs font-bold text-foreground flex items-center gap-1.5">
                         <span className="w-1.5 h-3 bg-primary rounded-full" />
                         {stepKey}
                       </h3>
@@ -1252,7 +1252,7 @@ function PublicFormContent({ slug }: { slug: string }) {
                       </Button>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-1.5 text-xs bg-slate-50/50 p-2.5 rounded-lg border border-slate-100">
+                    <div className="grid grid-cols-1 gap-1.5 text-xs bg-muted/50 p-2.5 rounded-lg border border-border">
                       {filledFields.map(f => {
                         const val = formValues[f.field_key]
                         let displayVal = val ? val.toString() : ''
@@ -1267,7 +1267,7 @@ function PublicFormContent({ slug }: { slug: string }) {
                             <span className="text-muted-foreground font-medium shrink-0">{f.label}:</span>
                             <span className={cn(
                               "text-right truncate max-w-[250px]",
-                              displayVal ? "text-slate-800 font-semibold" : "text-amber-500 italic font-medium"
+                              displayVal ? "text-foreground font-semibold" : "text-amber-500 italic font-medium"
                             )}>
                               {displayVal || (f.is_required ? "필수 입력 누락" : "선택 안 함")}
                             </span>
@@ -1349,7 +1349,7 @@ function PublicFormContent({ slug }: { slug: string }) {
                           <div
                             key={idx}
                             onClick={() => setZoomImage(img)}
-                            className="relative group cursor-pointer overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs bg-slate-50 dark:bg-slate-900 transition-all duration-200 hover:shadow-md hover:border-primary/50"
+                            className="relative group cursor-pointer overflow-hidden rounded-xl border border-border shadow-2xs bg-muted transition-all duration-200 hover:shadow-md hover:border-primary/50"
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
@@ -1371,9 +1371,9 @@ function PublicFormContent({ slug }: { slug: string }) {
                   return sections.map((sec, secIdx) => (
                     <div key={`section-${secIdx}`} className="space-y-4">
                       {sec.title && (
-                        <div className="pt-6 pb-2.5 border-b-2 border-slate-800 dark:border-slate-200 mt-8 first:mt-0 mb-4 flex items-center gap-2">
-                          <div className="w-2.5 h-5 bg-slate-900 dark:bg-slate-100 rounded-sm shrink-0" />
-                          <h3 className="text-base font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">
+                        <div className="pt-6 pb-2.5 border-b-2 border-border mt-8 first:mt-0 mb-4 flex items-center gap-2">
+                          <div className="w-2.5 h-5 bg-foreground rounded-sm shrink-0" />
+                          <h3 className="text-base font-extrabold text-foreground tracking-tight">
                             {sec.title}
                           </h3>
                         </div>
@@ -1385,9 +1385,9 @@ function PublicFormContent({ slug }: { slug: string }) {
                         )
 
                         return (
-                          <div key={field.field_key} className="p-4 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs space-y-3">
+                          <div key={field.field_key} className="p-4 sm:p-5 rounded-2xl border border-border bg-card shadow-2xs space-y-3">
                             <Field>
-                              <FieldLabel htmlFor={field.field_key} className="text-sm font-extrabold text-slate-800 dark:text-slate-100 tracking-tight flex items-center gap-1">
+                              <FieldLabel htmlFor={field.field_key} className="text-sm font-extrabold text-foreground tracking-tight flex items-center gap-1">
                                 <span>{field.label}</span>
                                 {field.is_required && (
                                   <span className="text-rose-500 font-bold text-sm ml-0.5" title="필수 입력 항목">*</span>
@@ -1410,7 +1410,7 @@ function PublicFormContent({ slug }: { slug: string }) {
                               return (
                                 <div
                                   key={childField.field_key}
-                                  className={`transition-all duration-300 ease-in-out overflow-hidden border-l-2 border-primary pl-4 ml-1 mt-3 bg-slate-50/80 dark:bg-slate-800/40 p-3.5 rounded-r-xl border-y border-r border-slate-200/60 dark:border-slate-800 ${
+                                  className={`transition-all duration-300 ease-in-out overflow-hidden border-l-2 border-primary pl-4 ml-1 mt-3 bg-muted/60 p-3.5 rounded-r-xl border-y border-r border-border/60 ${
                                     isTriggered 
                                       ? 'max-h-[600px] opacity-100 py-3' 
                                       : 'max-h-0 opacity-0 py-0 pointer-events-none'
@@ -1420,7 +1420,7 @@ function PublicFormContent({ slug }: { slug: string }) {
                                      <span>↳</span> 하위 세부 입력 항목
                                    </div>
                                    <Field>
-                                     <FieldLabel htmlFor={childField.field_key} className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                                     <FieldLabel htmlFor={childField.field_key} className="text-xs font-bold text-muted-foreground">
                                        {childField.label}
                                        {childField.is_required && <span className="text-rose-500 font-bold text-xs ml-0.5">*</span>}
                                      </FieldLabel>
@@ -1470,7 +1470,7 @@ export default function PublicFormPage({ params }: { params: Promise<{ slug: str
   const { slug } = use(params)
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-screen bg-muted flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     }>
