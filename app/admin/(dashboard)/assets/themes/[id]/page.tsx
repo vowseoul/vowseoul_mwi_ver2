@@ -15,6 +15,7 @@ import { toast } from 'sonner'
 import { supabase, logSupabaseError } from '@/lib/supabase'
 import { resolveThemeSwatch, buildThemeTokens } from '@/lib/theme-template'
 import { uploadFile } from '@/lib/storage'
+import { uploadImage } from '@/lib/image-upload'
 import { sampleThemes } from '@/lib/store'
 import { DEFAULT_BLOCK_ORDER } from '@/lib/constants'
 import { cn, getLegibleColor } from '@/lib/utils'
@@ -340,7 +341,7 @@ export default function ThemeEditorPage() {
     if (!e.target.files || e.target.files.length === 0) return
     setIsUploadingTheme(true)
     try {
-      const url = await uploadFile(e.target.files[0], 'theme-thumbnails')
+      const url = await uploadImage(e.target.files[0], 'theme-thumbnails')
       setTheme({ ...theme, thumbnail: url })
     } catch (err) {
       toast.error('테마 이미지 업로드에 실패했습니다.')

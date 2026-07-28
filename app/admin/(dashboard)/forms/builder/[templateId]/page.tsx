@@ -25,6 +25,7 @@ import {
 } from '@/hooks/queries/useForms'
 import { supabase } from '@/lib/supabase'
 import { uploadFile } from '@/lib/storage'
+import { uploadImage } from '@/lib/image-upload'
 import { 
   ArrowLeft, 
   Save, 
@@ -1168,7 +1169,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                                     if (!file) return
                                                     toast.loading('이미지 업로드 중...', { id: 'imgchoice-upload' })
                                                     try {
-                                                      const publicUrl = await uploadFile(file, 'forms/imageselect')
+                                                      const publicUrl = await uploadImage(file, 'forms/imageselect')
                                                       const btn = document.getElementById(`new-img-choice-file-${field.field_library_id}`)
                                                       if (btn) btn.setAttribute('data-temp-url', publicUrl)
                                                       toast.success('이미지가 업로드되었습니다.', { id: 'imgchoice-upload' })
@@ -1457,7 +1458,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                                 try {
                                                   for (let i = 0; i < files.length; i++) {
                                                     const file = files[i]
-                                                    const publicUrl = await uploadFile(file, 'forms/attached')
+                                                    const publicUrl = await uploadImage(file, 'forms/attached')
                                                     newImgs.push(publicUrl)
                                                   }
                                                   handleUpdateFieldProperty(field.field_library_id, 'options', { ...currentOpts, attached_images: newImgs })

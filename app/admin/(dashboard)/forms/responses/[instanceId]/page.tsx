@@ -24,6 +24,7 @@ import { ko } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { toast } from 'sonner'
+import { uploadImage } from '@/lib/image-upload'
 
 const parseLocalDate = (dateStr: string) => {
   if (!dateStr) return undefined
@@ -611,15 +612,18 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
             <Input
               type="file"
               accept="image/*"
-              onChange={(e) => {
+              onChange={async (e) => {
                 const file = e.target.files?.[0]
-                if (file) {
-                  const reader = new FileReader()
-                  reader.onloadend = () => {
-                    handleInputChange(field.field_key, reader.result)
-                  }
-                  reader.readAsDataURL(file)
+                if (!file) return
+                // 고객 폼과 동일하게 Storage 에 올리고 URL 만 저장한다 —
+                // base64 를 넣으면 그대로 form_submissions.data 에 쌓인다.
+                try {
+                  const url = await uploadImage(file, 'forms/submissions')
+                  handleInputChange(field.field_key, url)
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : '이미지 업로드에 실패했습니다.')
                 }
+                e.target.value = ''
               }}
               className="text-xs"
             />

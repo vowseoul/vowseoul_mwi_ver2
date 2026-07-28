@@ -16,6 +16,7 @@ import { supabase, logSupabaseError } from '@/lib/supabase'
 import { resolveThemeSwatch } from '@/lib/theme-template'
 import { Plus, Play, Pause, Trash2, Upload, Loader2, CheckCircle2 } from 'lucide-react'
 import { uploadFile, deleteFile } from '@/lib/storage'
+import { uploadImage } from '@/lib/image-upload'
 import Link from 'next/link'
 
 export default function AssetsPage() {
@@ -217,7 +218,7 @@ export default function AssetsPage() {
     if (!e.target.files || e.target.files.length === 0) return
     setIsUploadingTheme(true)
     try {
-      const url = await uploadFile(e.target.files[0], 'theme-thumbnails')
+      const url = await uploadImage(e.target.files[0], 'theme-thumbnails')
       setThemeImageUrl(url)
     } catch (err) {
       alert('테마 이미지 업로드에 실패했습니다.')

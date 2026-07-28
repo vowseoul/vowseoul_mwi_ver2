@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { supabase } from "@/lib/supabase"
-import { uploadFile } from "@/lib/storage"
+import { uploadImage } from "@/lib/image-upload"
 import { InvitationFrame, type TokenMap } from "@/components/invitation/invitation-frame"
 import { buildSlots } from "@/components/invitation/slot-registry"
 import { buildFieldData, mergeInvitationRaw } from "@/lib/invitation-data"
@@ -329,10 +329,10 @@ export default function CustomizeClient({
   const uploadImageField = async (key: string, file: File) => {
     setUploadingKey(key)
     try {
-      const url = await uploadFile(file, "invitations/content")
+      const url = await uploadImage(file, "invitations/content")
       setField(key, url)
-    } catch {
-      toast.error("이미지 업로드에 실패했습니다.")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "이미지 업로드에 실패했습니다.")
     } finally {
       setUploadingKey(null)
     }
@@ -341,10 +341,10 @@ export default function CustomizeClient({
   const addGalleryImages = async (files: FileList) => {
     setUploadingKey("gallery_images")
     try {
-      const urls = await Promise.all(Array.from(files).map((f) => uploadFile(f, "invitations/gallery")))
+      const urls = await Promise.all(Array.from(files).map((f) => uploadImage(f, "invitations/gallery")))
       setGalleryImages((cur) => [...cur, ...urls])
-    } catch {
-      toast.error("갤러리 이미지 업로드에 실패했습니다.")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "갤러리 이미지 업로드에 실패했습니다.")
     } finally {
       setUploadingKey(null)
     }

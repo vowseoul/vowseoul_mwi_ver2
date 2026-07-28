@@ -40,6 +40,7 @@ import {
   Plus
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { uploadImage } from '@/lib/image-upload'
 import { Logo } from '@/components/logo'
 
 const parseLocalDate = (dateStr: string) => {
@@ -67,6 +68,40 @@ function PublicFormContent({ slug }: { slug: string }) {
   const [savingDraft, setSavingDraft] = useState(false)
   const [customSelectTexts, setCustomSelectTexts] = useState<Record<string, boolean>>({})
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null)
+  const [uploadingFields, setUploadingFields] = useState<string[]>([])
+
+  /**
+   * 사진은 Storage 에 올리고 URL 만 폼 값으로 들고 있는다.
+   *
+   * 예전에는 FileReader 로 base64 를 만들어 그대로 폼 값에 넣었다. 그 값이
+   * form_submissions.data(jsonb) → content_data → 발행 페이지 HTML 까지 그대로
+   * 실려나가면서, 실제로 한 청첩장이 26MB / 15.6초짜리 페이지가 되어 있었다.
+   * 게다가 매 입력마다 localStorage 에 폼 전체를 저장하는 임시저장 로직이
+   * 사진 한 장만 들어와도 쿼터(5~10MB)를 넘겨 조용히 죽어버렸다.
+   */
+  const uploadFormImages = async (fieldKey: string, files: File[]): Promise<string[]> => {
+    setUploadingFields((prev) => [...prev, fieldKey])
+    try {
+      const results = await Promise.all(
+        files.map(async (file) => {
+          try {
+            return await uploadImage(file, 'forms/submissions')
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : `'${file.name}' 업로드에 실패했습니다.`)
+            return null
+          }
+        }),
+      )
+      return results.filter((url): url is string => !!url)
+    } finally {
+      setUploadingFields((prev) => prev.filter((k) => k !== fieldKey))
+    }
+  }
+
+  const uploadFormImage = async (fieldKey: string, file: File): Promise<string | null> => {
+    const [url] = await uploadFormImages(fieldKey, [file])
+    return url ?? null
+  }
 
   const handlePlayPause = (audioId: string, fileUrl: string) => {
     let aud = document.getElementById(audioId) as HTMLAudioElement
@@ -1013,30 +1048,35 @@ function PublicFormContent({ slug }: { slug: string }) {
           </div>
         )
       }
-      case 'image':
+      case 'image': {
+        const isUploading = uploadingFields.includes(field.field_key)
         return (
           <div className="space-y-2">
             <Input
               type="file"
               accept="image/*"
-              onChange={(e) => {
+              disabled={isUploading}
+              onChange={async (e) => {
                 const file = e.target.files?.[0]
-                if (file) {
-                  const reader = new FileReader()
-                  reader.onloadend = () => {
-                    handleInputChange(field.field_key, reader.result)
-                  }
-                  reader.readAsDataURL(file)
-                }
+                if (!file) return
+                const url = await uploadFormImage(field.field_key, file)
+                if (url) handleInputChange(field.field_key, url)
+                e.target.value = ''
               }}
-              required={field.is_required}
+              required={field.is_required && !value}
             />
+            {isUploading && (
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Loader2 className="w-3 h-3 animate-spin" /> 사진을 올리는 중입니다...
+              </p>
+            )}
             {value && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={value} alt="Preview" className="h-32 object-cover rounded-lg border border-border" />
             )}
           </div>
         )
+      }
       case 'toggle': {
         const isToggled = value === true || value === 'true' || value === 'on' || value === '예'
         return (
@@ -1053,25 +1093,14 @@ function PublicFormContent({ slug }: { slug: string }) {
       }
       case 'images': {
         const imageArray = Array.isArray(value) ? value : (value ? [value] : [])
-        
-        const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const isUploading = uploadingFields.includes(field.field_key)
+
+        const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
           const files = e.target.files
-          if (!files) return
-          
-          const newImages = [...imageArray]
-          let loadedCount = 0
-          
-          Array.from(files).forEach((file) => {
-            const reader = new FileReader()
-            reader.onloadend = () => {
-              newImages.push(reader.result as string)
-              loadedCount++
-              if (loadedCount === files.length) {
-                handleInputChange(field.field_key, newImages)
-              }
-            }
-            reader.readAsDataURL(file)
-          })
+          if (!files || files.length === 0) return
+          const urls = await uploadFormImages(field.field_key, Array.from(files))
+          if (urls.length > 0) handleInputChange(field.field_key, [...imageArray, ...urls])
+          e.target.value = ''
         }
 
         const handleRemoveImage = (index: number) => {
@@ -1085,9 +1114,15 @@ function PublicFormContent({ slug }: { slug: string }) {
               type="file"
               accept="image/*"
               multiple
+              disabled={isUploading}
               onChange={handleFileChange}
               required={field.is_required && imageArray.length === 0}
             />
+            {isUploading && (
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Loader2 className="w-3 h-3 animate-spin" /> 사진을 올리는 중입니다...
+              </p>
+            )}
             {imageArray.length > 0 && (
               <div className="grid grid-cols-3 gap-2">
                 {imageArray.map((imgUrl: string, idx: number) => (
@@ -1293,7 +1328,7 @@ function PublicFormContent({ slug }: { slug: string }) {
                 <Button
                   type="button"
                   onClick={handleSubmit}
-                  disabled={submitting}
+                  disabled={submitting || uploadingFields.length > 0}
                   className="gap-1.5 text-xs h-9 px-4 bg-primary hover:bg-primary/90"
                 >
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
