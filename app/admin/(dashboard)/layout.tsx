@@ -38,6 +38,7 @@ const navItems = [
   { href: '/admin/orders', label: '주문 관리', icon: ShoppingCart },
   { href: '/admin/assets', label: '에셋 관리', icon: Palette },
   { href: '/admin/statistics', label: '통계', icon: BarChart3 },
+  { href: '/admin/inquiries', label: '문의 관리', icon: HelpCircle },
   { href: '/admin/settings', label: '시스템 설정', icon: Settings },
 ]
 
