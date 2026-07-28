@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase"
+import { createSupabaseServerClient } from "@/lib/supabase-server"
 import type { ThemeRow } from "@/lib/theme-template"
 import CustomizeClient from "./customize-client"
 
@@ -20,6 +20,9 @@ function Unsupported({ reason }: { reason: string }) {
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+
+  // 관리자 세션 쿠키를 그대로 쓰는 서버 클라이언트 — RLS 상 authenticated 로 취급된다
+  const supabase = await createSupabaseServerClient()
 
   const { data: invitation } = await supabase
     .from("invitations")

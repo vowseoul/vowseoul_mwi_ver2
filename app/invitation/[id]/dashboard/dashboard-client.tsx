@@ -1,8 +1,7 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import Link from 'next/link'
-import { supabase, logSupabaseError } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -17,14 +16,13 @@ import {
   Trash2,
   ArrowLeft,
   ShieldAlert,
-  Loader2,
   CalendarDays,
   Utensils,
   Bus
 } from 'lucide-react'
 import { toast } from 'sonner'
 
-interface RSVP {
+export interface RSVP {
   id: string
   name: string
   phone?: string
@@ -38,7 +36,7 @@ interface RSVP {
   createdAt: string
 }
 
-interface GuestbookMessage {
+export interface GuestbookMessage {
   id: string
   name: string
   message: string
@@ -46,7 +44,7 @@ interface GuestbookMessage {
   createdAt: string
 }
 
-interface VisitorLog {
+export interface VisitorLog {
   id: string
   visitedDate: string
   visitedAt: string
@@ -62,105 +60,56 @@ export interface DashboardHeaderInfo {
   publicSlug: string
 }
 
+/** 하객 데이터 변경은 전부 서명 쿠키를 검증하는 서버 라우트를 거친다 */
+async function postDashboardAction(body: Record<string, unknown>): Promise<boolean> {
+  try {
+    const res = await fetch('/api/dashboard-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (res.ok) return true
+    const result = await res.json().catch(() => ({}))
+    toast.error(result?.error || '요청을 처리하지 못했습니다.')
+    return false
+  } catch (err) {
+    console.error('dashboard action failed:', err)
+    toast.error('요청을 처리하지 못했습니다.')
+    return false
+  }
+}
+
 /**
  * 신랑신부 대시보드 본문.
  *
- * 인증(서명 쿠키 검증)과 만료·파기 정책 판정은 전부 부모 Server Component 가
- * 끝낸 뒤에만 이 컴포넌트가 렌더된다 — 여기서는 수집 데이터 조회/관리만 한다.
+ * 인증(서명 쿠키 검증), 만료·파기 정책 판정, 하객 데이터 조회까지 전부 부모
+ * Server Component 가 끝낸 뒤에만 이 컴포넌트가 렌더된다 — 하객 개인정보는
+ * anon 키로 읽히면 안 되므로 브라우저에서 직접 조회하지 않는다.
  */
 export default function CustomerDashboardClient({
   invitationId,
   header,
+  initialRsvps,
+  initialGuestbook,
+  initialVisits,
 }: {
   invitationId: string
   header: DashboardHeaderInfo
+  initialRsvps: RSVP[]
+  initialGuestbook: GuestbookMessage[]
+  initialVisits: VisitorLog[]
 }) {
-  const [rsvps, setRsvps] = useState<RSVP[]>([])
-  const [guestbook, setGuestbook] = useState<GuestbookMessage[]>([])
-  const [visitorLogs, setVisitorLogs] = useState<VisitorLog[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-
-  useEffect(() => {
-    let cancelled = false
-
-    const load = async () => {
-      setIsLoading(true)
-      try {
-        // RSVP — DB 컬럼(guest_name/is_attending/party_size/meal_choice/shuttle_required)
-        // → 화면이 기대하는 필드명으로 정규화
-        const { data: rsvpsData, error: rsvpsError } = await supabase
-          .from('rsvp_responses')
-          .select('*')
-          .eq('invitation_id', invitationId)
-          .order('created_at', { ascending: false })
-        logSupabaseError('dashboard: rsvp_responses', rsvpsError)
-
-        const { data: gbData, error: gbError } = await supabase
-          .from('guestbook_entries')
-          .select('*')
-          .eq('invitation_id', invitationId)
-          .order('created_at', { ascending: false })
-        logSupabaseError('dashboard: guestbook_entries', gbError)
-
-        const { data: vlogsData, error: vlogsError } = await supabase
-          .from('visit_logs')
-          .select('*')
-          .eq('invitation_id', invitationId)
-          .order('visited_at', { ascending: false })
-        logSupabaseError('dashboard: visit_logs', vlogsError)
-
-        if (cancelled) return
-
-        setRsvps((rsvpsData || []).map((r: Record<string, unknown>) => ({
-          id: String(r.id),
-          name: String(r.guest_name ?? ''),
-          phone: r.phone as string | undefined,
-          attendance: r.is_attending ? 'yes' : 'no',
-          side: r.side as string | undefined,
-          guestCount: Number(r.party_size ?? 1),
-          mealType: r.meal_choice as string | undefined,
-          shuttleUsed: Boolean(r.shuttle_required),
-          createdAt: String(r.created_at ?? ''),
-        })))
-
-        setGuestbook((gbData || []).map((g: Record<string, unknown>) => ({
-          id: String(g.id),
-          name: String(g.author_name ?? ''),
-          message: String(g.message ?? ''),
-          is_visible: g.is_visible !== false,
-          createdAt: String(g.created_at ?? ''),
-        })))
-
-        setVisitorLogs((vlogsData || []).map((v: Record<string, unknown>) => ({
-          id: String(v.id),
-          visitedDate: String(v.visited_at ?? '').split('T')[0],
-          visitedAt: String(v.visited_at ?? ''),
-        })))
-      } catch (err) {
-        console.error('Error loading dashboard:', err)
-        toast.error('데이터를 불러오는 중 오류가 발생했습니다.')
-      } finally {
-        if (!cancelled) setIsLoading(false)
-      }
-    }
-
-    load()
-    return () => { cancelled = true }
-  }, [invitationId])
+  const [rsvps, setRsvps] = useState<RSVP[]>(initialRsvps)
+  const [guestbook, setGuestbook] = useState<GuestbookMessage[]>(initialGuestbook)
+  const visitorLogs = initialVisits
 
   // 방명록 노출 여부 전환
   const handleToggleVisibility = async (id: string, currentVal: boolean) => {
     const updatedVal = !currentVal
-    const { error } = await supabase
-      .from('guestbook_entries')
-      .update({ is_visible: updatedVal })
-      .eq('id', id)
-
-    if (error) {
-      logSupabaseError('dashboard: toggle guestbook visibility', error)
-      toast.error('노출 설정을 변경하지 못했습니다.')
-      return
-    }
+    const ok = await postDashboardAction({
+      action: 'toggleGuestbook', invitationId, id, isVisible: updatedVal,
+    })
+    if (!ok) return
 
     setGuestbook(prev => prev.map(msg => msg.id === id ? { ...msg, is_visible: updatedVal } : msg))
     toast.success(updatedVal ? '해당 방명록이 청첩장 링크에 다시 공개됩니다.' : '해당 방명록이 청첩장 링크에서 숨김 처리되었습니다.')
@@ -168,14 +117,8 @@ export default function CustomerDashboardClient({
 
   // 하객 RSVP / 방명록 단일 삭제
   const handleDeleteItem = async (id: string, type: 'rsvp' | 'guestbook') => {
-    const table = type === 'rsvp' ? 'rsvp_responses' : 'guestbook_entries'
-    const { error } = await supabase.from(table).delete().eq('id', id)
-
-    if (error) {
-      logSupabaseError(`dashboard: delete ${table}`, error)
-      toast.error('삭제하지 못했습니다. 잠시 후 다시 시도해주세요.')
-      return
-    }
+    const ok = await postDashboardAction({ action: 'delete', invitationId, id, target: type })
+    if (!ok) return
 
     if (type === 'rsvp') {
       setRsvps(prev => prev.filter(r => r.id !== id))
@@ -280,17 +223,6 @@ export default function CustomerDashboardClient({
       mealSummary[legacyKey] = (mealSummary[legacyKey] || 0) + (r.guestCount || 1)
     }
   })
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-muted/30 flex items-center justify-center font-sans">
-        <div className="text-center space-y-3">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto text-[#9E8B7E]" />
-          <p className="text-xs text-muted-foreground font-light">대시보드 데이터를 불러오고 있습니다...</p>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="min-h-screen bg-muted/30 pb-16 font-sans text-foreground">

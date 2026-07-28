@@ -2,8 +2,8 @@ import { cookies } from 'next/headers'
 import { redirect, notFound } from 'next/navigation'
 import { after } from 'next/server'
 import Link from 'next/link'
-import { createClient } from '@supabase/supabase-js'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { dashboardCookieName, verifyDashboardToken } from '@/lib/dashboard-session'
 import { mergeInvitationRaw } from '@/lib/invitation-data'
 import { Button } from '@/components/ui/button'
@@ -81,6 +81,15 @@ export default async function CustomerDashboardPage({ params }: { params: Promis
     )
   }
 
+  // 하객 데이터는 anon 키로 읽히지 않도록 RLS 를 조일 예정이라, 브라우저가 아니라
+  // 여기(service_role)에서 읽어 넘긴다. 접근 판정은 위 서명 쿠키 검증으로 이미 끝났다.
+  const admin = createSupabaseAdminClient()
+  const [{ data: rsvps }, { data: guestbook }, { data: visits }] = await Promise.all([
+    admin.from('rsvp_responses').select('*').eq('invitation_id', id).order('created_at', { ascending: false }),
+    admin.from('guestbook_entries').select('*').eq('invitation_id', id).order('created_at', { ascending: false }),
+    admin.from('visit_logs').select('id, visited_at').eq('invitation_id', id).order('visited_at', { ascending: false }),
+  ])
+
   return (
     <CustomerDashboardClient
       invitationId={id}
@@ -92,6 +101,29 @@ export default async function CustomerDashboardPage({ params }: { params: Promis
         weddingTime: String(raw.wedding_time ?? ''),
         publicSlug: String(invitation.public_slug ?? ''),
       }}
+      initialRsvps={(rsvps ?? []).map((r) => ({
+        id: String(r.id),
+        name: String(r.guest_name ?? ''),
+        phone: r.phone ?? undefined,
+        attendance: r.is_attending ? 'yes' : 'no',
+        side: r.side ?? undefined,
+        guestCount: Number(r.party_size ?? 1),
+        mealType: r.meal_choice ?? undefined,
+        shuttleUsed: Boolean(r.shuttle_required),
+        createdAt: String(r.created_at ?? ''),
+      }))}
+      initialGuestbook={(guestbook ?? []).map((g) => ({
+        id: String(g.id),
+        name: String(g.author_name ?? ''),
+        message: String(g.message ?? ''),
+        is_visible: g.is_visible !== false,
+        createdAt: String(g.created_at ?? ''),
+      }))}
+      initialVisits={(visits ?? []).map((v) => ({
+        id: String(v.id),
+        visitedDate: String(v.visited_at ?? '').split('T')[0],
+        visitedAt: String(v.visited_at ?? ''),
+      }))}
     />
   )
 }
@@ -116,11 +148,7 @@ function daysSince(weddingDate: unknown): number | null {
  */
 async function purgeCollectedData(invitationId: string) {
   try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-      { auth: { persistSession: false } },
-    )
+    const supabase = createSupabaseAdminClient()
     for (const table of ['rsvp_responses', 'guestbook_entries', 'visit_logs'] as const) {
       const { error } = await supabase.from(table).delete().eq('invitation_id', invitationId)
       if (error) console.error(`purge ${table} failed:`, error.message)

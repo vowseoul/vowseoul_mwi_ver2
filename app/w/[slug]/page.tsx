@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase"
+import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import TemplateInvitationClient from "./template-invitation-client"
 import { buildInvitationTokens, extractDisabledSlots, type ThemeRow } from "@/lib/theme-template"
 import { mergeInvitationRaw, type RawInvitationData } from "@/lib/invitation-data"
@@ -21,8 +21,15 @@ interface PageProps {
   params: Promise<{ slug: string }>
 }
 
-/** 청첩장 + 고객 + (테마체인) 조회 */
+/**
+ * 청첩장 + 고객 + (테마체인) 조회.
+ *
+ * service_role 로 읽는다 — invitations 행에는 신랑신부 대시보드 비밀번호가,
+ * customers 행에는 연락처가 들어 있어 anon 에게 SELECT 를 열어둘 수 없다.
+ * 이 함수는 Server Component 에서만 호출되므로 키가 브라우저로 나가지 않는다.
+ */
 async function loadInvitation(slug: string) {
+  const supabase = createSupabaseAdminClient()
   const { data: invitation } = await supabase
     .from('invitations')
     .select('*')
@@ -69,6 +76,7 @@ async function loadInvitation(slug: string) {
  */
 async function logVisit(invitationId: string, meta: { ipHash: string; userAgent: string | null; referrer: string | null }) {
   try {
+    const supabase = createSupabaseAdminClient()
     const { error } = await supabase.from("visit_logs").insert({
       invitation_id: invitationId,
       ip_hash: meta.ipHash,

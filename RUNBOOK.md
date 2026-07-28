@@ -18,7 +18,20 @@ pnpm dev # 또는 npm run dev
 ```
 * 로컬 서버 주소: http://localhost:3000 (또는 포트 충돌 시 3001 등)
 
-### 1.2 배포 빌드 및 실행 (Production Build)
+### 1.2 환경변수 (.env.local / 배포 환경 동일하게 설정)
+
+| 변수 | 노출 | 설명 |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | 공개 | Supabase 프로젝트 URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 공개 | 브라우저용 anon 키 |
+| `DASHBOARD_SESSION_SECRET` | **비공개** | 신랑신부 대시보드 접근 쿠키 HMAC 서명 키. 미설정 시 개발 환경에서만 고정 폴백이 쓰이고 프로덕션에서는 부팅이 실패한다. |
+| `SUPABASE_SERVICE_ROLE_KEY` | **비공개** | RLS 를 우회하는 서버 전용 키. 발행 청첩장 렌더·방문 로그·신랑신부 대시보드가 익명 사용자를 대신해 읽을 때 쓴다. Supabase 대시보드 > Project Settings > API 에서 발급. |
+
+> `SUPABASE_SERVICE_ROLE_KEY` 가 없으면 `lib/supabase-admin.ts` 가 anon 키로 폴백하며 경고를 남긴다.
+> RLS 강화 마이그레이션(`20260728000000_tighten_rls.sql`)을 적용한 뒤에는 이 폴백으로 동작하지 않으므로,
+> **마이그레이션 적용 전에 반드시 키를 먼저 설정**할 것. 두 비공개 키 모두 `NEXT_PUBLIC_` 접두사를 붙이면 안 된다.
+
+### 1.3 배포 빌드 및 실행 (Production Build)
 ```bash
 # Next.js 최적화 배포 빌드 생성
 pnpm build # 또는 npm run build
