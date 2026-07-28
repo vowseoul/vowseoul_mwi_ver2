@@ -2,7 +2,6 @@ import { cookies } from 'next/headers'
 import { redirect, notFound } from 'next/navigation'
 import { after } from 'next/server'
 import Link from 'next/link'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { dashboardCookieName, verifyDashboardToken } from '@/lib/dashboard-session'
 import { mergeInvitationRaw } from '@/lib/invitation-data'
@@ -28,7 +27,9 @@ const DATA_PURGE_DAYS = 14
 export default async function CustomerDashboardPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
 
-  const supabase = await createSupabaseServerClient()
+  // 신랑신부는 Supabase 계정이 없으므로 RLS 상 anon 이다 — 접근 판정은 아래
+  // 서명 쿠키로 하고, 실제 조회는 service_role 이 대신한다.
+  const supabase = createSupabaseAdminClient()
   const { data: invitation, error } = await supabase
     .from('invitations')
     .select('id, public_slug, customer_id, content_data')
@@ -81,13 +82,11 @@ export default async function CustomerDashboardPage({ params }: { params: Promis
     )
   }
 
-  // 하객 데이터는 anon 키로 읽히지 않도록 RLS 를 조일 예정이라, 브라우저가 아니라
-  // 여기(service_role)에서 읽어 넘긴다. 접근 판정은 위 서명 쿠키 검증으로 이미 끝났다.
-  const admin = createSupabaseAdminClient()
+  // 하객 데이터는 anon 키로 읽을 수 없으므로(RLS) 브라우저가 아니라 여기서 읽어 넘긴다.
   const [{ data: rsvps }, { data: guestbook }, { data: visits }] = await Promise.all([
-    admin.from('rsvp_responses').select('*').eq('invitation_id', id).order('created_at', { ascending: false }),
-    admin.from('guestbook_entries').select('*').eq('invitation_id', id).order('created_at', { ascending: false }),
-    admin.from('visit_logs').select('id, visited_at').eq('invitation_id', id).order('visited_at', { ascending: false }),
+    supabase.from('rsvp_responses').select('*').eq('invitation_id', id).order('created_at', { ascending: false }),
+    supabase.from('guestbook_entries').select('*').eq('invitation_id', id).order('created_at', { ascending: false }),
+    supabase.from('visit_logs').select('id, visited_at').eq('invitation_id', id).order('visited_at', { ascending: false }),
   ])
 
   return (

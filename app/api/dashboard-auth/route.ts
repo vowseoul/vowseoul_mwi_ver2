@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import {
   createDashboardToken,
   dashboardCookieName,
@@ -29,7 +29,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 })
   }
 
-  const supabase = await createSupabaseServerClient()
+  // 신랑신부는 Supabase 계정이 없는 익명 사용자라, invitations 를 읽으려면
+  // service_role 이 필요하다 (RLS 상 anon 은 invitations SELECT 가 막혀 있다 —
+  // 이 행에 dashboard_password 가 들어 있으니 당연히 열어둘 수 없다).
+  const supabase = createSupabaseAdminClient()
   const { data: invitation, error } = await supabase
     .from("invitations")
     .select("id, dashboard_password")
