@@ -14,6 +14,14 @@ export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request })
 
   const { pathname } = request.nextUrl
+
+  // /theme-lab 은 테마 렌더러를 손으로 확인하는 개발용 페이지다. 어디에서도
+  // 링크되지 않지만 빌드에는 포함되므로, 프로덕션에서는 URL 을 직접 쳐도
+  // 열리지 않도록 404 로 막는다.
+  if (pathname.startsWith('/theme-lab') && process.env.NODE_ENV === 'production') {
+    return new NextResponse(null, { status: 404 })
+  }
+
   const isAdminRoute = pathname.startsWith('/admin') && pathname !== '/admin/login'
 
   if (!isAdminRoute) return response
@@ -64,5 +72,5 @@ function redirectToLogin(request: NextRequest, pathname: string) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*'],
+  matcher: ['/admin/:path*', '/theme-lab/:path*', '/theme-lab'],
 }

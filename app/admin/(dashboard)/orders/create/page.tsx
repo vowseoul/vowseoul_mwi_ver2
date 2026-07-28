@@ -11,13 +11,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { useAppStore, sampleThemes } from '@/lib/store'
 import { supabase } from '@/lib/supabase'
+import { useCreateInvitationMutation } from '@/hooks/queries/useInvitations'
 import { ChevronLeft, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 export default function CreateOrderPage() {
   const router = useRouter()
   const { themes, fetchData } = useAppStore()
-  
+  const createInvitation = useCreateInvitationMutation()
+
   const [isLoading, setIsLoading] = useState(false)
   const [customerName, setCustomerName] = useState('')
   const [amount, setAmount] = useState('50000')
@@ -55,69 +57,25 @@ export default function CreateOrderPage() {
 
     setIsLoading(true)
     try {
-      const themeObj = availableThemes.find(t => t.id === selectedThemeId) || availableThemes[0]
-      
-      // 1. Generate invitation ID — invitations.id 는 uuid 컬럼이라 유효한 UUID 형식이어야 한다
-      // ('custom__' 접두사를 붙이면 insert 자체가 실패한다 — 이전 버그).
-      if (typeof window === 'undefined' || !window.crypto?.randomUUID) {
-        throw new Error('이 브라우저에서는 청첩장 ID를 생성할 수 없습니다. 최신 브라우저로 다시 시도해주세요.')
-      }
-      const invitationId = window.crypto.randomUUID()
-
-      // Default wedding date is 3 months from now
-      const defaultDate = new Date()
-      defaultDate.setMonth(defaultDate.getMonth() + 3)
-      const defaultDateStr = defaultDate.toISOString().split('T')[0]
-
-      // 2. Create Default Invitation Data
-      const defaultInvitation = {
-        id: invitationId,
-        groomName: '신랑',
-        groomNameEn: 'Groom',
-        groomParentRelation: '의 장남',
-        brideName: '신부',
-        brideNameEn: 'Bride',
-        brideParentRelation: '의 장녀',
-        weddingDate: defaultDateStr,
-        weddingTime: '12:00',
-        venueName: '아름다운 웨딩홀',
-        venueHall: '그랜드홀',
-        venueAddress: '서울특별시 중구 태평로1가 31',
+      // 청첩장 생성은 /admin/invitations 와 동일한 뮤테이션을 그대로 쓴다.
+      //
+      // 이 화면은 원래 invitations 에 직접 insert 했는데, groomName/weddingDate 같은
+      // 레거시 키를 최상위 컬럼처럼 넣고(실제로는 content_data jsonb 안에 들어가야 한다)
+      // customer_id/public_slug/dashboard_slug/dashboard_password/block_order/expires_at
+      // (전부 NOT NULL)을 아예 채우지 않아 **항상 PGRST204 로 실패**했다.
+      // 스키마를 아는 곳이 두 군데로 갈라져 있던 게 원인이라 한 곳으로 합친다.
+      const publicSlug = `vow-${Math.random().toString(36).slice(2, 8)}`
+      const invitation = await createInvitation.mutateAsync({
+        customerId: 'mock', // 이 화면은 고객 레코드 없이 시작한다 — 임시 고객이 자동 생성된다
         themeId: selectedThemeId,
-        colorSet: themeObj.colorSets?.[0]?.id || 'default',
-        fontSet: themeObj.fontSets?.[0]?.id || 'default',
-        mainImage: null,
-        invitationMessage: '서로 다른 길을 걸어온 저희 두 사람이\n이제 하나의 길을 함께 걸어가려 합니다.\n귀한 걸음으로 축복해 주시면 감사하겠습니다.',
-        galleryImages: [],
-        galleryViewType: 'slide',
-        trafficInfo: '지하철 시청역 5번 출구 바로 앞',
-        parkingInfo: '하객 전용 주차장 2시간 무료 이용 가능',
-        rsvpEnabled: true,
-        rsvpMealEnabled: true,
-        rsvpCommentEnabled: true,
-        guestbookType: 'text',
-        bgmId: (themeObj as any).recommendedBgms?.[0] || 'bgm1',
-        kakaoThumbnail: null,
-        kakaoTitle: '신랑 ❤️ 신부 결혼합니다!',
-        kakaoDescription: `${defaultDate.getFullYear()}년 ${defaultDate.getMonth() + 1}월 ${defaultDate.getDate()}일`,
-        bankAccounts: [],
-        contacts: [],
-        status: 'draft',
-        createdAt: new Date().toISOString(),
-        publishedUrl: null,
-        customStyles: {}
-      }
+        publicSlug,
+      })
 
-      const { error: inviteError } = await supabase.from('invitations').insert(defaultInvitation)
-      if (inviteError) throw inviteError
-
-      // 3. Create Default Order Data
-      // 이 화면은 customers 레코드 없이 청첩장을 바로 만들기 때문에 customer_id 는 비워두고,
-      // 관리자가 입력한 이름은 external_order_ref 에 참고용으로 남긴다(§1-B).
+      // 관리자가 입력한 주문자명은 참고용으로 external_order_ref 에 남긴다(§1-B).
       const { data: insertedOrder, error: orderError } = await supabase
         .from('orders')
         .insert({
-          invitation_id: invitationId,
+          invitation_id: invitation.id,
           external_order_ref: customerName,
           product_type: 'mobile',
           amount: parseInt(amount) || 50000,
@@ -130,20 +88,9 @@ export default function CreateOrderPage() {
 
       toast.success('수동 주문 및 청첩장 초안이 정상 생성되었습니다!')
       router.push(`/admin/orders/${insertedOrder.id}`)
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error creating manual order:', err)
-      
-      const isMissingColumn = err.code === 'PGRST204' || 
-                              (err.message && (err.message.includes('customStyles') || err.message.includes('column')));
-      
-      if (isMissingColumn) {
-        toast.error(
-          'Supabase 테이블에 "customStyles" 컬럼이 없거나 캐시되지 않았습니다. Supabase SQL Editor에서 ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS "customStyles" jsonb; 를 실행해주세요.',
-          { duration: 8000 }
-        )
-      } else {
-        toast.error(err.message || '생성 중 오류가 발생했습니다.')
-      }
+      toast.error(err instanceof Error ? err.message : '생성 중 오류가 발생했습니다.')
     } finally {
       setIsLoading(false)
     }
