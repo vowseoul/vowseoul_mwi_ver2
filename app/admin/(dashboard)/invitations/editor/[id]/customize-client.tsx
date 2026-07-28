@@ -8,6 +8,7 @@ import { buildSlots } from "@/components/invitation/slot-registry"
 import { buildFieldData, mergeInvitationRaw } from "@/lib/invitation-data"
 import {
   buildThemeTokens,
+  extractDisabledSlots,
   extractOverrideTokens,
   getFieldManifest,
   TOKEN_FIELDS,
@@ -23,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { ExternalLink, Image as ImageIcon, Loader2, Plus, Save, X } from "lucide-react"
 import { toast } from "sonner"
@@ -78,10 +80,45 @@ const ACCOUNT_FIELD_DEFS: FieldDef[] = [
   { key: "account_bride_holder", label: "예금주", type: "text" },
 ]
 
+/** 부모 이름 필드 → 고인(故) 표시 플래그 필드키. buildFieldData 가 이 값을 보고 이름 앞에 '故 '를 붙인다 */
+const DECEASED_KEY_BY_NAME_FIELD: Record<string, string> = {
+  groom_father_name: "groom_father_deceased",
+  groom_mother_name: "groom_mother_deceased",
+  bride_father_name: "bride_father_deceased",
+  bride_mother_name: "bride_mother_deceased",
+}
+const DECEASED_KEYS = Object.values(DECEASED_KEY_BY_NAME_FIELD)
+
+/** slot_manifest 에 'contact' 가 있을 때만 노출 (연락처 표시 여부 토글에 쓰는 이름 라벨용) */
+const CONTACT_FIELD_DEFS: FieldDef[] = [
+  { key: "groom_phone", label: "신랑 연락처", type: "tel" },
+  { key: "groom_father_phone", label: "신랑 아버지 연락처", type: "tel" },
+  { key: "groom_mother_phone", label: "신랑 어머니 연락처", type: "tel" },
+  { key: "bride_phone", label: "신부 연락처", type: "tel" },
+  { key: "bride_father_phone", label: "신부 아버지 연락처", type: "tel" },
+  { key: "bride_mother_phone", label: "신부 어머니 연락처", type: "tel" },
+]
+
+/** 슬롯 키 → 관리 화면에 보여줄 한글 이름. 테마가 지원하는 기능 중 이 청첩장만 끄고 싶을 때 쓴다 */
+const SLOT_LABELS: Record<string, string> = {
+  bgm: "배경음악",
+  gallery: "갤러리",
+  sequence: "식순",
+  calendar: "캘린더 · D-day",
+  account: "마음 전하실 곳 (계좌)",
+  contact: "연락처",
+  map: "오시는 길 (지도)",
+  rsvp: "참석 의사 전달",
+  guestbook: "방명록",
+  share: "청첩장 공유",
+}
+
 const ALL_TEXT_FIELD_DEFS = [...CONTENT_FIELD_DEFS, ...ACCOUNT_FIELD_DEFS]
 const MANAGED_CONTENT_KEYS = new Set([
   ...ALL_TEXT_FIELD_DEFS.map((f) => f.key),
   "wedding_date", "wedding_time", "gallery_images", "gallery_view_type", "gallery_align", "wedding_programs", "show_wedding_program",
+  "phone_expose",
+  ...DECEASED_KEYS,
 ])
 
 type SequenceRow = { time: string; title: string }
@@ -101,7 +138,8 @@ function normalizeSequenceRows(value: unknown): SequenceRow[] {
   return out
 }
 
-function isProgramShown(value: unknown): boolean {
+/** '아니오'/false/'off' 가 아니면 표시로 간주 (미설정은 항상 표시) — 식순 노출, 연락처 노출 토글에 공용으로 쓴다 */
+function isShown(value: unknown): boolean {
   return !(value === false || value === "false" || value === "아니오" || value === "off")
 }
 
@@ -177,6 +215,7 @@ export default function CustomizeClient({
       setActiveThemeRow(newTheme as ThemeRow)
       setThemeVersionId(versionId)
       setOverrides({}) // 이전 테마의 색/폰트 오버라이드는 새 테마에 그대로 적용하면 어색하므로 초기화
+      setDisabledSlots([]) // 새 테마는 슬롯 구성이 다를 수 있으므로 기능 끄기 상태도 함께 초기화
     } finally {
       setSwitchingTheme(false)
     }
@@ -191,6 +230,7 @@ export default function CustomizeClient({
     [fieldManifest]
   )
   const showAccountFields = slots.includes("account")
+  const showContact = slots.includes("contact")
   const showGallery = slots.includes("gallery")
   const showSequence = slots.includes("sequence")
   const showBgm = slots.includes("bgm")
@@ -201,12 +241,21 @@ export default function CustomizeClient({
   const [overrides, setOverrides] = useState<Record<string, string>>(
     () => extractOverrideTokens(invitation.customization_overrides)
   )
+  const [disabledSlots, setDisabledSlots] = useState<string[]>(
+    () => extractDisabledSlots(invitation.customization_overrides)
+  )
+  const toggleSlot = (key: string, enabled: boolean) =>
+    setDisabledSlots((cur) => enabled ? cur.filter((s) => s !== key) : Array.from(new Set([...cur, key])))
 
   const [content, setContent] = useState<Record<string, string>>(() => {
     const out: Record<string, string> = {}
     for (const f of ALL_TEXT_FIELD_DEFS) {
       const v = initialRaw[f.key]
       if (typeof v === "string") out[f.key] = v
+    }
+    for (const key of DECEASED_KEYS) {
+      const v = initialRaw[key]
+      if (typeof v === "string") out[key] = v
     }
     return out
   })
@@ -227,7 +276,8 @@ export default function CustomizeClient({
     () => (initialRaw.gallery_align === "bottom" ? "bottom" : "center")
   )
   const [sequenceRows, setSequenceRows] = useState<SequenceRow[]>(() => normalizeSequenceRows(initialRaw.wedding_programs))
-  const [showProgram, setShowProgram] = useState(() => isProgramShown(initialRaw.show_wedding_program))
+  const [showProgram, setShowProgram] = useState(() => isShown(initialRaw.show_wedding_program))
+  const [phoneExpose, setPhoneExpose] = useState(() => isShown(initialRaw.phone_expose))
   const [bgmUrl, setBgmUrl] = useState(String(invitation.bgm_url ?? ""))
   const [bgms, setBgms] = useState<{ id: string; name: string; url: string }[]>([])
   const [fonts, setFonts] = useState<RegisteredFont[]>([])
@@ -255,8 +305,9 @@ export default function CustomizeClient({
     gallery_align: galleryAlign,
     wedding_programs: sequenceRows,
     show_wedding_program: showProgram ? "예" : "아니오",
+    phone_expose: phoneExpose ? "예" : "아니오",
     bgm_url: bgmUrl,
-  }), [initialRaw, content, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign, sequenceRows, showProgram, bgmUrl])
+  }), [initialRaw, content, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign, sequenceRows, showProgram, phoneExpose, bgmUrl])
 
   const data = useMemo(() => buildFieldData(liveRaw), [liveRaw])
 
@@ -269,9 +320,10 @@ export default function CustomizeClient({
   const fontFaces = useMemo(() => resolveFontFaces(tokens, fonts), [tokens, fonts])
 
   const accent = tokens["--accent"] || "#D76C6C"
+  const activeSlots = useMemo(() => slots.filter((s) => !disabledSlots.includes(s)), [slots, disabledSlots])
   const previewSlots = useMemo(
-    () => buildSlots(slots, { accent, data, raw: liveRaw, invitationId }),
-    [slots, accent, data, liveRaw, invitationId]
+    () => buildSlots(activeSlots, { accent, data, raw: liveRaw, invitationId }),
+    [activeSlots, accent, data, liveRaw, invitationId]
   )
 
   const uploadImageField = async (key: string, file: File) => {
@@ -307,7 +359,7 @@ export default function CustomizeClient({
       ? invitation.customization_overrides as Record<string, unknown>
       : {}
     const preservedOverrideKeys: Record<string, unknown> = {}
-    for (const [k, v] of Object.entries(existingOverrides)) if (!k.startsWith("--")) preservedOverrideKeys[k] = v
+    for (const [k, v] of Object.entries(existingOverrides)) if (!k.startsWith("--") && k !== "disabled_slots") preservedOverrideKeys[k] = v
 
     const existingContentData = (invitation.content_data && typeof invitation.content_data === "object")
       ? invitation.content_data as Record<string, unknown>
@@ -325,13 +377,14 @@ export default function CustomizeClient({
       gallery_align: galleryAlign,
       wedding_programs: sequenceRows,
       show_wedding_program: showProgram ? "예" : "아니오",
+      phone_expose: phoneExpose ? "예" : "아니오",
     }
 
     const { error } = await supabase
       .from("invitations")
       .update({
         content_data: contentPayload,
-        customization_overrides: { ...preservedOverrideKeys, ...cleanTokens },
+        customization_overrides: { ...preservedOverrideKeys, ...cleanTokens, disabled_slots: disabledSlots },
         bgm_url: bgmUrl || null,
         theme_version_id: themeVersionId,
         updated_at: new Date().toISOString(),
@@ -362,9 +415,11 @@ export default function CustomizeClient({
     // 스크롤 컨테이너"를 기준으로 계산되므로 그 컨테이너가 window 인지 main 인지 어긋나면 어디에도
     // 제대로 붙지 않는다. 그래서 sticky 대신, 높이를 뷰포트 기준으로 고정하고 왼쪽 패널만 자체
     // 스크롤시키는 방식(assets/themes/[id] 페이지와 동일 패턴)으로 우측 미리보기를 항상 고정한다.
-    <div className="grid h-[calc(100vh-100px)] grid-cols-[minmax(0,1fr)_420px] gap-6 font-sans">
+    // 이 2단 고정 레이아웃은 미리보기 420px를 뺀 나머지가 편집 폭이 되므로 좁은 화면(노트북/태블릿)에서
+    // 찌그러진다 — xl(1280px) 미만에서는 1단으로 쌓고(미리보기를 위로), 위에서만 2단 고정을 적용한다.
+    <div className="grid gap-6 font-sans xl:h-[calc(100vh-100px)] xl:grid-cols-[minmax(0,1fr)_420px]">
       {/* 편집 */}
-      <div className="min-w-0 max-w-3xl h-full overflow-y-auto pr-1">
+      <div className="order-2 min-w-0 pb-24 xl:order-1 xl:h-full xl:max-w-3xl xl:overflow-y-auto xl:pb-0 xl:pr-1">
         <div className="mb-6">
           <h1 className="text-2xl font-semibold text-foreground">청첩장 커스터마이즈</h1>
           <p className="text-sm text-muted-foreground mt-1">
@@ -396,6 +451,31 @@ export default function CustomizeClient({
               </Field>
             </CardContent>
           </Card>
+
+          {slots.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-medium">기능 켜기 · 끄기</CardTitle>
+                <CardDescription>
+                  테마가 지원하는 기능 중 이 청첩장에서만 끄고 싶은 항목을 선택하세요. 끈 기능은 발행된 청첩장에서 완전히 사라집니다.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {slots.map((s) => (
+                    <div key={s} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`slot-${s}`}
+                        checked={!disabledSlots.includes(s)}
+                        onCheckedChange={(checked) => toggleSlot(s, !!checked)}
+                      />
+                      <Label htmlFor={`slot-${s}`} className="font-normal cursor-pointer">{SLOT_LABELS[s] || s}</Label>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>
@@ -430,10 +510,24 @@ export default function CustomizeClient({
             <CardContent>
               <FieldGroup className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 {visibleContentFields
-                  .filter((f) => !["venue_name", "venue_hall", "venue_address", "traffic_info", "parking_info", "greeting_message", "main_image", "groom_photo", "bride_photo"].includes(f.key))
-                  .map((f) => (
-                    <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
-                  ))}
+                  .filter((f) => !["venue_name", "venue_hall", "venue_address", "traffic_info", "parking_info", "greeting_message", "main_image", "groom_photo", "bride_photo", ...CONTACT_FIELD_DEFS.map((c) => c.key)].includes(f.key))
+                  .map((f) => {
+                    const deceasedKey = DECEASED_KEY_BY_NAME_FIELD[f.key]
+                    return (
+                      <div key={f.key} className="space-y-1.5">
+                        <TextField def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
+                        {deceasedKey && (
+                          <label className="flex items-center gap-1.5 pl-0.5 text-xs text-muted-foreground cursor-pointer">
+                            <Checkbox
+                              checked={content[deceasedKey] === "예"}
+                              onCheckedChange={(checked) => setField(deceasedKey, checked ? "예" : "아니오")}
+                            />
+                            故 (고인)
+                          </label>
+                        )}
+                      </div>
+                    )
+                  })}
               </FieldGroup>
             </CardContent>
           </Card>
@@ -621,6 +715,39 @@ export default function CustomizeClient({
             </Card>
           )}
 
+          {showContact && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-medium">연락처</CardTitle>
+                <CardDescription>신랑·신부 및 혼주 연락처를 청첩장에 노출합니다. 비워둔 항목은 표시되지 않습니다.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <FieldGroup className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <Switch id="phoneExpose" checked={phoneExpose} onCheckedChange={setPhoneExpose} />
+                    <Label htmlFor="phoneExpose" className="font-normal cursor-pointer">연락처 표시</Label>
+                  </div>
+                  {phoneExpose && (
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                      <FieldGroup className="space-y-4">
+                        <p className="text-sm font-medium text-muted-foreground">신랑측</p>
+                        {CONTACT_FIELD_DEFS.slice(0, 3).map((f) => (
+                          <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
+                        ))}
+                      </FieldGroup>
+                      <FieldGroup className="space-y-4">
+                        <p className="text-sm font-medium text-muted-foreground">신부측</p>
+                        {CONTACT_FIELD_DEFS.slice(3, 6).map((f) => (
+                          <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
+                        ))}
+                      </FieldGroup>
+                    </div>
+                  )}
+                </FieldGroup>
+              </CardContent>
+            </Card>
+          )}
+
           {showBgm && (
             <Card>
               <CardHeader>
@@ -722,7 +849,10 @@ export default function CustomizeClient({
           </Card>
         </div>
 
-        <div className="sticky bottom-0 mt-6 flex items-center gap-3 border-t bg-background py-4">
+        {/* xl 미만(1단 레이아웃)에서는 실제 스크롤이 main이 아니라 html에서 일어나(admin 레이아웃의
+            고질적인 문제) sticky가 기준을 잃으므로 fixed로 뷰포트 하단에 고정하고(사이드바 폭만큼
+            lg:left-64 로 비켜준다), xl 이상에서는 원래의(검증된) 컬럼 내부 sticky로 되돌린다. */}
+        <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t bg-background px-4 py-4 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] lg:left-64 lg:px-6 xl:sticky xl:inset-x-auto xl:left-auto xl:z-auto xl:mt-6 xl:px-0 xl:shadow-none">
           <Button onClick={save} disabled={saving} className="gap-2">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {saving ? "저장 중…" : "저장"}
@@ -737,10 +867,11 @@ export default function CustomizeClient({
         </div>
       </div>
 
-      {/* 미리보기 — 이 컬럼 자체는 스크롤되지 않으므로(왼쪽만 overflow-y-auto) 항상 화면에 고정된다 */}
-      <div className="h-full overflow-hidden">
+      {/* 미리보기 — xl 이상에서는 이 컬럼 자체가 스크롤되지 않아(왼쪽만 overflow-y-auto) 항상 화면에 고정되고,
+          그 아래 좁은 화면에서는 편집 영역 위에 쌓여 보인다(order-1) */}
+      <div className="order-1 xl:order-2 xl:h-full xl:overflow-hidden">
         <div className="mb-2.5 text-xs text-muted-foreground">실시간 미리보기 (실제 데이터)</div>
-        <div className="flex justify-center rounded-2xl bg-muted/40 py-5">
+        <div className="flex justify-center overflow-x-auto rounded-2xl bg-muted/40 py-5">
           <InvitationFrame template={template} data={data} tokens={tokens} slots={previewSlots} fontFaces={fontFaces} width={380} height={680} />
         </div>
       </div>

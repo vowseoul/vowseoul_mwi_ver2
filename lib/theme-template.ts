@@ -165,3 +165,15 @@ export function buildInvitationTokens(
 ): TokenMap {
   return { ...buildThemeTokens(themeRow), ...extractOverrideTokens(overrides) }
 }
+
+/**
+ * customization_overrides(jsonb) 에서 disabled_slots(문자열 배열)를 추출한다.
+ * 테마의 slot_manifest 는 "이 테마가 지원하는 기능"을, 이 값은 "그중 이 청첩장 하나만
+ * 꺼둔 기능"을 나타낸다 — 예: 이 커플만 RSVP를 빼달라는 요청. '--' 토큰 오버라이드와
+ * 같은 customization_overrides 컬럼을 공유하되 CSS 변수가 아닌 별도 키라 서로 간섭하지 않는다.
+ */
+export function extractDisabledSlots(overrides: unknown): string[] {
+  if (!overrides || typeof overrides !== "object") return []
+  const value = (overrides as Record<string, unknown>).disabled_slots
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : []
+}

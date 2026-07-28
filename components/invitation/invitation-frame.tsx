@@ -50,6 +50,23 @@ interface InvitationFrameProps {
   height?: number
 }
 
+/**
+ * 업로드된 TTF/WOFF 파일로 @font-face 규칙을 만든다.
+ * Supabase Storage 공개 URL은 앱과 다른 오리진이라 폰트 파일 요청이 CORS 대상이 되고,
+ * 업로드 시 Content-Type이 정확히 세팅되지 않으면 일부 브라우저가 파싱을 거부한다.
+ * /api/fonts 프록시를 거쳐 헤더를 정규화하고(app/api/fonts/route.ts), 확장자로 format() 힌트를 붙인다.
+ */
+function buildFontFaceRule(family: string, fileUrl: string): string {
+  const proxiedUrl = `/api/fonts?url=${encodeURIComponent(fileUrl)}`
+  const lower = fileUrl.toLowerCase()
+  let format = ""
+  if (lower.includes(".woff2")) format = " format('woff2')"
+  else if (lower.includes(".woff")) format = " format('woff')"
+  else if (lower.includes(".otf")) format = " format('opentype')"
+  else if (lower.includes(".ttf")) format = " format('truetype')"
+  return `@font-face { font-family: '${family}'; src: url('${proxiedUrl}')${format}; font-display: swap; }`
+}
+
 function buildSrcDoc(template: ThemeTemplate): string {
   return `<!doctype html>
 <html lang="ko">
@@ -149,7 +166,7 @@ export function InvitationFrame({
     styleEl.textContent = fontFaces
       .map((f) => {
         if (f.embedCode) return f.embedCode
-        if (f.fileUrl) return `@font-face { font-family: '${f.family}'; src: url('${f.fileUrl}'); font-display: swap; }`
+        if (f.fileUrl) return buildFontFaceRule(f.family, f.fileUrl)
         return ""
       })
       .filter(Boolean)

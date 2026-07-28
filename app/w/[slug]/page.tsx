@@ -1,9 +1,12 @@
 import { supabase } from "@/lib/supabase"
 import TemplateInvitationClient from "./template-invitation-client"
-import { buildInvitationTokens, type ThemeRow } from "@/lib/theme-template"
+import { buildInvitationTokens, extractDisabledSlots, type ThemeRow } from "@/lib/theme-template"
 import { mergeInvitationRaw, type RawInvitationData } from "@/lib/invitation-data"
 import { fetchRegisteredFonts, resolveFontFaces } from "@/lib/fonts"
 import { Metadata, Viewport } from "next"
+import { after } from "next/server"
+import { headers } from "next/headers"
+import { createHash } from "crypto"
 
 export const viewport: Viewport = {
   themeColor: '#ffffff',
@@ -52,6 +55,30 @@ async function loadInvitation(slug: string) {
   }
 
   return { invitation, customer, themeRow }
+}
+
+/**
+ * 방문 로그 기록 — 통계 페이지(admin/statistics)가 visit_logs.visited_at 을 읽어
+ * 시간대별 트래픽을 집계하는데, 지금까지 이 테이블에 INSERT하는 코드가 어디에도 없어
+ * 실데이터가 전혀 쌓이지 않고 있었다. 서버 컴포넌트라 요청 헤더에서 실제 클라이언트 IP를
+ * 읽을 수 있으므로(클라이언트 JS는 자신의 공인 IP를 알 수 없다), 여기서 해시해 저장한다.
+ * ip_hash 컬럼이 NOT NULL 이라 실패해도 렌더링을 막지 않도록 항상 무언가를 채워 넣는다.
+ * 응답을 지연시키지 않도록 next/server 의 after() 로 응답 전송 후에 실행한다(서버리스 환경에서
+ * await 없이 그냥 던지면 함수 실행이 응답과 함께 끊겨버릴 수 있어 fire-and-forget 대신 이 방식을 쓴다).
+ * headers() 는 after() 콜백 안에서 호출할 수 없으므로(Next.js 제약) 요청 처리 중에 먼저 읽어둔다.
+ */
+async function logVisit(invitationId: string, meta: { ipHash: string; userAgent: string | null; referrer: string | null }) {
+  try {
+    const { error } = await supabase.from("visit_logs").insert({
+      invitation_id: invitationId,
+      ip_hash: meta.ipHash,
+      user_agent: meta.userAgent,
+      referrer: meta.referrer,
+    })
+    if (error) console.error("visit_logs insert failed:", error.message)
+  } catch (err) {
+    console.error("logVisit failed:", err)
+  }
 }
 
 
@@ -117,16 +144,26 @@ export default async function Page({ params }: PageProps) {
 
   if (!invitation) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans p-4">
+      <div className="min-h-screen bg-muted flex items-center justify-center font-sans p-4">
         <div className="text-center space-y-2">
-          <h2 className="text-lg font-semibold text-slate-800">찾을 수 없는 청첩장</h2>
-          <p className="text-sm text-slate-500">
+          <h2 className="text-lg font-semibold text-foreground">찾을 수 없는 청첩장</h2>
+          <p className="text-sm text-muted-foreground">
             링크 주소가 잘못되었거나 만료되었을 수 있습니다.
           </p>
         </div>
       </div>
     )
   }
+
+  const h = await headers()
+  const forwardedFor = h.get("x-forwarded-for")
+  const ip = (forwardedFor ? forwardedFor.split(",")[0].trim() : null) || h.get("x-real-ip") || "unknown"
+  const visitMeta = {
+    ipHash: createHash("sha256").update(ip).digest("hex"),
+    userAgent: h.get("user-agent"),
+    referrer: h.get("referer"),
+  }
+  after(() => logVisit(String(invitation.id), visitMeta))
 
   // 템플릿 엔진(B + iframe) 테마만 지원한다 (legacy 렌더러는 제거됨)
   if (themeRow?.render_engine === 'template' && themeRow.template_html) {
@@ -139,15 +176,16 @@ export default async function Page({ params }: PageProps) {
         invitationId={String(invitation.id)}
         tokens={tokens}
         fontFaces={resolveFontFaces(tokens, fonts)}
+        disabledSlots={extractDisabledSlots(invitation.customization_overrides)}
       />
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans p-4">
+    <div className="min-h-screen bg-muted flex items-center justify-center font-sans p-4">
       <div className="text-center space-y-2">
-        <h2 className="text-lg font-semibold text-slate-800">지원되지 않는 테마</h2>
-        <p className="text-sm text-slate-500">
+        <h2 className="text-lg font-semibold text-foreground">지원되지 않는 테마</h2>
+        <p className="text-sm text-muted-foreground">
           이 청첩장의 테마를 표시할 수 없습니다. 관리자에게 문의해주세요.
         </p>
       </div>

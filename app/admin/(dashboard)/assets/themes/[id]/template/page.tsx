@@ -26,7 +26,7 @@ import { toast } from "sonner"
  * (레거시 스타일 에디터(../page.tsx)와 분리 — 서로 간섭 없음)
  */
 
-const KNOWN_SLOTS = ["bgm", "gallery", "account", "map", "rsvp", "guestbook"]
+const KNOWN_SLOTS = ["bgm", "gallery", "sequence", "calendar", "account", "contact", "map", "rsvp", "guestbook", "share"]
 
 /** HTML 문자열에서 data-field / data-slot 키를 추출 */
 function extractMarkers(html: string): { fields: string[]; slots: string[] } {
@@ -153,10 +153,11 @@ export default function TemplateThemeEditor() {
   return (
     // 청첩장 커스터마이즈 화면과 동일한 이유로 position:sticky 대신 뷰포트 기준 고정 높이 +
     // 왼쪽 패널만 자체 스크롤시키는 방식을 쓴다 (admin main의 overflow-auto가 실제 스크롤 컨테이너가
-    // 아니라서 sticky가 기준을 잃는 문제).
-    <div className="grid h-[calc(100vh-100px)] grid-cols-[minmax(0,1fr)_420px] gap-6 font-sans">
+    // 아니라서 sticky가 기준을 잃는 문제). 미리보기 420px 고정폭 때문에 좁은 화면(노트북/태블릿)에서
+    // 편집 폭이 찌그러지므로, xl(1280px) 미만에서는 1단으로 쌓는다(미리보기가 위로 오도록 order 지정).
+    <div className="grid gap-6 font-sans xl:h-[calc(100vh-100px)] xl:grid-cols-[minmax(0,1fr)_420px]">
       {/* 편집 폼 */}
-      <div className="min-w-0 h-full overflow-y-auto pr-1">
+      <div className="order-2 min-w-0 pb-24 xl:order-1 xl:h-full xl:overflow-y-auto xl:pb-0 xl:pr-1">
         <div className="mb-6">
           <h1 className="text-2xl font-semibold text-foreground">템플릿 테마 편집</h1>
           <p className="text-sm text-muted-foreground mt-1">
@@ -312,7 +313,10 @@ export default function TemplateThemeEditor() {
           </Card>
         </div>
 
-        <div className="sticky bottom-0 mt-6 flex items-center gap-3 border-t bg-background py-4">
+        {/* xl 미만(1단 레이아웃)에서는 실제 스크롤이 main이 아니라 html에서 일어나(admin 레이아웃의
+            고질적인 문제) sticky가 기준을 잃으므로 fixed로 뷰포트 하단에 고정하고(사이드바 폭만큼
+            lg:left-64 로 비켜준다), xl 이상에서는 원래의(검증된) 컬럼 내부 sticky로 되돌린다. */}
+        <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t bg-background px-4 py-4 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] lg:left-64 lg:px-6 xl:sticky xl:inset-x-auto xl:left-auto xl:z-auto xl:mt-6 xl:px-0 xl:shadow-none">
           <Button onClick={save} disabled={saving} className="gap-2">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {saving ? "저장 중…" : "저장"}
@@ -325,10 +329,11 @@ export default function TemplateThemeEditor() {
         </div>
       </div>
 
-      {/* 실시간 미리보기 — 왼쪽만 자체 스크롤되므로 항상 화면에 고정된다 */}
-      <div className="h-full overflow-hidden">
+      {/* 실시간 미리보기 — xl 이상에서는 왼쪽만 자체 스크롤되어 항상 화면에 고정되고,
+          그 아래 좁은 화면에서는 편집 폼 위에 쌓여 보인다(order-1) */}
+      <div className="order-1 xl:order-2 xl:h-full xl:overflow-hidden">
         <div className="mb-2.5 text-xs text-muted-foreground">실시간 미리보기</div>
-        <div className="flex justify-center rounded-2xl bg-muted/40 py-5">
+        <div className="flex justify-center overflow-x-auto rounded-2xl bg-muted/40 py-5">
           {applied.html
             ? <InvitationFrame template={previewTemplate} data={previewData} tokens={tokens} slots={previewSlots} width={380} height={680} />
             : <div className="p-10 text-sm text-muted-foreground">HTML을 입력하고 &lsquo;미리보기 적용&rsquo;을 누르세요.</div>}

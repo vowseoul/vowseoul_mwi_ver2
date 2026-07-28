@@ -4,6 +4,8 @@
   "sequence",
   "calendar",
   "account",
+  "contact",
   "map",
-  "rsvp"
+  "rsvp",
+  "share"
 ]

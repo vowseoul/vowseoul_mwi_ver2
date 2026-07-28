@@ -292,28 +292,91 @@ function GalleryIsland({ raw }: SlotProps) {
   const isGrid = raw?.gallery_view_type === "grid"
   const objectPosition = raw?.gallery_align === "bottom" ? "center bottom" : "center center"
 
-  if (isGrid) {
-    return (
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, width: "100%" }}>
-        {images.map((src, i) => (
-          <div key={i} style={{ aspectRatio: "1/1", overflow: "hidden" }}>
-            <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition }} />
-          </div>
-        ))}
-      </div>
-    )
-  }
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const prev = () => setLightboxIndex((i) => (i === null ? null : (i - 1 + images.length) % images.length))
+  const next = () => setLightboxIndex((i) => (i === null ? null : (i + 1) % images.length))
 
-  return (
+  // 라이트박스가 열려있을 때 ESC/방향키 조작 — iframe(별도 realm)에 포탈되므로
+  // BgmIsland 와 동일하게 이 아일랜드가 속한 문서에 직접 리스너를 건다.
+  useEffect(() => {
+    if (lightboxIndex === null) return
+    const doc = rootRef.current?.ownerDocument
+    if (!doc) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightboxIndex(null)
+      else if (e.key === "ArrowLeft") prev()
+      else if (e.key === "ArrowRight") next()
+    }
+    doc.addEventListener("keydown", onKeyDown)
+    return () => doc.removeEventListener("keydown", onKeyDown)
+  }, [lightboxIndex, images.length])
+
+  const thumbnails = isGrid ? (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, width: "100%" }}>
+      {images.map((src, i) => (
+        <div key={i} onClick={() => setLightboxIndex(i)} style={{ aspectRatio: "1/1", overflow: "hidden", cursor: "pointer" }}>
+          <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition }} />
+        </div>
+      ))}
+    </div>
+  ) : (
     <div style={{ display: "flex", gap: 8, overflowX: "auto", width: "100%", paddingBottom: 8, scrollSnapType: "x mandatory" }}>
       {images.map((src, i) => (
         <div
           key={i}
-          style={{ width: 220, height: 280, flexShrink: 0, scrollSnapAlign: "center", overflow: "hidden" }}
+          onClick={() => setLightboxIndex(i)}
+          style={{ width: 220, height: 280, flexShrink: 0, scrollSnapAlign: "center", overflow: "hidden", cursor: "pointer" }}
         >
           <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition }} />
         </div>
       ))}
+    </div>
+  )
+
+  const navBtnStyle: React.CSSProperties = {
+    position: "absolute", top: "50%", transform: "translateY(-50%)", width: 40, height: 40, borderRadius: "50%",
+    border: "none", background: "rgba(255,255,255,.12)", color: "#fff", fontSize: 22, lineHeight: 1, cursor: "pointer",
+    display: "flex", alignItems: "center", justifyContent: "center",
+  }
+
+  return (
+    <div ref={rootRef}>
+      {thumbnails}
+      {lightboxIndex !== null && (
+        <div
+          onClick={() => setLightboxIndex(null)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 70, background: "rgba(0,0,0,.92)",
+            display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+          }}
+        >
+          <button
+            onClick={(e) => { e.stopPropagation(); setLightboxIndex(null) }}
+            style={{ position: "absolute", top: 16, right: 16, width: 36, height: 36, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.12)", color: "#fff", fontSize: 16, cursor: "pointer" }}
+            aria-label="닫기"
+          >
+            ✕
+          </button>
+          {images.length > 1 && (
+            <button onClick={(e) => { e.stopPropagation(); prev() }} style={{ ...navBtnStyle, left: 12 }} aria-label="이전 사진">‹</button>
+          )}
+          <img
+            src={images[lightboxIndex]}
+            alt=""
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: "100%", maxHeight: "85vh", objectFit: "contain" }}
+          />
+          {images.length > 1 && (
+            <button onClick={(e) => { e.stopPropagation(); next() }} style={{ ...navBtnStyle, right: 12 }} aria-label="다음 사진">›</button>
+          )}
+          {images.length > 1 && (
+            <div style={{ position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)", color: "#fff", fontSize: 12, opacity: 0.8 }}>
+              {lightboxIndex + 1} / {images.length}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -324,24 +387,40 @@ function composeAccount(bank?: string, number?: string, holder?: string): string
 }
 function AccountRow({ label, value, accent }: { label: string; value: string; accent: string }) {
   const [copied, setCopied] = useState(false)
+  const numericValue = value.replace(/[^0-9]/g, "")
   const copy = () => {
-    navigator.clipboard?.writeText(value.replace(/[^0-9]/g, ""))
+    navigator.clipboard?.writeText(numericValue)
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
   }
+  // 계좌번호만 복사해두고 카카오페이 앱을 열어준다 — 카카오페이는 공식 이체 API 없이도
+  // 이 딥링크(kakaotalk://kakaopay/home)로 열리므로, 사용자가 그 안에서 붙여넣기만 하면 된다.
+  // 데스크톱처럼 카카오톡이 없는 환경에서는 딥링크가 그냥 무시되고 복사만 남는다.
+  const sendViaKakaoPay = () => {
+    navigator.clipboard?.writeText(numericValue)
+    window.location.href = "kakaotalk://kakaopay/home"
+  }
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${soft(25)}` }}>
-      <div style={{ textAlign: "left" }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${soft(25)}`, gap: 8 }}>
+      <div style={{ textAlign: "left", minWidth: 0 }}>
         <div style={{ fontSize: 11, opacity: 0.6 }}>{label}</div>
         <div style={{ fontSize: 13.5 }}>{value}</div>
       </div>
-      <button onClick={copy} style={{
-        padding: "6px 12px", borderRadius: 7, cursor: "pointer", whiteSpace: "nowrap",
-        border: `1px solid ${accent}`, background: copied ? accent : "transparent",
-        color: copied ? "#fff" : accent, fontSize: 12,
-      }}>
-        {copied ? "복사됨" : "복사"}
-      </button>
+      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+        <button onClick={sendViaKakaoPay} style={{
+          padding: "6px 10px", borderRadius: 7, cursor: "pointer", whiteSpace: "nowrap",
+          border: "1px solid #FFE300", background: "#FFE300", color: "#3C1E1E", fontSize: 11.5, fontWeight: 600,
+        }}>
+          카카오페이
+        </button>
+        <button onClick={copy} style={{
+          padding: "6px 12px", borderRadius: 7, cursor: "pointer", whiteSpace: "nowrap",
+          border: `1px solid ${accent}`, background: copied ? accent : "transparent",
+          color: copied ? "#fff" : accent, fontSize: 12,
+        }}>
+          {copied ? "복사됨" : "복사"}
+        </button>
+      </div>
     </div>
   )
 }
@@ -353,6 +432,50 @@ function AccountIsland({ accent, data }: SlotProps) {
       {groom && <AccountRow label="신랑측" value={groom} accent={accent} />}
       {bride && <AccountRow label="신부측" value={bride} accent={accent} />}
       {!groom && !bride && <div style={{ fontSize: 12, opacity: 0.6, padding: "8px 0" }}>등록된 계좌 정보가 없습니다.</div>}
+    </div>
+  )
+}
+
+/* ----------------------------- Contact ------------------------------
+ * 신랑·신부·혼주 연락처. 폼에서 이미 수집되던 phone_expose·전화번호 필드들이
+ * 지금까지 렌더 경로가 없어 아무 데도 표시되지 않았다 — 이 슬롯이 그 값을 받는다.
+ * phone_expose 가 '아니오'/false 로 꺼져있으면(미설정은 표시로 간주) 섹션 자체를 숨긴다.
+ * ------------------------------------------------------------------ */
+function ContactRow({ label, name, phone, accent }: { label: string; name?: string; phone: string; accent: string }) {
+  const linkStyle: React.CSSProperties = {
+    padding: "6px 12px", borderRadius: 7, whiteSpace: "nowrap", textDecoration: "none",
+    border: `1px solid ${accent}`, color: accent, fontSize: 12, display: "inline-flex", alignItems: "center",
+  }
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${soft(25)}`, gap: 8 }}>
+      <div style={{ textAlign: "left", minWidth: 0 }}>
+        <div style={{ fontSize: 11, opacity: 0.6 }}>{name ? `${label} · ${name}` : label}</div>
+        <div style={{ fontSize: 13.5 }}>{phone}</div>
+      </div>
+      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+        <a href={`tel:${phone}`} style={linkStyle}>전화</a>
+        <a href={`sms:${phone}`} style={linkStyle}>문자</a>
+      </div>
+    </div>
+  )
+}
+function ContactIsland({ accent, data }: SlotProps) {
+  if (isToggledOff(data.phone_expose)) return null
+  const rows = [
+    { label: "신랑", name: data.groom_name, phone: data.groom_phone },
+    { label: "신부", name: data.bride_name, phone: data.bride_phone },
+    { label: "신랑 아버지", name: data.groom_father_name, phone: data.groom_father_phone },
+    { label: "신랑 어머니", name: data.groom_mother_name, phone: data.groom_mother_phone },
+    { label: "신부 아버지", name: data.bride_father_name, phone: data.bride_father_phone },
+    { label: "신부 어머니", name: data.bride_mother_name, phone: data.bride_mother_phone },
+  ].filter((r) => !!r.phone)
+
+  if (rows.length === 0) return null
+  return (
+    <div style={{ textAlign: "left", maxWidth: 320, margin: "0 auto" }}>
+      {rows.map((r) => (
+        <ContactRow key={r.label} label={r.label} name={r.name} phone={r.phone} accent={accent} />
+      ))}
     </div>
   )
 }
@@ -760,16 +883,53 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
   )
 }
 
+/* ------------------------------- Share ------------------------------
+ * 청첩장 링크 공유. 지금까지 발행된 청첩장 어디에도 공유 버튼이 없어 하객이 주소를
+ * 직접 긴 URL을 복사해야 했다. navigator.share 를 지원하는 모바일 브라우저에서는
+ * OS 공유 시트(카카오톡 포함, 별도 SDK/API 키 없이도 뜬다)를 그대로 띄우고,
+ * 지원하지 않는 환경(대부분의 데스크톱 브라우저)에서는 클립보드 복사로 대체한다.
+ * ------------------------------------------------------------------ */
+function ShareIsland({ accent, data }: SlotProps) {
+  const [copied, setCopied] = useState(false)
+  const handleShare = () => {
+    if (typeof window === "undefined") return
+    const url = window.location.href
+    const title = [data.groom_name, data.bride_name].filter(Boolean).join(" ♥ ") || "모바일 청첩장"
+    const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> }
+    if (nav.share) {
+      nav.share({ title, url }).catch(() => { /* 사용자가 공유 시트를 취소한 경우 등 - 무시 */ })
+      return
+    }
+    navigator.clipboard?.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+  return (
+    <button
+      onClick={handleShare}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 22px", borderRadius: 20,
+        border: `1px solid ${soft(40)}`, background: "transparent", color: "inherit", fontSize: 12.5,
+        cursor: "pointer", opacity: 0.85,
+      }}
+    >
+      {copied ? "청첩장 주소가 복사되었습니다" : "청첩장 주소 공유하기"}
+    </button>
+  )
+}
+
 /* ----------------------------- Registry ---------------------------- */
 export const SLOT_REGISTRY: Record<string, React.ComponentType<SlotProps>> = {
   bgm: BgmIsland,
   gallery: GalleryIsland,
   account: AccountIsland,
+  contact: ContactIsland,
   map: MapIsland,
   rsvp: RsvpIsland,
   sequence: SequenceIsland,
   calendar: CalendarIsland,
   guestbook: GuestbookIsland,
+  share: ShareIsland,
 }
 
 /** 테마가 선언한 슬롯 키 목록을 실제 React 노드 맵으로 변환한다. */

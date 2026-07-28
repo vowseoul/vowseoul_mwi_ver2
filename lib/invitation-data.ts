@@ -127,5 +127,21 @@ export function buildFieldData(rawInput: RawInvitationData, now = new Date()): F
     data.wedding_dday = computeDday(d, now)
   }
 
+  // 3) 혼주 고인(故) 표시 — 각 부모 이름 필드에 '故 ' 접두어를 붙인다.
+  // 별도 슬롯/템플릿 마커 없이 기존 data-field="..._name" 값 자체를 덮어쓰므로
+  // 테마 템플릿을 전혀 건드리지 않고도 모든 테마에 곧바로 적용된다.
+  const deceasedPairs: [string, string][] = [
+    ["groom_father_deceased", "groom_father_name"],
+    ["groom_mother_deceased", "groom_mother_name"],
+    ["bride_father_deceased", "bride_father_name"],
+    ["bride_mother_deceased", "bride_mother_name"],
+  ]
+  for (const [deceasedKey, nameKey] of deceasedPairs) {
+    const isDeceased = raw[deceasedKey] === "예" || raw[deceasedKey] === true
+    if (isDeceased && data[nameKey]) {
+      data[nameKey] = `故 ${data[nameKey]}`
+    }
+  }
+
   return data
 }
