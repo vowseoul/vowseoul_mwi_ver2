@@ -23,6 +23,7 @@ import { createClient } from "@supabase/supabase-js"
 import { useProfilesQuery } from "@/hooks/queries/useCustomers"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
+import PaperTypesCard from "./paper-types-card"
 
 export default function AdminSettingsPage() {
   const [isSaving, setIsSaving] = useState(false)
@@ -339,7 +340,9 @@ export default function AdminSettingsPage() {
         </TabsList>
 
         {/* General Settings */}
-        <TabsContent value="general">
+        <TabsContent value="general" className="space-y-6">
+          <PaperTypesCard />
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

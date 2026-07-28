@@ -1212,16 +1212,31 @@ export default function FormTemplatesPage() {
               {/* Form Body for Current Step */}
               <div className="space-y-5 px-1">
                 {(() => {
-                  let lastSectionTitle = ''
                   const rootFields = currentFields.filter((f) => !parseOptions(f).parent_field_key)
 
-                  return rootFields.map((field) => {
-                    const opts = parseOptions(field)
-                    const currentSection = opts.section_title || ''
-                    const showSectionHeader = currentSection && currentSection !== lastSectionTitle
-                    if (showSectionHeader) {
-                      lastSectionTitle = currentSection
+                  // 섹션 단위로 묶어서 렌더한다.
+                  //
+                  // 예전에는 평면 순서로 훑으면서 "직전 필드와 섹션명이 다르면 헤더 출력"
+                  // 하는 방식이었다. 그래서 나중에 추가돼 sort_order 가 뒤로 밀린 필드
+                  // (예: 예식 정보 섹션의 venue_address)가 제 섹션에 붙지 못하고 단계
+                  // 맨 끝에서 같은 헤더를 한 번 더 그리며 나타났다 — 폼 빌더가 보여주는
+                  // 페이지>섹션 구조와 순서가 어긋나던 원인. 빌더(getPagesAndSections)와
+                  // 실제 고객 폼(/form/[slug])은 둘 다 아래처럼 그룹핑한다.
+                  const sections: { title: string; fields: typeof rootFields }[] = []
+                  rootFields.forEach((field) => {
+                    const title = (parseOptions(field).section_title || '').trim()
+                    let sec = sections.find((s) => s.title === title)
+                    if (!sec) {
+                      sec = { title, fields: [] }
+                      sections.push(sec)
                     }
+                    sec.fields.push(field)
+                  })
+
+                  return sections.flatMap((section) => section.fields.map((field, indexInSection) => {
+                    const opts = parseOptions(field)
+                    const currentSection = section.title
+                    const showSectionHeader = !!currentSection && indexInSection === 0
 
                     const children = currentFields.filter(
                       (c) => parseOptions(c).parent_field_key === field.field_key
@@ -1309,7 +1324,7 @@ export default function FormTemplatesPage() {
                         </div>
                       </React.Fragment>
                     )
-                  })
+                  }))
                 })()}
               </div>
 
