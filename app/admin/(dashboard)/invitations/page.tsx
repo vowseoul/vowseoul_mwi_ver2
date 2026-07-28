@@ -46,7 +46,8 @@ import {
   Calendar,
   Sparkles,
   Link2,
-  Trash2
+  Trash2,
+  ClipboardList
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -328,7 +329,13 @@ export default function InvitationsListPage() {
                             <Edit3 className="w-3.5 h-3.5" /> 편집
                           </Link>
                         </Button>
-                        
+
+                        <Button variant="outline" size="sm" asChild className="h-8 text-[11px] gap-1">
+                          <Link href={`/admin/invitations/${inv.id}/responses`}>
+                            <ClipboardList className="w-3.5 h-3.5" /> 응답
+                          </Link>
+                        </Button>
+
                         {inv.status === 'published' ? (
                           <Button 
                             variant="outline" 
