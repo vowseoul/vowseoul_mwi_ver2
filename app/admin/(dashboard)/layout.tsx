@@ -25,8 +25,7 @@ import {
   FileText,
   Sparkles,
   LogOut,
-  HelpCircle,
-  Megaphone
+  HelpCircle
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 

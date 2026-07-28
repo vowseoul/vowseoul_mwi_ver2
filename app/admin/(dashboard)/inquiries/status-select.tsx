@@ -28,9 +28,16 @@ export default function InquiryStatusSelect({
     const previous = value
     setValue(next)
 
-    const { error } = await supabase.from("inquiries").update({ status: next }).eq("id", id)
-    if (error) {
-      console.error("inquiry status update failed:", error.message)
+    // .select() 로 갱신된 행을 되받아 확인한다 — RLS 에 막힌 UPDATE 는 에러가 아니라
+    // "0건 갱신"으로 돌아오기 때문에 error 만 봐서는 조용히 실패한다.
+    const { data, error } = await supabase
+      .from("inquiries")
+      .update({ status: next })
+      .eq("id", id)
+      .select("id")
+
+    if (error || !data || data.length === 0) {
+      console.error("inquiry status update failed:", error?.message ?? "0 rows updated (RLS?)")
       setValue(previous)
       toast.error("상태를 변경하지 못했습니다.")
       return

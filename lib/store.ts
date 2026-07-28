@@ -53,23 +53,6 @@ export interface Order {
   notes: string
 }
 
-export interface FAQ {
-  id: string
-  question: string
-  answer: string
-  category?: string
-  createdAt: string
-}
-
-export interface Notice {
-  id: string
-  title: string
-  content: string
-  category: string
-  createdAt: string
-}
-
-
 interface AppState {
   // Data fetching
   fetchData: () => Promise<void>
@@ -86,21 +69,7 @@ interface AppState {
   orders: Order[]
   setOrders: (orders: Order[]) => void
   updateOrder: (id: string, updates: Partial<Order>) => Promise<void>
-  
-  // FAQ state
-  faqs: FAQ[]
-  setFaqs: (faqs: FAQ[]) => void
-  addFaq: (faq: FAQ) => Promise<void>
-  updateFaq: (id: string, faq: Partial<FAQ>) => Promise<void>
-  deleteFaq: (id: string) => Promise<void>
 
-  // Notice state
-  notices: Notice[]
-  setNotices: (notices: Notice[]) => void
-  addNotice: (notice: Notice) => Promise<void>
-  updateNotice: (id: string, notice: Partial<Notice>) => Promise<void>
-  deleteNotice: (id: string) => Promise<void>
-  
   // UI state
   editorStep: number
   setEditorStep: (step: number) => void
@@ -118,15 +87,6 @@ interface AppState {
 export const useAppStore = create<AppState>((set, get) => ({
   fetchData: async () => {
     try {
-      let faqs: any[] = []
-      try {
-        const { data, error } = await supabase.from('faqs').select('*')
-        logSupabaseError('fetchData: faqs', error)
-        faqs = data || []
-      } catch (err) {
-        faqs = []
-      }
-
       let themes: any[] = []
       try {
         const { data, error } = await supabase.from('themes').select('*')
@@ -182,34 +142,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         mappedOrders = []
       }
 
-      let noticesList = []
-      try {
-        const { data: noticesData } = await supabase.from('notices').select('*')
-        if (noticesData && noticesData.length > 0) {
-          noticesList = noticesData
-        } else {
-          const localNotices = typeof window !== 'undefined' ? localStorage.getItem('vow_seoul_local_notices') : null
-          if (localNotices) {
-            noticesList = JSON.parse(localNotices)
-          } else {
-            noticesList = sampleNotices
-          }
-        }
-      } catch (err) {
-        const localNotices = typeof window !== 'undefined' ? localStorage.getItem('vow_seoul_local_notices') : null
-        if (localNotices) {
-          noticesList = JSON.parse(localNotices)
-        } else {
-          noticesList = sampleNotices
-        }
-      }
-
       set({
-        faqs: faqs.length > 0 ? faqs : sampleFaqs,
         themes: themes || [],
         bgmList: bgms.length > 0 ? bgms : sampleBGMs,
         orders: mappedOrders,
-        notices: noticesList
       })
     } catch (e) {
       console.error('Error fetching data from Supabase:', e)
@@ -258,69 +194,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => ({
       orders: state.orders.map(o => o.id === id ? { ...o, ...updates } : o)
     }))
-  },
-  
-  faqs: [],
-  setFaqs: (faqs) => set({ faqs }),
-  notices: [],
-  setNotices: (notices) => set({ notices }),
-  addFaq: async (faq) => {
-    await supabase.from('faqs').insert(faq)
-    set((state) => ({ faqs: [...state.faqs, faq] }))
-  },
-  updateFaq: async (id, faq) => {
-    await supabase.from('faqs').update(faq).eq('id', id)
-    set((state) => ({
-      faqs: state.faqs.map(f => f.id === id ? { ...f, ...faq } : f)
-    }))
-  },
-  deleteFaq: async (id) => {
-    await supabase.from('faqs').delete().eq('id', id)
-    set((state) => ({
-      faqs: state.faqs.filter(f => f.id !== id)
-    }))
-  },
-  addNotice: async (notice) => {
-    try {
-      await supabase.from('notices').insert(notice)
-    } catch (err) {
-      console.error('Error inserting notice to Supabase:', err)
-    }
-    set((state) => {
-      const updated = [...state.notices, notice]
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('vow_seoul_local_notices', JSON.stringify(updated))
-      }
-      return { notices: updated }
-    })
-  },
-  updateNotice: async (id, notice) => {
-    try {
-      await supabase.from('notices').update(notice).eq('id', id)
-    } catch (err) {
-      console.error('Error updating notice in Supabase:', err)
-    }
-    set((state) => {
-      const updated = state.notices.map(n => n.id === id ? { ...n, ...notice } : n)
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('vow_seoul_local_notices', JSON.stringify(updated))
-      }
-      return { notices: updated }
-    })
-  },
-  deleteNotice: async (id) => {
-    try {
-      await supabase.from('notices').delete().eq('id', id)
-    } catch (err) {
-      console.error('Error deleting notice from Supabase:', err)
-    }
-    set((state) => {
-      const updated = state.notices.filter(n => n.id !== id)
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('vow_seoul_local_notices', JSON.stringify(updated))
-      }
-      return { notices: updated }
-    })
   },
   
   editorStep: 1,
@@ -502,36 +375,6 @@ export const sampleBGMs: BGM[] = [
   { id: 'bgm5', name: 'Perfect', artist: 'Ed Sheeran', duration: '4:23', url: '/bgm/perfect.mp3', isRecommended: true },
 ]
 
-
-export const sampleFaqs: FAQ[] = [
-  { id: 'faq1', question: '청첩장 제작은 얼마나 걸리나요?', answer: '기본 템플릿을 사용할 경우 결제 완료 후 10분 내로 즉시 제작되어 배포가 가능합니다.', category: '제작', createdAt: '2025-01-01' },
-  { id: 'faq2', question: '완성된 청첩장을 수정할 수 있나요?', answer: '네, 결제 후에도 언제든지 내용을 수정하실 수 있으며, 변경 사항은 실시간으로 반영됩니다.', category: '수정', createdAt: '2025-01-02' },
-  { id: 'faq3', question: '환불 규정이 어떻게 되나요?', answer: '결제 후 7일 이내, 청첩장을 한 번도 공유하지 않은 경우에 한하여 전액 환불이 가능합니다.', category: '결제', createdAt: '2025-01-03' },
-]
-
-export const sampleNotices: Notice[] = [
-  {
-    id: 'notice1',
-    title: 'VOW SEOUL 모바일 청첩장 서비스 정식 오픈 안내',
-    content: '안녕하세요. VOW SEOUL입니다.\n가장 소중한 날을 아름답게 장식할 수 있도록 우아하고 프리미엄한 모바일 청첩장 서비스를 시작합니다.\n\n다양한 테마와 실시간 미리보기, 배경음악(BGM) 설정 및 송금 계좌 연동 등 완벽한 기능들을 지금 바로 만나보세요.\n\n앞으로도 더 나은 서비스로 보답하겠습니다.\n감사합니다.',
-    category: '안내',
-    createdAt: '2026-06-01'
-  },
-  {
-    id: 'notice2',
-    title: '축의금 송금 계좌 및 연락처 편집 기능 업데이트 완료',
-    content: '안녕하세요. VOW SEOUL입니다.\n고객님들의 피드백을 반영하여 청첩장 만들기 페이지에서 등록하신 축의금 송금 계좌번호 및 연락처의 "수정" 기능이 추가되었습니다.\n이제 오타 수정 및 세부 사항 변경을 위해 삭제 후 재등록할 필요 없이 즉시 수정하여 편리하게 청첩장을 제작할 수 있습니다.\n\n더 나은 사용성을 위해 계속 노력하겠습니다.',
-    category: '업데이트',
-    createdAt: '2026-06-03'
-  },
-  {
-    id: 'notice3',
-    title: '6월 서비스 안정화 및 정기 점검 안내 (6월 10일)',
-    content: '안녕하세요. VOW SEOUL 개발팀입니다.\n안정적인 서비스 제공을 위해 정기 서버 점검 및 최적화 작업이 진행될 예정입니다.\n\n- 일시: 2026년 6월 10일(수) 오전 02:00 ~ 05:00 (약 3시간)\n- 대상: VOW SEOUL 전체 서비스\n- 내용: 데이터베이스 안정화 작업 및 보안 패치 적용\n\n점검 시간 동안에는 청첩장 작성 및 수정이 일시적으로 제한될 수 있으니 양해 부탁드립니다.',
-    category: '점검',
-    createdAt: '2026-06-02'
-  }
-]
 
 export interface Phrase {
   id: string
