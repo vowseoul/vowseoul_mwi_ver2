@@ -68,6 +68,20 @@ export function buildFontFaceCss(font: RegisteredFont): string {
   return ""
 }
 
+/**
+ * 여러 폰트의 CSS 조각을 하나의 스타일시트로 합친다.
+ * @import 는 CSS 스펙상 스타일시트 맨 앞(다른 규칙보다 먼저)에 와야만 유효하다.
+ * 관리자가 "임베드 코드(@import)" 폰트와 "파일 업로드(@font-face)" 폰트를 섞어 등록하면,
+ * 원래 등록 순서대로 이어붙일 때 @font-face 가 @import 보다 앞에 오는 경우가 생겨
+ * 뒤따르는 @import 전체가 브라우저에서 조용히 무시된다 — 등록은 됐는데 그 폰트만
+ * 적용 안 되는 버그로 나타난다. @import 조각을 항상 먼저 배치해 이를 막는다.
+ */
+export function joinFontFaceCss(cssList: string[]): string {
+  const imports = cssList.filter((css) => css.trimStart().startsWith("@import"))
+  const rest = cssList.filter((css) => !css.trimStart().startsWith("@import"))
+  return [...imports, ...rest].join("\n")
+}
+
 /** 목록/드롭다운에서 폰트 이름을 그 폰트로 미리 보여줄 때 쓰는 인라인 스타일 */
 export function fontPreviewStyle(font: RegisteredFont): { fontFamily: string } {
   return { fontFamily: `'${font.family}', sans-serif` }

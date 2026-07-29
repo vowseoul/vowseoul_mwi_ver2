@@ -116,7 +116,7 @@ export const SIZE_TOKEN_FIELDS: { name: string; label: string; group: "typograph
  */
 export const BLOCK_KEYS = [
   "hero", "greeting", "gallery", "sequence", "calendar",
-  "location", "account", "contact", "rsvp", "share",
+  "location", "account", "contact", "rsvp", "share", "guestbook",
 ] as const
 export type BlockKey = (typeof BLOCK_KEYS)[number]
 

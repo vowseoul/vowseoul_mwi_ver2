@@ -426,14 +426,46 @@ function AccountRow({ label, value, accent }: { label: string; value: string; ac
     </div>
   )
 }
+/** 혼주(부모) 계좌 — 은행/번호/예금주를 나눠 받는 본인 계좌와 달리, 부모 쪽은 계좌 수가
+ * 정해져 있지 않아(아버지·어머니 각각 또는 한쪽만) 관리자가 자유 형식 텍스트로 입력한다.
+ * 숫자만 추출하는 기존 복사 방식은 여러 줄/여러 계좌가 섞인 텍스트에 맞지 않아 원문 그대로 복사한다.
+ */
+function ExtraAccountRow({ label, value, accent }: { label: string; value: string; accent: string }) {
+  const [copied, setCopied] = useState(false)
+  const copy = () => {
+    navigator.clipboard?.writeText(value)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${soft(25)}`, gap: 8 }}>
+      <div style={{ textAlign: "left", minWidth: 0 }}>
+        <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 2 }}>{label}</div>
+        <div style={{ fontSize: 13.5, whiteSpace: "pre-line" }}>{value}</div>
+      </div>
+      <button onClick={copy} style={{
+        padding: "6px 12px", borderRadius: 7, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+        border: `1px solid ${accent}`, background: copied ? accent : "transparent",
+        color: copied ? "#fff" : accent, fontSize: 12,
+      }}>
+        {copied ? "복사됨" : "복사"}
+      </button>
+    </div>
+  )
+}
 function AccountIsland({ accent, data }: SlotProps) {
   const groom = composeAccount(data.account_groom_bank, data.account_groom_number, data.account_groom_holder)
   const bride = composeAccount(data.account_bride_bank, data.account_bride_number, data.account_bride_holder)
+  const extraGroom = data.extra_account_groom
+  const extraBride = data.extra_account_bride
+  const hasAny = groom || bride || extraGroom || extraBride
   return (
     <div style={{ textAlign: "left", maxWidth: 320, margin: "0 auto" }}>
       {groom && <AccountRow label="신랑측" value={groom} accent={accent} />}
       {bride && <AccountRow label="신부측" value={bride} accent={accent} />}
-      {!groom && !bride && <div style={{ fontSize: 12, opacity: 0.6, padding: "8px 0" }}>등록된 계좌 정보가 없습니다.</div>}
+      {extraGroom && <ExtraAccountRow label="신랑측 혼주" value={extraGroom} accent={accent} />}
+      {extraBride && <ExtraAccountRow label="신부측 혼주" value={extraBride} accent={accent} />}
+      {!hasAny && <div style={{ fontSize: 12, opacity: 0.6, padding: "8px 0" }}>등록된 계좌 정보가 없습니다.</div>}
     </div>
   )
 }
@@ -891,11 +923,11 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
       <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="이름"
           disabled={saving}
-          style={{ width: 80, padding: "8px 10px", border: "1px solid #e2ddd6", borderRadius: 8, outline: "none", fontSize: 13 }} />
+          style={{ width: 80, flexShrink: 0, padding: "8px 10px", border: "1px solid #e2ddd6", borderRadius: 8, outline: "none", fontSize: 13 }} />
         <input value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="축하 메시지"
           disabled={saving}
-          style={{ flex: 1, padding: "8px 10px", border: "1px solid #e2ddd6", borderRadius: 8, outline: "none", fontSize: 13 }} />
-        <button onClick={add} disabled={saving} style={{ padding: "0 14px", borderRadius: 8, border: "none", cursor: saving ? "wait" : "pointer", background: accent, color: "#fff", fontSize: 13, opacity: saving ? 0.7 : 1 }}>
+          style={{ flex: 1, minWidth: 0, padding: "8px 10px", border: "1px solid #e2ddd6", borderRadius: 8, outline: "none", fontSize: 13 }} />
+        <button onClick={add} disabled={saving} style={{ flexShrink: 0, whiteSpace: "nowrap", padding: "0 14px", borderRadius: 8, border: "none", cursor: saving ? "wait" : "pointer", background: accent, color: "#fff", fontSize: 13, opacity: saving ? 0.7 : 1 }}>
           {saving ? "등록 중…" : "등록"}
         </button>
       </div>

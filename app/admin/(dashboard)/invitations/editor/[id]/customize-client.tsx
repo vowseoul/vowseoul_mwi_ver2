@@ -92,6 +92,8 @@ const ACCOUNT_FIELD_DEFS: FieldDef[] = [
   { key: "account_bride_bank", label: "은행", type: "text" },
   { key: "account_bride_number", label: "계좌번호", type: "text" },
   { key: "account_bride_holder", label: "예금주", type: "text" },
+  { key: "extra_account_groom", label: "신랑측 혼주 계좌 (자유 입력)", type: "textarea" },
+  { key: "extra_account_bride", label: "신부측 혼주 계좌 (자유 입력)", type: "textarea" },
 ]
 
 /** 부모 이름 필드 → 고인(故) 표시 플래그 필드키. buildFieldData 가 이 값을 보고 이름 앞에 '故 '를 붙인다 */
@@ -782,6 +784,7 @@ export default function CustomizeClient({
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base font-medium">마음 전하실 곳 (계좌)</CardTitle>
+                  <CardDescription>혼주 계좌는 아버지·어머니 계좌를 함께 적는 등 형식이 자유로워 텍스트로 직접 입력합니다.</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -790,12 +793,22 @@ export default function CustomizeClient({
                       {ACCOUNT_FIELD_DEFS.slice(0, 3).map((f) => (
                         <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
                       ))}
+                      <TextField
+                        def={ACCOUNT_FIELD_DEFS.find((f) => f.key === "extra_account_groom")!}
+                        value={content.extra_account_groom || ""}
+                        onChange={(v) => setField("extra_account_groom", v)}
+                      />
                     </FieldGroup>
                     <FieldGroup className="space-y-4">
                       <p className="text-sm font-medium text-muted-foreground">신부측</p>
                       {ACCOUNT_FIELD_DEFS.slice(3, 6).map((f) => (
                         <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
                       ))}
+                      <TextField
+                        def={ACCOUNT_FIELD_DEFS.find((f) => f.key === "extra_account_bride")!}
+                        value={content.extra_account_bride || ""}
+                        onChange={(v) => setField("extra_account_bride", v)}
+                      />
                     </FieldGroup>
                   </div>
                 </CardContent>

@@ -20,23 +20,25 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
-const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
 
-let warned = false
-
+/**
+ * 예전에는 이 키가 없으면 anon 키로 조용히 폴백했다 — RLS 강화 마이그레이션 적용 전까지의
+ * 임시 안전장치였다. 지금은 invitations/customers 의 anon SELECT 가 이미 막혀 있어서,
+ * 폴백이 걸리면 이 클라이언트를 쓰는 모든 공개 경로(/w/[slug], /dashboard/[slug], 폼 제출,
+ * 파기 크론 등)가 "정상 응답(빈 결과)"처럼 보이면서 실제로는 데이터를 전혀 못 읽는다.
+ * 예: 발행된 청첩장 링크를 열면 슬러그가 멀쩡한데도 "찾을 수 없는 청첩장"이 뜨는 버그로
+ * 나타난다 — 원인을 알 수 없어 훨씬 진단하기 어려우므로, 이제는 조용히 넘어가지 않고
+ * 바로 에러를 던져 배포 로그에 원인이 드러나게 한다.
+ */
 export function createSupabaseAdminClient(): SupabaseClient {
-  // 키가 아직 없으면 anon 으로 폴백한다 — RLS 를 조이는 마이그레이션을 적용하기
-  // 전까지는 동작에 차이가 없고, 키를 넣는 순간 곧바로 정상 동작한다.
-  const key = serviceRoleKey || anonKey
-  if (!serviceRoleKey && !warned) {
-    warned = true
-    console.warn(
-      "[supabase-admin] SUPABASE_SERVICE_ROLE_KEY 가 없어 anon 키로 폴백합니다. " +
-        "RLS 강화 마이그레이션을 적용하기 전에 반드시 설정하세요.",
+  if (!serviceRoleKey) {
+    throw new Error(
+      "[supabase-admin] SUPABASE_SERVICE_ROLE_KEY 환경변수가 설정되지 않았습니다. " +
+        "Vercel 프로젝트 설정 > Environment Variables 에 등록 후 다시 배포하세요.",
     )
   }
 
-  return createClient(supabaseUrl, key, {
+  return createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 }

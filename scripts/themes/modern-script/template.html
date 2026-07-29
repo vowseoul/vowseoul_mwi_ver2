@@ -281,8 +281,25 @@
     <div class="ms-slot" data-slot="account"></div>
   </section>
 
-  <!-- 9. RSVP & BGM & GUESTBOOK SLOTS -->
-  <div class="ms-slot" data-slot="rsvp"></div>
-  <div class="ms-slot" data-slot="guestbook"></div>
+  <!-- 9. RSVP SECTION (다른 블럭과 동일하게 section 으로 감싸 패딩·제목 편집·켜기/끄기를 통일한다 —
+       예전엔 맨몸 슬롯이라 패딩이 아예 없고 제목도 못 바꿨다) -->
+  <section class="ms-section ms-rsvp" data-block="rsvp">
+    <div class="ms-section__header">
+      <span class="ms-section__subtitle" data-block-label>RSVP</span>
+      <h2 class="ms-section__title" data-block-title>참석 여부 알리기</h2>
+    </div>
+    <div class="ms-slot" data-slot="rsvp"></div>
+  </section>
+
+  <!-- 10. GUESTBOOK SECTION -->
+  <section class="ms-section ms-guestbook" data-block="guestbook">
+    <div class="ms-section__header">
+      <span class="ms-section__subtitle" data-block-label>GUESTBOOK</span>
+      <h2 class="ms-section__title" data-block-title>방명록</h2>
+    </div>
+    <div class="ms-slot" data-slot="guestbook"></div>
+  </section>
+
+  <!-- 11. BGM -->
   <div class="ms-slot" data-slot="bgm"></div>
 </div>

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { buildFontFaceRule } from "@/lib/fonts"
+import { buildFontFaceRule, joinFontFaceCss } from "@/lib/fonts"
 
 /**
  * InvitationFrame — B(하이브리드) + iframe 구조의 핵심 렌더러 프로토타입.
@@ -324,14 +324,15 @@ export function InvitationFrame({
       styleEl.id = styleId
       doc.head.appendChild(styleEl)
     }
-    styleEl.textContent = fontFaces
-      .map((f) => {
-        if (f.embedCode) return f.embedCode
-        if (f.fileUrl) return buildFontFaceRule(f.family, f.fileUrl)
-        return ""
-      })
-      .filter(Boolean)
-      .join("\n")
+    styleEl.textContent = joinFontFaceCss(
+      fontFaces
+        .map((f) => {
+          if (f.embedCode) return f.embedCode
+          if (f.fileUrl) return buildFontFaceRule(f.family, f.fileUrl)
+          return ""
+        })
+        .filter(Boolean)
+    )
   }, [doc, fontFaces])
 
   return (

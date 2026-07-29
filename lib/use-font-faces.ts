@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
-import { buildFontFaceCss, type RegisteredFont } from "@/lib/fonts"
+import { buildFontFaceCss, joinFontFaceCss, type RegisteredFont } from "@/lib/fonts"
 
 /**
  * 현재(iframe이 아닌) 문서에 등록 폰트들을 실제로 로드해, 폰트 이름을 "그 폰트로" 미리보여줄 수
@@ -21,6 +21,6 @@ export function useInjectFontFaces(fonts: RegisteredFont[], styleId = "registere
       styleEl.id = styleId
       document.head.appendChild(styleEl)
     }
-    styleEl.textContent = fonts.map(buildFontFaceCss).filter(Boolean).join("\n")
+    styleEl.textContent = joinFontFaceCss(fonts.map(buildFontFaceCss).filter(Boolean))
   }, [fonts, styleId])
 }
