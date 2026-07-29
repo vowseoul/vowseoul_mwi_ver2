@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase, logSupabaseError } from '@/lib/supabase'
+import { buildFontFaceRule } from '@/lib/fonts'
 
 export function FontLoader() {
   const [customFonts, setCustomFonts] = useState<any[]>([])
@@ -45,17 +46,7 @@ export function FontLoader() {
 
   const fontFaces = customFonts
     .filter(f => f.type === 'file' && f.fileUrl)
-    .map(f => {
-      // Use local API proxy to bypass CORS restrictions on cross-origin font files
-      const proxiedUrl = `/api/fonts?url=${encodeURIComponent(f.fileUrl)}`;
-      return `
-        @font-face {
-          font-family: '${f.family}';
-          src: url('${proxiedUrl}') format('truetype');
-          font-display: swap;
-        }
-      `;
-    })
+    .map(f => buildFontFaceRule(f.family, f.fileUrl))
     .join('\n');
 
   const css = `${defaultGoogleFonts}\n${imports}\n${directImports}\n${fontFaces}`;

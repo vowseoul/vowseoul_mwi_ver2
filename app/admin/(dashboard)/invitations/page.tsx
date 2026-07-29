@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Table,
   TableBody,
@@ -25,11 +26,13 @@ import {
 } from '@/components/ui/dialog'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { 
-  useInvitationsQuery, 
-  useCreateInvitationMutation, 
+import {
+  useInvitationsQuery,
+  useCreateInvitationMutation,
   useUpdateInvitationStatusMutation,
-  useDeleteInvitationMutation 
+  useUpdateInvitationSlugMutation,
+  useUpdateInvitationSampleMutation,
+  useDeleteInvitationMutation
 } from '@/hooks/queries/useInvitations'
 import { useCustomersQuery } from '@/hooks/queries/useCustomers'
 import { useThemesQuery } from '@/hooks/queries/useThemes'
@@ -47,7 +50,8 @@ import {
   Sparkles,
   Link2,
   Trash2,
-  ClipboardList
+  ClipboardList,
+  Pencil
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -58,6 +62,8 @@ export default function InvitationsListPage() {
 
   const createMutation = useCreateInvitationMutation()
   const statusMutation = useUpdateInvitationStatusMutation()
+  const slugMutation = useUpdateInvitationSlugMutation()
+  const sampleMutation = useUpdateInvitationSampleMutation()
   const deleteMutation = useDeleteInvitationMutation()
 
   const [search, setSearch] = useState('')
@@ -70,6 +76,38 @@ export default function InvitationsListPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  const [slugEditTarget, setSlugEditTarget] = useState<{ id: string; name: string } | null>(null)
+  const [editedSlug, setEditedSlug] = useState('')
+  const [isSavingSlug, setIsSavingSlug] = useState(false)
+
+  const openSlugEditor = (id: string, currentSlug: string, name: string) => {
+    setSlugEditTarget({ id, name })
+    setEditedSlug(currentSlug)
+  }
+
+  const handleSlugSave = async () => {
+    if (!slugEditTarget) return
+    const trimmed = editedSlug.trim()
+    if (!trimmed) {
+      toast.error('링크 주소를 입력해주세요.')
+      return
+    }
+    if (!/^[a-z0-9-]+$/.test(trimmed)) {
+      toast.error('링크 주소는 영문 소문자, 숫자, 하이픈(-)만 허용됩니다.')
+      return
+    }
+    setIsSavingSlug(true)
+    try {
+      await slugMutation.mutateAsync({ invitationId: slugEditTarget.id, publicSlug: trimmed })
+      toast.success('접속 링크 주소가 변경되었습니다.')
+      setSlugEditTarget(null)
+    } catch (err: any) {
+      toast.error(err.message || '링크 주소 변경에 실패했습니다.')
+    } finally {
+      setIsSavingSlug(false)
+    }
+  }
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -122,6 +160,16 @@ export default function InvitationsListPage() {
     } catch (err: any) {
       console.error(err)
       toast.error('상태 변경 실패')
+    }
+  }
+
+  const handleSampleToggle = async (invitationId: string, isSample: boolean) => {
+    try {
+      await sampleMutation.mutateAsync({ invitationId, isSample })
+      toast.success(isSample ? '샘플용으로 지정되어 자동 파기 대상에서 제외됩니다.' : '샘플 지정이 해제되었습니다.')
+    } catch (err: any) {
+      console.error(err)
+      toast.error('샘플 지정 변경 실패')
     }
   }
 
@@ -282,9 +330,31 @@ export default function InvitationsListPage() {
                       <div className="font-semibold text-sm">
                         {inv.customer?.groom_name} & {inv.customer?.bride_name}
                       </div>
+                      <label className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer w-fit">
+                        <Checkbox
+                          checked={inv.is_sample === true}
+                          onCheckedChange={(checked) => handleSampleToggle(inv.id, checked === true)}
+                        />
+                        SAMPLE
+                      </label>
                     </TableCell>
                     <TableCell className="font-mono text-xs">
-                      /w/{inv.public_slug}
+                      <div className="flex items-center gap-1.5">
+                        <span>/w/{inv.public_slug}</span>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="h-6 w-6 shrink-0"
+                          title="링크 주소 수정"
+                          onClick={() => openSlugEditor(
+                            inv.id,
+                            inv.public_slug,
+                            `${inv.customer?.groom_name || '신랑'} & ${inv.customer?.bride_name || '신부'}`
+                          )}
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </Button>
+                      </div>
                     </TableCell>
                     <TableCell className="text-center">
                       <Badge 
@@ -413,6 +483,43 @@ export default function InvitationsListPage() {
             >
               {isDeleting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
               삭제하기
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Slug Edit Modal */}
+      <Dialog open={!!slugEditTarget} onOpenChange={(open) => !open && setSlugEditTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>접속 링크 주소 수정</DialogTitle>
+            <DialogDescription>
+              <strong className="text-foreground">{slugEditTarget?.name}</strong> 청첩장의 하객 접속 링크 주소를 변경합니다.
+              기존 링크는 더 이상 연결되지 않으니, 이미 공유된 링크라면 주의해주세요.
+            </DialogDescription>
+          </DialogHeader>
+          <FieldGroup className="mt-2">
+            <Field>
+              <FieldLabel htmlFor="editedSlug">접속 링크 (Slug)</FieldLabel>
+              <Input
+                id="editedSlug"
+                value={editedSlug}
+                onChange={(e) => setEditedSlug(e.target.value)}
+                placeholder="예: sample-wedding"
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSlugSave() }}
+              />
+              <p className="text-[10px] text-muted-foreground">
+                영문 소문자, 숫자, 하이픈(-)만 가능합니다. 예: /w/{editedSlug || 'sample-wedding'}
+              </p>
+            </Field>
+          </FieldGroup>
+          <DialogFooter className="mt-4 gap-2">
+            <Button variant="outline" size="sm" onClick={() => setSlugEditTarget(null)} disabled={isSavingSlug}>
+              취소
+            </Button>
+            <Button size="sm" onClick={handleSlugSave} disabled={isSavingSlug}>
+              {isSavingSlug ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+              저장
             </Button>
           </DialogFooter>
         </DialogContent>

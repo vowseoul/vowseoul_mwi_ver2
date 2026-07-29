@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import type { FieldData } from "./invitation-frame"
+import type { FieldData, BlockOverrideMap } from "./invitation-frame"
 import type { RawInvitationData } from "@/lib/invitation-data"
 import { supabase } from "@/lib/supabase"
 
@@ -26,6 +26,8 @@ export interface SlotProps {
   raw?: RawInvitationData
   /** 실제 청첩장 렌더 시 전달. 있으면 RSVP가 DB에 저장된다(없으면 미리보기 모드) */
   invitationId?: string
+  /** 블럭별 오버라이드 (§rsvp 블럭의 mealEnabled/shuttleEnabled 서브옵션에 사용) */
+  blockOverrides?: BlockOverrideMap
 }
 
 /** currentColor 기반 반투명 색 (테마 색을 그대로 따라감) */
@@ -169,7 +171,7 @@ function SequenceIsland({ raw }: SlotProps) {
           <div style={{
             width: 90, padding: "12px 0", textAlign: "center", fontSize: 14, fontWeight: 300,
             borderRight: `1px solid ${soft(40)}`, display: "flex", alignItems: "center", justifyContent: "center",
-            fontFamily: "ui-monospace, monospace", opacity: 0.9,
+            fontFamily: "var(--font-en, ui-monospace, monospace)", opacity: 0.9,
           }}>
             {e.time}
           </div>
@@ -224,7 +226,7 @@ function CalendarIsland({ accent, data, raw }: SlotProps) {
     <div>
       <div style={{ maxWidth: 320, margin: "0 auto", background: "#fff", padding: 16, color: "#000", borderRadius: 2, boxShadow: "0 4px 10px rgba(0,0,0,.05)" }}>
         <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <p style={{ fontSize: 20, fontWeight: 500, letterSpacing: ".15em", textTransform: "uppercase", color: accent }}>
+          <p style={{ fontSize: 20, fontWeight: 500, letterSpacing: ".15em", textTransform: "uppercase", color: accent, fontFamily: "var(--font-en, inherit)" }}>
             {MONTHS_FULL[cal.month]}
           </p>
         </div>
@@ -253,10 +255,10 @@ function CalendarIsland({ accent, data, raw }: SlotProps) {
 
       {/* D-day 카운트다운 */}
       <div style={{ marginTop: 48, paddingTop: 32, textAlign: "center", borderTop: `1px solid ${accent}` }}>
-        <p style={{ fontSize: 14, textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600, color: accent, marginBottom: 20 }}>
+        <p style={{ fontSize: 14, textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600, color: accent, marginBottom: 20, fontFamily: "var(--font-en, inherit)" }}>
           Days left
         </p>
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 40, maxWidth: 280, margin: "0 auto", color: accent }}>
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 40, maxWidth: 280, margin: "0 auto", color: accent, fontFamily: "var(--font-en, inherit)" }}>
           {[["DAYS", daysLeft], ["HOURS", hoursLeft], ["MINUTES", minutesLeft]].map(([label, value]) => (
             <div key={String(label)} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
               <p style={{ fontSize: 14, letterSpacing: ".05em", opacity: 0.6 }}>{label}</p>
@@ -629,7 +631,7 @@ function MapIsland({ accent, data }: SlotProps) {
  * 이전 버전 UX(트리거 버튼 → 모달 폼)를 이식하되, 저장은 새 스키마
  * rsvp_responses 테이블에 맞춰 구현. invitationId 가 없으면 미리보기 모드.
  * ------------------------------------------------------------------ */
-function RsvpIsland({ accent, invitationId }: SlotProps) {
+function RsvpIsland({ accent, invitationId, blockOverrides }: SlotProps) {
   const [open, setOpen] = useState(false)
   const [done, setDone] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -640,6 +642,15 @@ function RsvpIsland({ accent, invitationId }: SlotProps) {
   const [attending, setAttending] = useState<"yes" | "no">("yes")
   const [side, setSide] = useState<"groom" | "bride">("groom")
   const [partySize, setPartySize] = useState(1)
+  const [mealChoice, setMealChoice] = useState<"korean" | "western" | "none">("korean")
+  const [shuttleUsed, setShuttleUsed] = useState(false)
+
+  // rsvp_responses.meal_choice/shuttle_required 컬럼은 이미 있었지만 이 폼이 값을
+  // 채운 적이 없어 신랑신부 대시보드의 식사·셔틀 집계가 항상 비어 있었다 — 여기서 채운다.
+  // 관리자가 편집기 "블럭" 카드에서 청첩장별로 끌 수 있다(§customize-client.tsx) — 미설정 시 노출.
+  const rsvpOverride = blockOverrides?.rsvp
+  const mealEnabled = rsvpOverride?.mealEnabled !== false
+  const shuttleEnabled = rsvpOverride?.shuttleEnabled !== false
 
   const submit = async () => {
     if (!name.trim()) { setError("성함을 입력해주세요."); return }
@@ -647,13 +658,17 @@ function RsvpIsland({ accent, invitationId }: SlotProps) {
     setError(null); setSaving(true)
 
     if (invitationId) {
+      const isAttending = attending === "yes"
       const { error: err } = await supabase.from("rsvp_responses").insert({
         invitation_id: invitationId,
         guest_name: name.trim(),
         phone: phone.trim(),
         side,
-        is_attending: attending === "yes",
-        party_size: attending === "yes" ? partySize : 0,
+        is_attending: isAttending,
+        party_size: isAttending ? partySize : 0,
+        meal_required: isAttending && mealEnabled && mealChoice !== "none",
+        meal_choice: isAttending && mealEnabled && mealChoice !== "none" ? mealChoice : null,
+        shuttle_required: isAttending && shuttleEnabled ? shuttleUsed : false,
       })
       if (err) { setSaving(false); setError("전송에 실패했습니다. 잠시 후 다시 시도해주세요."); return }
     }
@@ -728,6 +743,26 @@ function RsvpIsland({ accent, invitationId }: SlotProps) {
                     <button onClick={() => setPartySize((n) => Math.min(20, n + 1))} style={stepBtn}>＋</button>
                   </div>
                 </RsvpField>
+                {mealEnabled && (
+                  <RsvpField label="식사 여부">
+                    <Segmented
+                      options={[["korean", "한식"], ["western", "양식"], ["none", "안함"]]}
+                      value={mealChoice}
+                      onChange={(v) => setMealChoice(v as "korean" | "western" | "none")}
+                      accent={accent}
+                    />
+                  </RsvpField>
+                )}
+                {shuttleEnabled && (
+                  <RsvpField label="셔틀버스 이용">
+                    <Segmented
+                      options={[["no", "이용안함"], ["yes", "이용함"]]}
+                      value={shuttleUsed ? "yes" : "no"}
+                      onChange={(v) => setShuttleUsed(v === "yes")}
+                      accent={accent}
+                    />
+                  </RsvpField>
+                )}
               </>
             )}
 

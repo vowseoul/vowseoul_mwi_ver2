@@ -1,6 +1,6 @@
 <div class="se-container">
   <!-- 1. HERO SECTION -->
-  <section class="se-hero">
+  <section class="se-hero" data-block="hero">
     <div class="se-hero__top-bar"></div>
     <div class="se-hero__semi-circle"></div>
     
@@ -30,7 +30,7 @@
   </section>
 
   <!-- 2. GREETING SECTION -->
-  <section class="se-greeting">
+  <section class="se-greeting" data-block="greeting">
     <!-- Diagonal Slanted White Bar -->
     <div class="se-greeting__slanted-bar"></div>
     
@@ -40,6 +40,11 @@
 서로를 이해하며 한 길을 걸어가려 합니다.
 귀한 발걸음으로 저희의 출발을
 함께 축복해 주시기 바랍니다.
+    </div>
+
+    <!-- Greeting Image (선택) -->
+    <div class="se-greeting__image" data-field-when="greeting_image">
+      <img data-field="greeting_image" alt="인사말 이미지" />
     </div>
 
     <!-- Profile Photos -->
@@ -97,31 +102,31 @@
   </section>
 
   <!-- 3. GALLERY SECTION -->
-  <section class="se-section se-gallery-section">
-    <h4 class="se-section__subtitle">GALLERY</h4>
-    <h3 class="se-section__title">갤러리</h3>
+  <section class="se-section se-gallery-section" data-block="gallery">
+    <h4 class="se-section__subtitle" data-block-label>GALLERY</h4>
+    <h3 class="se-section__title" data-block-title>갤러리</h3>
     <div data-slot="gallery"></div>
   </section>
 
   <!-- 4. ORDER / SEQUENCE SECTION -->
-  <section class="se-section se-order-section">
-    <h4 class="se-section__subtitle">WEDDING ORDER</h4>
-    <h3 class="se-section__title">식순 안내</h3>
-    
+  <section class="se-section se-order-section" data-block="sequence">
+    <h4 class="se-section__subtitle" data-block-label>WEDDING ORDER</h4>
+    <h3 class="se-section__title" data-block-title>식순 안내</h3>
+
     <div data-slot="sequence"></div>
   </section>
 
-  <!-- 5. CALENDAR & D-DAY SECTION -->
-  <section class="se-section se-calendar-section">
-    <h4 class="se-section__subtitle se-section__subtitle--pink">Calendar</h4>
-    
+  <!-- 5. CALENDAR & D-DAY SECTION (이 테마는 캘린더에 한글 타이틀이 없다 — block_manifest 에서 title:false) -->
+  <section class="se-section se-calendar-section" data-block="calendar">
+    <h4 class="se-section__subtitle se-section__subtitle--pink" data-block-label>Calendar</h4>
+
     <div data-slot="calendar"></div>
   </section>
 
   <!-- 6. LOCATION / MAP SECTION -->
-  <section class="se-section se-location-section">
-    <h4 class="se-section__subtitle">LOCATION</h4>
-    <h3 class="se-section__title">식장 위치</h3>
+  <section class="se-section se-location-section" data-block="location">
+    <h4 class="se-section__subtitle" data-block-label>LOCATION</h4>
+    <h3 class="se-section__title" data-block-title>식장 위치</h3>
 
     <div class="se-location-card">
       <h3 class="se-location-card__name" data-field="venue_name">VOW SEOUL GRAND HALL</h3>
@@ -131,31 +136,46 @@
     </div>
 
     <div data-slot="map"></div>
+
+    <div class="se-location__guides">
+      <div class="se-location__guide">
+        <h4 class="se-location__guide-title">교통 안내</h4>
+        <p class="se-location__guide-desc" data-field="traffic_info">지하철 7호선 학동역 1번 출구 도보 5분</p>
+      </div>
+      <div class="se-location__guide">
+        <h4 class="se-location__guide-title">주차 안내</h4>
+        <p class="se-location__guide-desc" data-field="parking_info">식장 내부 주차장 2시간 무료 주차 가능</p>
+      </div>
+      <div class="se-location__guide">
+        <h4 class="se-location__guide-title">셔틀버스 안내</h4>
+        <p class="se-location__guide-desc" data-field="shuttle_info">운행 정보가 등록되면 이곳에 표시됩니다</p>
+      </div>
+    </div>
   </section>
 
   <!-- 7. ACCOUNT SECTION -->
-  <section class="se-section se-account-section">
-    <h4 class="se-section__subtitle">ACCOUNT</h4>
-    <h3 class="se-section__title">마음 전하실 곳</h3>
+  <section class="se-section se-account-section" data-block="account">
+    <h4 class="se-section__subtitle" data-block-label>ACCOUNT</h4>
+    <h3 class="se-section__title" data-block-title>마음 전하실 곳</h3>
     <div data-slot="account"></div>
   </section>
 
   <!-- 7-1. CONTACT SECTION -->
-  <section class="se-section se-contact-section">
-    <h4 class="se-section__subtitle">CONTACT</h4>
-    <h3 class="se-section__title">축하 연락하기</h3>
+  <section class="se-section se-contact-section" data-block="contact">
+    <h4 class="se-section__subtitle" data-block-label>CONTACT</h4>
+    <h3 class="se-section__title" data-block-title>축하 연락하기</h3>
     <div data-slot="contact"></div>
   </section>
 
   <!-- 8. RSVP SECTION -->
-  <section class="se-section se-rsvp-section">
-    <h4 class="se-section__subtitle">RSVP</h4>
-    <h3 class="se-section__title">참석 여부 알리기</h3>
+  <section class="se-section se-rsvp-section" data-block="rsvp">
+    <h4 class="se-section__subtitle" data-block-label>RSVP</h4>
+    <h3 class="se-section__title" data-block-title>참석 여부 알리기</h3>
     <div data-slot="rsvp"></div>
   </section>
 
-  <!-- 8-1. SHARE -->
-  <section class="se-section se-share-section" style="padding-top: 0;">
+  <!-- 8-1. SHARE (여백은 이 섹션 전용 클래스로 고정 — 인라인 style 금지, PLAN_DESIGN_CONTROLS.md §3.3) -->
+  <section class="se-section se-share-section" data-block="share">
     <div data-slot="share"></div>
   </section>
 

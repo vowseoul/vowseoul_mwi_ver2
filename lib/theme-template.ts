@@ -21,6 +21,8 @@ export interface ThemeRow {
   template_css?: string | null
   slot_manifest?: unknown
   field_manifest?: unknown
+  /** 이 테마가 지원하는 블럭과 블럭별 편집 가능 범위 선언 (§BlockManifestEntry) */
+  block_manifest?: unknown
   /** 디자인 토큰 저장소 (CSS 변수 키 또는 레거시 스타일 키) */
   styles?: unknown
   [key: string]: unknown
@@ -89,6 +91,124 @@ export const TOKEN_FIELDS: { name: string; label: string; type: "color" | "font"
   { name: "--font-en", label: "영문 폰트", type: "font" },
 ]
 
+/**
+ * 슬라이더로 노출하는 숫자형 토큰 정의.
+ * 값은 customization_overrides 에 숫자로 저장되고(extractOverrideTokens 가 'px' 단위를 붙인다),
+ * 테마 CSS 는 항상 폴백을 동반한 var() 로 이 토큰을 참조한다 — 토큰이 없으면 원래 값 그대로 렌더된다.
+ * 편집기는 이 목록을 그대로 순회하되, 테마 template_css 가 실제로 참조하지 않는 토큰은 슬라이더를 숨긴다.
+ */
+export const SIZE_TOKEN_FIELDS: { name: string; label: string; group: "typography" | "layout"; min: number; max: number }[] = [
+  { name: "--text-display", label: "대표 문구 · 이름 크기", group: "typography", min: 16, max: 48 },
+  { name: "--text-title", label: "섹션 제목 크기", group: "typography", min: 12, max: 32 },
+  { name: "--text-label", label: "섹션 영문 소제목 크기", group: "typography", min: 10, max: 24 },
+  { name: "--text-body", label: "본문 크기", group: "typography", min: 12, max: 22 },
+  { name: "--text-caption", label: "작은 글씨 크기", group: "typography", min: 10, max: 18 },
+  { name: "--section-py", label: "섹션 세로 여백", group: "layout", min: 16, max: 120 },
+  { name: "--section-px", label: "섹션 가로 여백", group: "layout", min: 8, max: 48 },
+  { name: "--content-gap", label: "요소 간 기본 간격", group: "layout", min: 8, max: 64 },
+  { name: "--radius", label: "모서리 곡률", group: "layout", min: 0, max: 24 },
+]
+
+/**
+ * 블럭 키 — 테마 독립적인 청첩장 섹션 식별자. slot_manifest 의 상위집합이다
+ * (hero/greeting 은 슬롯이 없는 블럭). themes.block_manifest 는 이 중 테마가
+ * 실제로 지원하는(=data-block 이 붙은) 키만 선언한다.
+ */
+export const BLOCK_KEYS = [
+  "hero", "greeting", "gallery", "sequence", "calendar",
+  "location", "account", "contact", "rsvp", "share",
+] as const
+export type BlockKey = (typeof BLOCK_KEYS)[number]
+
+/** themes.block_manifest 한 항목 — "이 테마가 이 블럭에 대해 무엇을 지원하는가" 선언 */
+export interface BlockManifestEntry {
+  key: string
+  label: string
+  /** 블럭 제목/영문 소제목 입력란을 보여줄지. false 면 이 블럭에 편집 가능한 타이틀 마커가 없다는 뜻 */
+  title: boolean
+  /** 블럭 위/아래 여백 슬라이더를 보여줄지. false 면 이 블럭의 여백이 디자인상 고정이어야 한다는 뜻 */
+  padding: boolean
+}
+
+/** themes.block_manifest(jsonb) 를 안전하게 배열로 정규화 */
+export function getBlockManifest(row: ThemeRow | null | undefined): BlockManifestEntry[] {
+  const value = row?.block_manifest
+  if (!Array.isArray(value)) return []
+  return value.filter((v): v is BlockManifestEntry =>
+    !!v && typeof v === "object" && typeof (v as Record<string, unknown>).key === "string"
+  )
+}
+
+/** 블럭 하나에 대한 개별 오버라이드 — customization_overrides.blocks[key] */
+export interface BlockOverride {
+  /** 위/아래 여백(px). 없으면 테마 기본값 */
+  py?: number
+  /** 한글 타이틀. 빈 문자열/미설정이면 템플릿 기본 텍스트를 그대로 둔다 */
+  title?: string
+  /** 영문 소제목. 빈 문자열/미설정이면 템플릿 기본 텍스트를 그대로 둔다 */
+  label?: string
+  /** rsvp 블럭 전용: false 면 식사 여부 질문을 숨긴다 (미설정 시 노출) */
+  mealEnabled?: boolean
+  /** rsvp 블럭 전용: false 면 셔틀버스 이용 질문을 숨긴다 (미설정 시 노출) */
+  shuttleEnabled?: boolean
+}
+
+/**
+ * customization_overrides(jsonb) 에서 blocks(블럭별 오버라이드 맵)를 추출한다.
+ * disabled_slots/'--' 토큰과 같은 customization_overrides 컬럼을 공유하되 별도 키라 서로 간섭하지 않는다.
+ */
+export function extractBlockOverrides(overrides: unknown): Record<string, BlockOverride> {
+  const out: Record<string, BlockOverride> = {}
+  if (!overrides || typeof overrides !== "object") return out
+  const blocks = (overrides as Record<string, unknown>).blocks
+  if (!blocks || typeof blocks !== "object") return out
+  for (const [key, raw] of Object.entries(blocks as Record<string, unknown>)) {
+    if (!raw || typeof raw !== "object") continue
+    const r = raw as Record<string, unknown>
+    const entry: BlockOverride = {}
+    if (typeof r.py === "number" && Number.isFinite(r.py)) entry.py = r.py
+    if (typeof r.title === "string") entry.title = r.title
+    if (typeof r.label === "string") entry.label = r.label
+    if (typeof r.mealEnabled === "boolean") entry.mealEnabled = r.mealEnabled
+    if (typeof r.shuttleEnabled === "boolean") entry.shuttleEnabled = r.shuttleEnabled
+    if (Object.keys(entry).length > 0) out[key] = entry
+  }
+  return out
+}
+
+/**
+ * 섹션(블럭) 사이에 끼워 넣는 이미지 — customization_overrides.sectionImages.
+ * 배열 순서가 렌더 순서다. 같은 afterBlock 을 가리키는 항목이 여러 개면 배열 순서대로
+ * 연속 배치된다. 삭제 후 재업로드 없이 afterBlock 드롭다운만 바꾸면 위치를 옮길 수 있고,
+ * 배열 순서는 위/아래 버튼으로 바꾼다 (편집기 UI, §customize-client.tsx).
+ */
+export interface SectionImage {
+  /** 클라이언트에서 생성하는 안정적인 key (React key 및 DOM 매칭용) */
+  id: string
+  url: string
+  /** 이 블럭 키의 섹션 바로 뒤에 삽입된다 */
+  afterBlock: string
+  caption?: string
+}
+
+/** customization_overrides.sectionImages 를 안전하게 SectionImage[] 로 정규화 */
+export function extractSectionImages(overrides: unknown): SectionImage[] {
+  if (!overrides || typeof overrides !== "object") return []
+  const raw = (overrides as Record<string, unknown>).sectionImages
+  if (!Array.isArray(raw)) return []
+  const out: SectionImage[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue
+    const r = item as Record<string, unknown>
+    if (typeof r.id !== "string" || typeof r.url !== "string" || typeof r.afterBlock !== "string") continue
+    if (!r.url) continue
+    const entry: SectionImage = { id: r.id, url: r.url, afterBlock: r.afterBlock }
+    if (typeof r.caption === "string" && r.caption) entry.caption = r.caption
+    out.push(entry)
+  }
+  return out
+}
+
 /** 'font-serif' 같은 유틸 값도 실제 font-family 스택으로 변환 */
 function toFontStack(value: string): string {
   if (value === "font-serif") return "'Noto Serif KR', serif"
@@ -144,12 +264,18 @@ export function resolveThemeSwatch(theme: ThemeSwatchInput | null | undefined) {
   }
 }
 
-/** customization_overrides(jsonb) 에서 '--' CSS 변수만 추출 */
+/**
+ * customization_overrides(jsonb) 에서 '--' CSS 변수만 추출한다.
+ * 색/폰트 토큰은 문자열로, 사이즈 토큰(SIZE_TOKEN_FIELDS)은 숫자로 저장되므로
+ * 숫자 값은 여기서 'px' 단위를 붙여 문자열 CSS 값으로 정규화한다.
+ */
 export function extractOverrideTokens(overrides: unknown): TokenMap {
   const tokens: TokenMap = {}
   if (overrides && typeof overrides === "object") {
     for (const [k, v] of Object.entries(overrides as Record<string, unknown>)) {
-      if (k.startsWith("--") && typeof v === "string" && v) tokens[k] = v
+      if (!k.startsWith("--")) continue
+      if (typeof v === "string" && v) tokens[k] = v
+      else if (typeof v === "number" && Number.isFinite(v)) tokens[k] = `${v}px`
     }
   }
   return tokens
@@ -176,4 +302,15 @@ export function extractDisabledSlots(overrides: unknown): string[] {
   if (!overrides || typeof overrides !== "object") return []
   const value = (overrides as Record<string, unknown>).disabled_slots
   return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : []
+}
+
+/**
+ * disabled_slots 중 "블럭 전체가 그 슬롯 하나로만 이루어진" 키만 골라 블럭 표시 제거 대상으로 반환한다.
+ * 예) gallery/sequence/rsvp 등은 슬롯을 끄면 섹션 안에 남는 게 없어 빈 껍데기가 되므로 블럭째 숨긴다.
+ * 반면 'map'은 location 블럭 안의 일부일 뿐이라(주소 카드가 별도로 있음) 슬롯만 빠지고
+ * 블럭은 유지해야 한다. 'bgm'은 아예 블럭이 아닌 플로팅 위젯이라 대상이 아니다.
+ * BLOCK_KEYS 에 속하는 슬롯만 남기면 이 구분이 자동으로 맞아떨어진다.
+ */
+export function getHiddenBlocks(disabledSlots: string[]): string[] {
+  return disabledSlots.filter((s): s is BlockKey => (BLOCK_KEYS as readonly string[]).includes(s))
 }

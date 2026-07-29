@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ArrowLeft, CalendarDays, MessageSquare, Users } from "lucide-react"
+import { ResetVisitsButton } from "./reset-visits-button"
 
 /**
  * 청첩장별 하객 응답 조회 (관리자).
@@ -80,7 +81,13 @@ export default async function InvitationResponsesPage({
         <StatCard label="참석 인원" value={`${headcount}명`} hint={`신랑측 ${groomSide} · 신부측 ${brideSide}`} icon={<Users className="h-4 w-4" />} />
         <StatCard label="RSVP 응답" value={`${rsvpRows.length}건`} hint={`참석 ${attending.length} · 불참 ${rsvpRows.length - attending.length}`} icon={<CalendarDays className="h-4 w-4" />} />
         <StatCard label="방명록" value={`${guestbookRows.length}개`} hint={`공개 ${guestbookRows.filter((g) => g.is_visible !== false).length}개`} icon={<MessageSquare className="h-4 w-4" />} />
-        <StatCard label="누적 방문" value={`${(visits ?? []).length}회`} hint="발행 페이지 조회 수" icon={<Users className="h-4 w-4" />} />
+        <StatCard
+          label="누적 방문"
+          value={`${(visits ?? []).length}회`}
+          hint="발행 페이지 조회 수"
+          icon={<Users className="h-4 w-4" />}
+          action={<ResetVisitsButton invitationId={id} />}
+        />
       </div>
 
       <Card>
@@ -177,11 +184,13 @@ function StatCard({
   value,
   hint,
   icon,
+  action,
 }: {
   label: string
   value: string
   hint: string
   icon: React.ReactNode
+  action?: React.ReactNode
 }) {
   return (
     <Card>
@@ -191,7 +200,10 @@ function StatCard({
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-semibold">{value}</div>
-        <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
+        <div className="mt-1 flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">{hint}</p>
+          {action}
+        </div>
       </CardContent>
     </Card>
   )

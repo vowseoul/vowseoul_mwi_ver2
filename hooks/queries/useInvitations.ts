@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { DATA_RETENTION_SETTINGS_KEY, computeExpiryDate, parseRetentionSettings } from '@/lib/data-retention'
 
 export interface Invitation {
   id: string
@@ -16,6 +17,8 @@ export interface Invitation {
   bgm_url: string | null
   published_at: string | null
   expires_at: string
+  /** true 면 데이터 자동 파기 대상에서 제외된다 (예: 데모/샘플용 청첩장) */
+  is_sample: boolean
   created_at: string
   updated_at: string
   customer?: {
@@ -134,11 +137,17 @@ export function useCreateInvitationMutation() {
       const dashboardPassword = phoneStr.slice(-4)
       const dashboardSlug = `dash-${publicSlug}`
 
-      const weddingDate = customer?.wedding_date 
+      const weddingDate = customer?.wedding_date
         ? new Date(customer.wedding_date)
         : new Date()
-      // Expiration: wedding date + 30 days
-      const expiresAt = new Date(weddingDate.getTime() + 30 * 24 * 60 * 60 * 1000)
+      // 만료일 = 예식일 + 보관일수(관리자 설정, 기본 30일 — lib/data-retention.ts)
+      const { data: retentionRow } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', DATA_RETENTION_SETTINGS_KEY)
+        .maybeSingle()
+      const { daysAfterWedding } = parseRetentionSettings(retentionRow?.value)
+      const expiresAt = computeExpiryDate(weddingDate, daysAfterWedding)
 
       const blockOrder = latestVersion?.default_block_order || [
         "cover", "greeting", "couple-info", "event-info", "gallery", "map", "account", "rsvp", "guestbook"
@@ -272,7 +281,65 @@ export function useUpdateInvitationStatusMutation() {
   })
 }
 
-// 4. Delete invitation mutation
+// 4. Update invitation public slug (하객 접속 링크 주소 변경 — 예: 기존 청첩장을 샘플용 링크로 재사용)
+export function useUpdateInvitationSlugMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      invitationId,
+      publicSlug,
+    }: {
+      invitationId: string
+      publicSlug: string
+    }) => {
+      const { data, error } = await supabase
+        .from('invitations')
+        .update({ public_slug: publicSlug })
+        .eq('id', invitationId)
+        .select()
+        .single()
+
+      if (error) {
+        // public_slug 는 DB 에 UNIQUE 제약이 걸려 있다 (23505 = unique_violation)
+        if (error.code === '23505') throw new Error('이미 사용 중인 링크 주소입니다.')
+        throw error
+      }
+      return data as Invitation
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invitations-list'] })
+    },
+  })
+}
+
+// 5. Toggle "샘플용" 플래그 — 켜두면 데이터 자동 파기(예식일+보관일수 경과 삭제) 대상에서 제외된다
+export function useUpdateInvitationSampleMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      invitationId,
+      isSample,
+    }: {
+      invitationId: string
+      isSample: boolean
+    }) => {
+      const { data, error } = await supabase
+        .from('invitations')
+        .update({ is_sample: isSample })
+        .eq('id', invitationId)
+        .select()
+        .single()
+
+      if (error) throw error
+      return data as Invitation
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invitations-list'] })
+    },
+  })
+}
+
+// 6. Delete invitation mutation
 export function useDeleteInvitationMutation() {
   const queryClient = useQueryClient()
   return useMutation({

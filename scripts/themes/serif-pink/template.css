@@ -74,7 +74,7 @@
 
 .se-hero__title {
   font-family: 'Goudy Bookletter 1911', serif;
-  font-size: 25px;
+  font-size: var(--text-display, 25px);
   font-weight: 400;
   line-height: 1.2;
   color: #1A1A1A;
@@ -118,7 +118,7 @@
 .se-polaroid__signature {
   margin-top: 16px;
   font-family: 'Covered By Your Grace', cursive;
-  font-size: 24px;
+  font-size: var(--text-display, 24px);
   font-weight: 400;
   font-style: italic;
   color: #000000;
@@ -130,7 +130,7 @@
   z-index: 10;
   text-align: center;
   font-family: 'Goudy Bookletter 1911', serif;
-  font-size: 12px;
+  font-size: var(--text-caption, 12px);
   letter-spacing: 0.1em;
   color: #686868;
 }
@@ -169,12 +169,25 @@
   padding: 0 24px;
   max-width: 340px;
   margin: 0 auto;
-  font-size: 15px;
+  font-size: var(--text-body, 15px);
   line-height: 2.0;
   font-weight: 500;
   white-space: pre-line;
   color: rgba(255, 255, 255, 0.95);
   font-family: var(--font-kr, 'Noto Serif KR', serif);
+}
+
+.se-greeting__image {
+  max-width: 340px;
+  margin: 20px auto 0;
+  padding: 0 24px;
+}
+
+.se-greeting__image img {
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius, 2px);
+  box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.08);
 }
 
 .se-profile {
@@ -193,7 +206,7 @@
   overflow: hidden;
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
+  border-radius: var(--radius, 2px);
 }
 
 .se-profile__img {
@@ -205,7 +218,7 @@
 .se-parents {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 32px;
+  gap: var(--content-gap, 32px);
   text-align: center;
   max-width: 300px;
   margin: 24px auto 0;
@@ -271,30 +284,38 @@
 
 /* COMMON SECTIONS */
 .se-section {
-  padding: 64px 24px;
+  padding: var(--section-py, 64px) var(--section-px, 24px);
   text-align: center;
   background-color: var(--bg, #EFD0D0);
   color: var(--ink, #FFFFFF);
 }
 
 .se-section__subtitle {
-  font-size: 18px;
+  font-size: var(--text-label, 18px);
   text-transform: uppercase;
   letter-spacing: 0.15em;
   opacity: 0.8;
 }
 
 .se-section__subtitle--pink {
-  font-size: 14px;
+  font-size: var(--text-label, 14px);
   color: rgba(215, 108, 108, 0.9);
+  margin-bottom: 20px;
 }
 
 .se-section__title {
-  font-size: 18px;
+  font-size: var(--text-title, 18px);
   font-weight: 700;
   margin-top: 4px;
   margin-bottom: 32px;
   font-family: var(--font-kr, 'Noto Serif KR', serif);
+}
+
+/* share 섹션은 위 여백을 없애 RSVP 섹션과 바로 이어지도록 한다.
+   원래 template.html의 인라인 style="padding-top:0"이었던 것을 클래스로 옮김
+   (인라인 스타일은 블럭 여백 오버라이드 주입 CSS를 항상 이겨버리기 때문 — data-block 계약 문서 §2.3) */
+.se-share-section {
+  padding-top: 0;
 }
 
 /* 4. ORDER TABLE */
@@ -347,7 +368,7 @@
   background-color: #FFFFFF;
   padding: 16px;
   color: #000000;
-  border-radius: 2px;
+  border-radius: var(--radius, 2px);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
 }
 
@@ -425,7 +446,7 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.05);
   margin-bottom: 24px;
-  border-radius: 2px;
+  border-radius: var(--radius, 2px);
 }
 
 .se-location-card__name {
@@ -437,7 +458,7 @@
 }
 
 .se-location-card__hall {
-  font-size: 12px;
+  font-size: var(--text-caption, 12px);
   color: rgba(215, 108, 108, 0.8);
   margin-top: 4px;
 }
@@ -451,7 +472,33 @@
 }
 
 .se-location-card__hint {
-  font-size: 10px;
+  font-size: var(--text-caption, 10px);
   margin-top: 4px;
   color: rgba(215, 108, 108, 0.6);
+}
+
+.se-location__guides {
+  max-width: 340px;
+  margin: 20px auto 0;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border-top: 1px solid rgba(215, 108, 108, 0.15);
+  padding-top: 20px;
+}
+
+.se-location__guide-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent, #D76C6C);
+  margin-bottom: 4px;
+}
+
+.se-location__guide-desc {
+  font-size: var(--text-caption, 12px);
+  color: var(--ink, #FFFFFF);
+  opacity: 0.7;
+  line-height: 1.6;
+  white-space: pre-line;
 }

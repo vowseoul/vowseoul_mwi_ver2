@@ -27,7 +27,7 @@
 
 /* SECTION STRUCTURE AND ALTERNATING COLORS */
 .ca-section {
-  padding: 64px 24px;
+  padding: var(--section-py, 64px) var(--section-px, 24px);
   text-align: center;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
@@ -47,14 +47,14 @@
 /* Section Header Typography */
 .ca-section__header-sub {
   font-family: var(--font-en, 'Playfair Display', serif);
-  font-size: 16px;
+  font-size: var(--text-label, 16px);
   font-weight: 300;
   letter-spacing: 0.2em;
   opacity: 0.7;
 }
 
 .ca-section__header-title {
-  font-size: 18px;
+  font-size: var(--text-title, 18px);
   font-weight: 500;
   margin-top: 4px;
   margin-bottom: 32px;
@@ -73,7 +73,7 @@
 
 .ca-hero__subtitle {
   font-family: var(--font-en, 'Playfair Display', serif);
-  font-size: 24px;
+  font-size: var(--text-display, 24px);
   letter-spacing: 0.2em;
   text-transform: uppercase;
   font-weight: 300;
@@ -95,13 +95,13 @@
 }
 
 .ca-hero__names {
-  font-size: 22px;
+  font-size: var(--text-display, 22px);
   font-weight: 300;
   letter-spacing: 0.1em;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: var(--content-gap, 16px);
 }
 
 .ca-hero__amp {
@@ -117,7 +117,7 @@
   margin: 16px auto 0;
   padding-top: 16px;
   border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent);
-  font-size: 12px;
+  font-size: var(--text-caption, 12px);
   letter-spacing: 0.05em;
   line-height: 1.6;
   opacity: 0.85;
@@ -147,7 +147,7 @@
 
 /* 2. GREETING SECTION */
 .ca-greeting {
-  padding: 80px 24px;
+  padding: var(--section-py, 80px) var(--section-px, 24px);
 }
 
 .ca-greeting__icon-wrap {
@@ -162,7 +162,7 @@
 }
 
 .ca-greeting__message {
-  font-size: 15px;
+  font-size: var(--text-body, 15px);
   line-height: 2.0;
   letter-spacing: 0.05em;
   font-weight: 300;
@@ -170,6 +170,24 @@
   margin: 0 auto;
   white-space: pre-line;
   opacity: 0.9;
+}
+
+.ca-greeting__image {
+  max-width: 320px;
+  margin: 20px auto 0;
+}
+
+.ca-greeting__image img {
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius, 4px);
+}
+
+/* share 섹션은 위 여백을 없애 RSVP 섹션과 바로 이어지도록 한다.
+   원래 template.html의 인라인 style="padding-top:0"이었던 것을 클래스로 옮김
+   (인라인 스타일은 블럭 여백 오버라이드 주입 CSS를 항상 이겨버리기 때문 — data-block 계약 문서 §2.3) */
+.ca-share-section {
+  padding-top: 0;
 }
 
 /* 4. ORDER TABLE */
@@ -216,7 +234,7 @@
   background-color: rgba(255, 255, 255, 0.08);
   padding: 24px;
   border: 1px solid color-mix(in srgb, currentColor 10%, transparent);
-  border-radius: 4px;
+  border-radius: var(--radius, 4px);
 }
 
 .ca-calendar-card__header {
@@ -316,7 +334,7 @@
   text-align: center;
   border: 1px solid color-mix(in srgb, currentColor 10%, transparent);
   margin-bottom: 24px;
-  border-radius: 4px;
+  border-radius: var(--radius, 4px);
 }
 
 .ca-location-card__name {
@@ -329,7 +347,33 @@
 .ca-location-card__address {
   font-size: 14px;
   margin-top: 8px;
+  white-space: pre-line;
   /* color 프로퍼티 자체의 값으로 currentColor 를 쓰면 조상 커스텀 프로퍼티가 바뀌어도
      일부 브라우저에서 재계산되지 않아 --ink 를 직접 참조한다 */
   color: color-mix(in srgb, var(--ink, #3D3D3D) 80%, transparent);
+}
+
+.ca-location__guides {
+  max-width: 340px;
+  margin: 20px auto 0;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border-top: 1px solid color-mix(in srgb, var(--ink, #3D3D3D) 12%, transparent);
+  padding-top: 20px;
+}
+
+.ca-location__guide-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink, #3D3D3D);
+  margin-bottom: 4px;
+}
+
+.ca-location__guide-desc {
+  font-size: var(--text-caption, 12px);
+  color: color-mix(in srgb, var(--ink, #3D3D3D) 70%, transparent);
+  line-height: 1.6;
+  white-space: pre-line;
 }

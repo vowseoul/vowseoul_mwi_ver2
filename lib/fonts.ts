@@ -34,6 +34,46 @@ export function buildFontStack(font: RegisteredFont, tokenName: string): string 
 }
 
 /**
+ * 업로드된 TTF/WOFF 파일로 @font-face 규칙을 만든다.
+ * Supabase Storage 공개 URL은 앱과 다른 오리진이라 폰트 파일 요청이 CORS 대상이 되고,
+ * 업로드 시 Content-Type이 정확히 세팅되지 않으면 일부 브라우저가 파싱을 거부한다.
+ * /api/fonts 프록시를 거쳐 헤더를 정규화하고(app/api/fonts/route.ts), 확장자로 format() 힌트를 붙인다.
+ * (원래 invitation-frame.tsx 안에만 있던 걸 여기로 옮겨 에셋 관리·편집기 폰트 미리보기에서도 재사용한다.)
+ */
+export function buildFontFaceRule(family: string, fileUrl: string): string {
+  const proxiedUrl = `/api/fonts?url=${encodeURIComponent(fileUrl)}`
+  const lower = fileUrl.toLowerCase()
+  let format = ""
+  if (lower.includes(".woff2")) format = " format('woff2')"
+  else if (lower.includes(".woff")) format = " format('woff')"
+  else if (lower.includes(".otf")) format = " format('opentype')"
+  else if (lower.includes(".ttf")) format = " format('truetype')"
+  return `@font-face { font-family: '${family}'; src: url('${proxiedUrl}')${format}; font-display: swap; }`
+}
+
+/** 업로드된 폰트 파일의 확장자로 에셋 관리 목록에 보여줄 형식 배지 라벨을 만든다 */
+export function fontFileFormatLabel(fileUrl?: string): string {
+  const lower = (fileUrl || "").toLowerCase()
+  if (lower.includes(".woff2")) return "WOFF2 파일"
+  if (lower.includes(".woff")) return "WOFF 파일"
+  if (lower.includes(".otf")) return "OTF 파일"
+  if (lower.includes(".ttf")) return "TTF 파일"
+  return "폰트 파일"
+}
+
+/** 등록 폰트 하나를 실제 로드하는 CSS(임베드 코드 또는 @font-face)로 변환 */
+export function buildFontFaceCss(font: RegisteredFont): string {
+  if (font.embedCode) return font.embedCode
+  if (font.fileUrl) return buildFontFaceRule(font.family, font.fileUrl)
+  return ""
+}
+
+/** 목록/드롭다운에서 폰트 이름을 그 폰트로 미리 보여줄 때 쓰는 인라인 스타일 */
+export function fontPreviewStyle(font: RegisteredFont): { fontFamily: string } {
+  return { fontFamily: `'${font.family}', sans-serif` }
+}
+
+/**
  * 최종 토큰(--font-kr/--font-en)이 등록된 커스텀 폰트를 가리키면
  * 그 로딩 정보(embed 코드 또는 TTF 파일 URL)를 뽑아 InvitationFrame 에 전달할 형태로 만든다.
  * iframe 안에는 이 정보가 없으면 폰트 자체가 로드되지 않아 브라우저 기본 글꼴로 표시된다.

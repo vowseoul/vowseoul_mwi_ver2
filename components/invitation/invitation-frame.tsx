@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
+import { buildFontFaceRule } from "@/lib/fonts"
 
 /**
  * InvitationFrame — B(하이브리드) + iframe 구조의 핵심 렌더러 프로토타입.
@@ -30,6 +31,23 @@ export interface ThemeTemplate {
 export type FieldData = Record<string, string>
 export type TokenMap = Record<string, string>
 export type SlotMap = Record<string, React.ReactNode>
+/** 블럭(섹션) 하나에 대한 여백/타이틀 오버라이드. lib/theme-template.ts 의 BlockOverride 와 동일한 형태 */
+export interface BlockOverride {
+  py?: number
+  title?: string
+  label?: string
+  /** rsvp 블럭 전용 서브옵션 (§slot-registry.tsx RsvpIsland) */
+  mealEnabled?: boolean
+  shuttleEnabled?: boolean
+}
+export type BlockOverrideMap = Record<string, BlockOverride>
+/** 섹션(블럭) 사이에 끼워 넣는 이미지. lib/theme-template.ts 의 SectionImage 와 동일한 형태 */
+export interface SectionImage {
+  id: string
+  url: string
+  afterBlock: string
+  caption?: string
+}
 export interface FontFace {
   family: string
   /** 구글 폰트 등 @import 임베드 코드 */
@@ -45,26 +63,20 @@ interface InvitationFrameProps {
   slots?: SlotMap
   /** 에셋 관리에 등록된 커스텀 폰트 중 --font-kr/--font-en 토큰이 가리키는 것들 (실제 로딩용) */
   fontFaces?: FontFace[]
+  /** 블럭별 여백/타이틀 오버라이드. [data-block="키"] 섹션에 스코프 CSS로 주입된다 */
+  blockOverrides?: BlockOverrideMap
+  /** 완전히 감춰야 하는 블럭 키 목록 (꺼진 슬롯의 빈 섹션 껍데기 제거용) */
+  hiddenBlocks?: string[]
+  /** 이 블럭 키로 미리보기를 스크롤한다. 편집기에서 블럭 아코디언을 펼칠 때 사용 */
+  focusBlock?: string | null
   /** 프레임 너비. 모바일 청첩장이므로 기본 375px. */
   width?: number
   height?: number
-}
-
-/**
- * 업로드된 TTF/WOFF 파일로 @font-face 규칙을 만든다.
- * Supabase Storage 공개 URL은 앱과 다른 오리진이라 폰트 파일 요청이 CORS 대상이 되고,
- * 업로드 시 Content-Type이 정확히 세팅되지 않으면 일부 브라우저가 파싱을 거부한다.
- * /api/fonts 프록시를 거쳐 헤더를 정규화하고(app/api/fonts/route.ts), 확장자로 format() 힌트를 붙인다.
- */
-function buildFontFaceRule(family: string, fileUrl: string): string {
-  const proxiedUrl = `/api/fonts?url=${encodeURIComponent(fileUrl)}`
-  const lower = fileUrl.toLowerCase()
-  let format = ""
-  if (lower.includes(".woff2")) format = " format('woff2')"
-  else if (lower.includes(".woff")) format = " format('woff')"
-  else if (lower.includes(".otf")) format = " format('opentype')"
-  else if (lower.includes(".ttf")) format = " format('truetype')"
-  return `@font-face { font-family: '${family}'; src: url('${proxiedUrl}')${format}; font-display: swap; }`
+  /** 핀치줌·더블탭 확대 차단. 실제 발행 페이지(하객용)에서만 켠다 — 편집기/미리보기에서는
+   * 관리자가 레이아웃을 확대해 볼 수 있어야 하므로 기본 꺼짐. */
+  preventZoom?: boolean
+  /** 섹션 사이에 끼워 넣는 이미지. afterBlock 이 가리키는 [data-block] 섹션 바로 뒤에 삽입된다 */
+  sectionImages?: SectionImage[]
 }
 
 function buildSrcDoc(template: ThemeTemplate): string {
@@ -80,6 +92,25 @@ function buildSrcDoc(template: ThemeTemplate): string {
     html, body { width: 100%; }
     body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; background: var(--bg, #fff); color: var(--ink, #222); }
     img { max-width: 100%; display: block; }
+    /* [data-slot] 아일랜드(계좌·연락처·식순·방명록·RSVP·공유 등)는 React portal로 마운트되어
+       테마 CSS의 개별 클래스 지정 없이 조상 요소의 font-family를 그대로 상속한다. 대부분의
+       테마는 컨테이너 기본 폰트를 --font-en(영문)으로 잡고 개별 한글 요소에만 --font-kr를
+       얹는 구조라, 이 규칙이 없으면 아일랜드 안의 한글 텍스트는 --font-kr을 전혀 반영하지 못한다. */
+    [data-slot] { font-family: var(--font-kr, inherit); }
+    /* button/input/select/textarea 는 브라우저 기본 UA 스타일상 조상의 font-family를
+       상속하지 않는다(OS 위젯 폰트를 쓴다) — 위 [data-slot] 규칙만으로는 아일랜드 안의
+       버튼(공유하기, 계좌 복사, RSVP 등)에 폰트가 전혀 반영되지 않아 별도로 명시한다. */
+    button, input, select, textarea { font-family: inherit; }
+    /* data-field-when="키" 요소는 해당 필드값이 있을 때만 보인다 — 인사말 이미지처럼
+       "값이 없으면 자리 자체가 아예 없어야" 하는 선택적 요소용. main_image/groom_photo
+       처럼 미설정 시 템플릿 기본 사진을 유지해야 하는 [data-field] 일반 규칙과는 다르므로
+       별도 속성으로 분리했다 (아래 필드 바인딩 useEffect 참고). */
+    [data-field-when] { display: none; }
+    /* 섹션 사이 삽입 이미지 — 테마 무관 공용 스타일 (아래 sectionImages 삽입 useEffect 참고).
+       테마마다 별도 CSS를 만들 필요 없이 어떤 테마 뒤에 꽂혀도 자연스럽게 화면 폭을 채운다. */
+    .vs-section-image { width: 100%; background: inherit; }
+    .vs-section-image img { width: 100%; height: auto; display: block; }
+    .vs-section-image__caption { padding: 10px 24px; font-size: 12px; text-align: center; opacity: 0.6; }
   </style>
   <!-- 테마 CSS는 별도 스타일시트로 주입 → 템플릿 선두의 @import(커스텀 폰트)가 유효하게 유지됨 -->
   <style>
@@ -98,8 +129,13 @@ export function InvitationFrame({
   tokens,
   slots = {},
   fontFaces = [],
+  blockOverrides = {},
+  hiddenBlocks = [],
+  focusBlock = null,
   width = 375,
   height = 720,
+  preventZoom = false,
+  sectionImages = [],
 }: InvitationFrameProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [doc, setDoc] = useState<Document | null>(null)
@@ -141,6 +177,15 @@ export function InvitationFrame({
         el.textContent = value
       }
     })
+    // data-field-when="키" 래퍼는 그 필드에 값이 있을 때만 보인다 (예: 인사말 이미지).
+    // 기본 CSS가 display:none 이므로 값이 있을 때는 빈 문자열이 아니라 실제 표시값으로
+    // 인라인 스타일을 채워야 그 규칙을 이긴다 — 빈 문자열은 "인라인 오버라이드 제거"일 뿐이라
+    // 다시 스타일시트의 none 으로 되돌아간다.
+    doc.querySelectorAll<HTMLElement>("[data-field-when]").forEach((el) => {
+      const key = el.getAttribute("data-field-when")
+      if (!key) return
+      el.style.display = data[key] ? "block" : "none"
+    })
   }, [doc, data])
 
   // 토큰 → CSS 변수 주입 (tokens 변경 시 실시간 반영, 리로드 없음)
@@ -151,6 +196,122 @@ export function InvitationFrame({
       root.style.setProperty(name.startsWith("--") ? name : `--${name}`, value)
     })
   }, [doc, tokens])
+
+  // 블럭 여백/표시여부 → [data-block] 스코프 CSS 주입 (테마 <style> 뒤에 삽입되므로 동률 특정도에서 우선한다.
+  // 인라인 style 만 예외 — 테마 쪽에서 금지되어 있다, THEME_TOKEN_GUIDE.md §2.3)
+  useEffect(() => {
+    if (!doc) return
+    const styleId = "vs-block-overrides"
+    let styleEl = doc.getElementById(styleId) as HTMLStyleElement | null
+    if (!styleEl) {
+      styleEl = doc.createElement("style")
+      styleEl.id = styleId
+      doc.head.appendChild(styleEl)
+    }
+    const rules: string[] = []
+    for (const [key, override] of Object.entries(blockOverrides)) {
+      if (typeof override.py === "number") {
+        rules.push(`[data-block="${key}"]{padding-top:${override.py}px;padding-bottom:${override.py}px;}`)
+      }
+    }
+    for (const key of hiddenBlocks) {
+      rules.push(`[data-block="${key}"]{display:none;}`)
+    }
+    styleEl.textContent = rules.join("\n")
+  }, [doc, blockOverrides, hiddenBlocks])
+
+  // 블럭 타이틀/영문 소제목 바인딩 — 빈 값이면 템플릿 기본 텍스트를 그대로 둔다 ([data-field]와 동일 규칙)
+  useEffect(() => {
+    if (!doc) return
+    doc.querySelectorAll<HTMLElement>("[data-block]").forEach((section) => {
+      const key = section.getAttribute("data-block")
+      if (!key) return
+      const override = blockOverrides[key]
+      if (!override) return
+      if (override.title) {
+        const titleEl = section.querySelector<HTMLElement>("[data-block-title]")
+        if (titleEl) titleEl.textContent = override.title
+      }
+      if (override.label) {
+        const labelEl = section.querySelector<HTMLElement>("[data-block-label]")
+        if (labelEl) labelEl.textContent = override.label
+      }
+    })
+  }, [doc, blockOverrides])
+
+  // 섹션 사이 삽입 이미지 — afterBlock 이 가리키는 [data-block] 섹션 바로 뒤에 <div class="vs-section-image">
+  // 를 끼워 넣는다. 테마 template.html 을 전혀 건드리지 않아 어떤 테마에도 그대로 적용된다.
+  // sectionImages 가 바뀔 때마다(추가/삭제/순서변경/위치변경) 이전에 넣어둔 노드를 전부 지우고
+  // 다시 그린다 — 순서·위치가 자유롭게 바뀌는 목록이라 diff 갱신보다 통째로 다시 그리는 쪽이 단순하고 안전하다.
+  useEffect(() => {
+    if (!doc) return
+    doc.querySelectorAll("[data-vs-section-image]").forEach((el) => el.remove())
+
+    // 같은 afterBlock 을 가리키는 이미지가 여러 개면 배열 순서대로 이어 붙여야 하므로,
+    // 각 블럭 뒤에 "마지막으로 삽입한 지점"을 추적하며 순서대로 insertAfter 한다.
+    const lastInserted = new Map<string, Element>()
+    for (const img of sectionImages) {
+      const anchor = lastInserted.get(img.afterBlock) ?? doc.querySelector(`[data-block="${img.afterBlock}"]`)
+      if (!anchor) continue
+
+      const wrapper = doc.createElement("div")
+      wrapper.className = "vs-section-image"
+      wrapper.setAttribute("data-vs-section-image", img.id)
+
+      const imgEl = doc.createElement("img")
+      imgEl.src = img.url
+      imgEl.alt = img.caption || ""
+      wrapper.appendChild(imgEl)
+
+      if (img.caption) {
+        const caption = doc.createElement("p")
+        caption.className = "vs-section-image__caption"
+        caption.textContent = img.caption
+        wrapper.appendChild(caption)
+      }
+
+      anchor.after(wrapper)
+      lastInserted.set(img.afterBlock, wrapper)
+    }
+  }, [doc, sectionImages])
+
+  // 블럭 포커스 — 편집기에서 블럭 아코디언을 펼치면 미리보기가 해당 섹션으로 스크롤
+  useEffect(() => {
+    if (!doc || !focusBlock) return
+    const target = doc.querySelector(`[data-block="${focusBlock}"]`)
+    target?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }, [doc, focusBlock])
+
+  // 핀치줌·더블탭 확대 차단 (preventZoom=true 일 때만). 콘텐츠는 iframe 내부(별도 문서)에
+  // 렌더되므로 터치 이벤트도 그 문서에 직접 등록해야 한다 — 부모 문서에 걸면 iframe 안의
+  // 터치는 아예 잡히지 않는다. outer 페이지의 viewport meta(maximumScale/userScalable)만으로는
+  // 일부 브라우저·인앱 웹뷰(카카오톡 등)가 더블탭 확대를 막지 않아 JS로 보강한다.
+  useEffect(() => {
+    if (!doc || !preventZoom) return
+    doc.body.style.touchAction = "manipulation"
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length > 1) e.preventDefault()
+    }
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 1) e.preventDefault()
+    }
+    let lastTouchEnd = 0
+    const handleTouchEnd = (e: TouchEvent) => {
+      const now = Date.now()
+      if (now - lastTouchEnd <= 300) e.preventDefault()
+      lastTouchEnd = now
+    }
+
+    doc.addEventListener("touchstart", handleTouchStart, { passive: false })
+    doc.addEventListener("touchmove", handleTouchMove, { passive: false })
+    doc.addEventListener("touchend", handleTouchEnd, { passive: false })
+    return () => {
+      doc.removeEventListener("touchstart", handleTouchStart)
+      doc.removeEventListener("touchmove", handleTouchMove)
+      doc.removeEventListener("touchend", handleTouchEnd)
+    }
+  }, [doc, preventZoom])
 
   // 커스텀 폰트 로딩 — 에셋 관리에서 등록한 폰트를 iframe 문서 안에 주입한다.
   // (iframe은 별도 realm이라 부모 문서에 <link>/<style>을 추가해도 적용되지 않는다)

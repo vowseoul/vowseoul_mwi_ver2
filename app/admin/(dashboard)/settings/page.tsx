@@ -20,6 +20,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Save, Globe, Mail, CreditCard, Bell, Shield, Image as ImageIcon, Upload, Loader2, Check, Users, Trash2, Plus } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { createClient } from "@supabase/supabase-js"
+import { DATA_RETENTION_SETTINGS_KEY, DEFAULT_RETENTION_DAYS, parseRetentionSettings } from "@/lib/data-retention"
 import { useProfilesQuery } from "@/hooks/queries/useCustomers"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -155,6 +156,10 @@ export default function AdminSettingsPage() {
   const [logoPath, setLogoPath] = useState<string>('')
   const [isUploadingLogo, setIsUploadingLogo] = useState(false)
 
+  // 데이터 자동 파기 정책 — 예식일 + 보관일수가 지나면 청첩장을 자동 삭제한다 (§lib/data-retention.ts)
+  const [retentionDays, setRetentionDays] = useState<number>(DEFAULT_RETENTION_DAYS)
+  const [isSavingRetention, setIsSavingRetention] = useState(false)
+
   useEffect(() => {
     fetchCurrentSetting()
     fetchImages()
@@ -200,6 +205,32 @@ export default function AdminSettingsPage() {
 
     if (logoData?.value?.path) {
       setLogoPath(logoData.value.path)
+    }
+
+    const { data: retentionData } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', DATA_RETENTION_SETTINGS_KEY)
+      .maybeSingle()
+
+    setRetentionDays(parseRetentionSettings(retentionData?.value).daysAfterWedding)
+  }
+
+  const handleSaveRetention = async () => {
+    if (!Number.isFinite(retentionDays) || retentionDays < 1) {
+      toast.error('보관일수는 1일 이상이어야 합니다.')
+      return
+    }
+    setIsSavingRetention(true)
+    const { error } = await supabase.from('settings').upsert({
+      key: DATA_RETENTION_SETTINGS_KEY,
+      value: { daysAfterWedding: Math.floor(retentionDays) },
+    })
+    setIsSavingRetention(false)
+    if (error) {
+      toast.error('데이터 보관 정책 저장에 실패했습니다.')
+    } else {
+      toast.success('데이터 보관 정책이 저장되었습니다.')
     }
   }
 
@@ -454,6 +485,45 @@ export default function AdminSettingsPage() {
                 <Button onClick={handleSave} disabled={isSaving}>
                   <Save className="w-4 h-4 mr-2" />
                   {isSaving ? "저장 중..." : "저장"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="w-5 h-5" />
+                데이터 보관 정책
+              </CardTitle>
+              <CardDescription>
+                예식일로부터 지정한 일수가 지나면 청첩장이 자동으로 삭제(소프트 삭제)됩니다.
+                청첩장 목록에서 &quot;SAMPLE&quot;로 지정한 청첩장은 예식일과 무관하게 항상 제외됩니다.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">예식일 기준 보관일수</p>
+                  <p className="text-xs text-muted-foreground">
+                    변경하면 기존 청첩장에도 즉시 적용됩니다 (매일 자동 실행되는 파기 작업이 이 값을 그때그때 읽습니다).
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    value={retentionDays}
+                    onChange={(e) => setRetentionDays(Number(e.target.value))}
+                    className="w-24"
+                  />
+                  <span className="text-sm text-muted-foreground">일 후</span>
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <Button onClick={handleSaveRetention} disabled={isSavingRetention}>
+                  <Save className="w-4 h-4 mr-2" />
+                  {isSavingRetention ? "저장 중..." : "저장"}
                 </Button>
               </div>
             </CardContent>

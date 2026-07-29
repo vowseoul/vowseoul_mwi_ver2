@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/purge-expired-invitations",
+      "schedule": "0 18 * * *"
+    }
+  ]
+}

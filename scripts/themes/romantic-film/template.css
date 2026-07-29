@@ -91,7 +91,7 @@
 .sb-hero__word--save {
   left: 8px;
   top: 16px;
-  font-size: 48px;
+  font-size: var(--text-display, 48px);
   letter-spacing: 0.1em;
   font-weight: 400;
   font-family: 'Kaushan Script', cursive;
@@ -109,7 +109,7 @@
 .sb-hero__word--date {
   left: 138px;
   top: 60px;
-  font-size: 48px;
+  font-size: var(--text-display, 48px);
   letter-spacing: 0.1em;
   font-weight: 400;
   font-family: 'Kaushan Script', cursive;
@@ -145,7 +145,7 @@
 }
 
 .sb-hero__datetime-venue {
-  font-size: 11px;
+  font-size: var(--text-caption, 11px);
   line-height: 1.6;
   letter-spacing: 0.05em;
   opacity: 0.9;
@@ -158,7 +158,7 @@
 /* 2. GREETING SECTION */
 .sb-greeting {
   position: relative;
-  padding: 64px 24px;
+  padding: var(--section-py, 64px) var(--section-px, 24px);
   text-align: center;
   background-color: var(--bg, #9EB7CE);
   color: var(--ink, #FFFFFF);
@@ -169,7 +169,7 @@
   margin: 0 auto 32px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--content-gap, 16px);
 }
 
 .sb-parents__row {
@@ -213,7 +213,7 @@
 }
 
 .sb-greeting__message {
-  font-size: 14px;
+  font-size: var(--text-body, 14px);
   line-height: 1.8;
   letter-spacing: 0.05em;
   font-weight: 300;
@@ -224,27 +224,47 @@
   font-family: var(--font-kr, 'Noto Serif KR', serif);
 }
 
+.sb-greeting__image {
+  max-width: 300px;
+  margin: 20px auto 0;
+}
+
+.sb-greeting__image img {
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius, 0);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
 /* COMMON SECTION STYLES */
 .sb-section {
-  padding: 64px 24px;
+  padding: var(--section-py, 64px) var(--section-px, 24px);
   text-align: center;
   background-color: var(--bg, #9EB7CE);
   color: var(--ink, #FFFFFF);
 }
 
 .sb-section__subtitle {
-  font-size: 18px;
+  font-size: var(--text-label, 18px);
   text-transform: uppercase;
   letter-spacing: 0.15em;
   opacity: 0.8;
 }
 
 .sb-section__title {
-  font-size: 18px;
+  font-size: var(--text-title, 18px);
   font-weight: 700;
   margin-top: 4px;
   margin-bottom: 32px;
   font-family: var(--font-kr, 'Noto Serif KR', serif);
+}
+
+/* share 섹션은 위 여백을 없애 RSVP 섹션과 바로 이어지도록 한다. .sb-section 보다 반드시 뒤에 와야
+   동일 특정도에서 소스 순서로 이긴다 (원래 template.html의 인라인 style="padding-top:0"이었던 것을
+   클래스로 옮김 — 인라인 스타일은 블럭 여백 오버라이드 주입 CSS를 항상 이겨버리기 때문,
+   data-block 계약 문서 §2.3) */
+.sb-share-section {
+  padding-top: 0;
 }
 
 /* 4. ORDER / SEQUENCE TABLE */
@@ -297,7 +317,7 @@
   background-color: #FFFFFF;
   padding: 24px;
   color: #000000;
-  border-radius: 0;
+  border-radius: var(--radius, 0);
   box-shadow: none;
 }
 
@@ -372,7 +392,7 @@
   border: 1px solid rgba(0, 0, 0, 0.05);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   margin-bottom: 16px;
-  border-radius: 0;
+  border-radius: var(--radius, 0);
 }
 
 .sb-location-card__name {
@@ -384,7 +404,7 @@
 }
 
 .sb-location-card__hall {
-  font-size: 14px;
+  font-size: var(--text-caption, 14px);
   font-weight: 500;
   color: var(--accent, #62798E);
   margin-top: 4px;
@@ -398,7 +418,33 @@
 }
 
 .sb-location-card__hint {
-  font-size: 10px;
+  font-size: var(--text-caption, 10px);
   margin-top: 4px;
   color: rgba(0, 0, 0, 0.4);
+}
+
+.sb-location__guides {
+  max-width: 340px;
+  margin: 20px auto 0;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  padding-top: 20px;
+}
+
+.sb-location__guide-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink, #FFFFFF);
+  margin-bottom: 4px;
+}
+
+.sb-location__guide-desc {
+  font-size: var(--text-caption, 12px);
+  color: var(--ink, #FFFFFF);
+  opacity: 0.7;
+  line-height: 1.6;
+  white-space: pre-line;
 }

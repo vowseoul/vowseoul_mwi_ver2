@@ -14,5 +14,9 @@
   "groom_mother_name",
   "bride_father_name",
   "bride_mother_name",
-  "venue_address"
+  "venue_address",
+  "traffic_info",
+  "parking_info",
+  "shuttle_info",
+  "greeting_image"
 ]

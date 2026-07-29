@@ -14,6 +14,8 @@ import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { sampleThemes, sampleBGMs, Theme, samplePhrases } from '@/lib/store'
 import { supabase, logSupabaseError } from '@/lib/supabase'
 import { resolveThemeSwatch } from '@/lib/theme-template'
+import { fontPreviewStyle, fontFileFormatLabel, type RegisteredFont } from '@/lib/fonts'
+import { useInjectFontFaces } from '@/lib/use-font-faces'
 import { Plus, Play, Pause, Trash2, Upload, Loader2, CheckCircle2 } from 'lucide-react'
 import { uploadFile, deleteFile } from '@/lib/storage'
 import { uploadImage } from '@/lib/image-upload'
@@ -66,6 +68,9 @@ export default function AssetsPage() {
     }
   }, [])
 
+  // 폰트 목록 카드에서 폰트명을 그 폰트로 미리 보여주기 위해 실제 로드해둔다 (이슈: 이름만 봐선 어떤 폰트인지 알기 어려움)
+  useInjectFontFaces(fonts as RegisteredFont[])
+
   const fetchFonts = async () => {
     setIsLoadingFonts(true)
     try {
@@ -90,9 +95,15 @@ export default function AssetsPage() {
 
   const handleFontFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return
+    const file = e.target.files[0]
+    if (!/\.(ttf|otf|woff2?|eot)$/i.test(file.name)) {
+      alert('TTF/OTF/WOFF/WOFF2 형식의 폰트 파일만 업로드할 수 있습니다.')
+      if (e.target) e.target.value = ''
+      return
+    }
     setIsUploadingFont(true)
     try {
-      const url = await uploadFile(e.target.files[0], 'fonts')
+      const url = await uploadFile(file, 'fonts')
       setFontFileUrl(url)
     } catch (err) {
       alert('폰트 파일 업로드에 실패했습니다.')
@@ -105,7 +116,7 @@ export default function AssetsPage() {
   const handleSaveFont = async () => {
     if (!newFontName || !newFontFamily) return alert('폰트명과 폰트 패밀리명을 입력해주세요.')
     if (fontType === 'embed' && !embedCode) return alert('웹 폰트 임베드 코드를 입력해주세요.')
-    if (fontType === 'file' && !fontFileUrl) return alert('TTF 폰트 파일을 업로드해주세요.')
+    if (fontType === 'file' && !fontFileUrl) return alert('폰트 파일을 업로드해주세요.')
 
     setIsSavingFont(true)
     try {
@@ -602,7 +613,7 @@ export default function AssetsPage() {
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-lg">폰트 관리</CardTitle>
-                <CardDescription>구글 웹 폰트 임베드 코드 등록 및 TTF 폰트 파일을 에셋으로 등록합니다.</CardDescription>
+                <CardDescription>구글 웹 폰트 임베드 코드 등록 및 폰트 파일(TTF/OTF/WOFF/WOFF2)을 에셋으로 등록합니다.</CardDescription>
               </div>
               <Dialog open={isFontDialogOpen} onOpenChange={(open) => {
                 if (!open) resetFontForm()
@@ -617,7 +628,7 @@ export default function AssetsPage() {
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>새 폰트 등록</DialogTitle>
-                    <DialogDescription>임베드 코드 입력 혹은 TTF 파일을 통해 폰트를 등록합니다.</DialogDescription>
+                    <DialogDescription>임베드 코드 입력 혹은 폰트 파일(TTF/OTF/WOFF/WOFF2)을 통해 폰트를 등록합니다.</DialogDescription>
                   </DialogHeader>
                   <FieldGroup className="mt-4">
                     <Field>
@@ -637,7 +648,7 @@ export default function AssetsPage() {
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="embed">웹 폰트 임베드 코드 (CSS @import)</SelectItem>
-                          <SelectItem value="file">TTF 파일 직접 업로드</SelectItem>
+                          <SelectItem value="file">폰트 파일 직접 업로드</SelectItem>
                         </SelectContent>
                       </Select>
                     </Field>
@@ -654,7 +665,7 @@ export default function AssetsPage() {
                       </Field>
                     ) : (
                       <Field>
-                        <FieldLabel>TTF 파일 (.ttf)</FieldLabel>
+                        <FieldLabel>폰트 파일 (.ttf/.otf/.woff/.woff2)</FieldLabel>
                         <div className="flex aspect-video items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/50 cursor-pointer" onClick={() => fontFileInputRef.current?.click()}>
                           <div className="text-center">
                             {fontFileUrl ? (
@@ -670,14 +681,14 @@ export default function AssetsPage() {
                             ) : (
                               <>
                                 <Upload className="mx-auto h-6 w-6 text-muted-foreground" />
-                                <p className="mt-1 text-xs text-muted-foreground">TTF 파일 업로드</p>
+                                <p className="mt-1 text-xs text-muted-foreground">폰트 파일 업로드</p>
                               </>
                             )}
                           </div>
                         </div>
                         <input 
                           type="file" 
-                          accept=".ttf" 
+                          accept=".ttf,.otf,.woff,.woff2"
                           className="hidden" 
                           ref={fontFileInputRef}
                           onChange={handleFontFileUpload}
@@ -710,11 +721,11 @@ export default function AssetsPage() {
                       className="flex items-center justify-between rounded-lg border border-border p-4"
                     >
                       <div>
-                        <p className="font-semibold text-sm">{font.name}</p>
+                        <p className="font-semibold text-base" style={fontPreviewStyle(font)}>{font.name}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">Family: {font.family}</p>
                         <div className="mt-1.5">
                           <Badge variant="outline" className="text-[10px]">
-                            {font.type === 'embed' ? 'CSS @import' : 'TTF 파일'}
+                            {font.type === 'embed' ? 'CSS @import' : fontFileFormatLabel(font.fileUrl)}
                           </Badge>
                         </div>
                       </div>

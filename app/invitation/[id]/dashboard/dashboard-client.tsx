@@ -8,6 +8,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination'
 import { Logo } from '@/components/logo'
 import {
   Users,
@@ -102,6 +110,16 @@ export default function CustomerDashboardClient({
   const [rsvps, setRsvps] = useState<RSVP[]>(initialRsvps)
   const [guestbook, setGuestbook] = useState<GuestbookMessage[]>(initialGuestbook)
   const visitorLogs = initialVisits
+
+  // 방명록이 수백 건 쌓이면 표 전체를 한 번에 렌더링하는 게 무거워져 5개씩 페이지네이션한다
+  const GUESTBOOK_PAGE_SIZE = 5
+  const [guestbookPage, setGuestbookPage] = useState(1)
+  const guestbookTotalPages = Math.max(1, Math.ceil(guestbook.length / GUESTBOOK_PAGE_SIZE))
+  const safeGuestbookPage = Math.min(guestbookPage, guestbookTotalPages)
+  const pagedGuestbook = guestbook.slice(
+    (safeGuestbookPage - 1) * GUESTBOOK_PAGE_SIZE,
+    safeGuestbookPage * GUESTBOOK_PAGE_SIZE
+  )
 
   // 방명록 노출 여부 전환
   const handleToggleVisibility = async (id: string, currentVal: boolean) => {
@@ -505,7 +523,7 @@ export default function CustomerDashboardClient({
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {guestbook.map((msg) => (
+                        {pagedGuestbook.map((msg) => (
                           <TableRow key={msg.id} className="hover:bg-muted/10 text-xs">
                             <TableCell className="text-center text-muted-foreground font-light">
                               {msg.createdAt ? new Date(msg.createdAt).toLocaleDateString('ko-KR') : '-'}
@@ -546,6 +564,39 @@ export default function CustomerDashboardClient({
                   </div>
                 )}
               </CardContent>
+              {guestbookTotalPages > 1 && (
+                <div className="border-t border-border/30 py-3">
+                  <Pagination>
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          href="#"
+                          onClick={(e) => { e.preventDefault(); setGuestbookPage((p) => Math.max(1, p - 1)) }}
+                          className={safeGuestbookPage === 1 ? "pointer-events-none opacity-40" : undefined}
+                        />
+                      </PaginationItem>
+                      {Array.from({ length: guestbookTotalPages }, (_, i) => i + 1).map((page) => (
+                        <PaginationItem key={page}>
+                          <PaginationLink
+                            href="#"
+                            isActive={page === safeGuestbookPage}
+                            onClick={(e) => { e.preventDefault(); setGuestbookPage(page) }}
+                          >
+                            {page}
+                          </PaginationLink>
+                        </PaginationItem>
+                      ))}
+                      <PaginationItem>
+                        <PaginationNext
+                          href="#"
+                          onClick={(e) => { e.preventDefault(); setGuestbookPage((p) => Math.min(guestbookTotalPages, p + 1)) }}
+                          className={safeGuestbookPage === guestbookTotalPages ? "pointer-events-none opacity-40" : undefined}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                </div>
+              )}
             </Card>
           </TabsContent>
         </Tabs>

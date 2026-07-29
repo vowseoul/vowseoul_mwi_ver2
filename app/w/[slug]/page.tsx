@@ -1,6 +1,6 @@
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import TemplateInvitationClient from "./template-invitation-client"
-import { buildInvitationTokens, extractDisabledSlots, type ThemeRow } from "@/lib/theme-template"
+import { buildInvitationTokens, extractBlockOverrides, extractDisabledSlots, extractSectionImages, getHiddenBlocks, type ThemeRow } from "@/lib/theme-template"
 import { mergeInvitationRaw, type RawInvitationData } from "@/lib/invitation-data"
 import { fetchRegisteredFonts, resolveFontFaces } from "@/lib/fonts"
 import { Metadata, Viewport } from "next"
@@ -8,10 +8,14 @@ import { after } from "next/server"
 import { headers } from "next/headers"
 import { createHash } from "crypto"
 
+// 하객이 실수로 확대/축소하지 않도록 앱처럼 고정한다 (핀치줌·더블탭 확대 차단).
+// JS 레벨 보강은 InvitationFrame 의 preventZoom 옵션(§template-invitation-client.tsx)이 담당한다.
 export const viewport: Viewport = {
   themeColor: '#ffffff',
   width: 'device-width',
   initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 }
 
 export const dynamic = 'force-dynamic'
@@ -177,6 +181,7 @@ export default async function Page({ params }: PageProps) {
   if (themeRow?.render_engine === 'template' && themeRow.template_html) {
     const tokens = buildInvitationTokens(themeRow, invitation.customization_overrides)
     const fonts = await fetchRegisteredFonts()
+    const disabledSlots = extractDisabledSlots(invitation.customization_overrides)
     return (
       <TemplateInvitationClient
         themeRow={themeRow}
@@ -184,7 +189,10 @@ export default async function Page({ params }: PageProps) {
         invitationId={String(invitation.id)}
         tokens={tokens}
         fontFaces={resolveFontFaces(tokens, fonts)}
-        disabledSlots={extractDisabledSlots(invitation.customization_overrides)}
+        disabledSlots={disabledSlots}
+        blockOverrides={extractBlockOverrides(invitation.customization_overrides)}
+        hiddenBlocks={getHiddenBlocks(disabledSlots)}
+        sectionImages={extractSectionImages(invitation.customization_overrides)}
       />
     )
   }

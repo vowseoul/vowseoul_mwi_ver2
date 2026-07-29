@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { InvitationFrame, type FontFace, type TokenMap } from "@/components/invitation/invitation-frame"
+import { InvitationFrame, type BlockOverrideMap, type FontFace, type SectionImage, type TokenMap } from "@/components/invitation/invitation-frame"
 import { buildSlots } from "@/components/invitation/slot-registry"
 import { buildFieldData, normalizeLegacyKeys, type RawInvitationData } from "@/lib/invitation-data"
 import { toThemeTemplate, type ThemeRow } from "@/lib/theme-template"
@@ -20,6 +20,9 @@ export default function TemplateInvitationClient({
   tokens = {},
   fontFaces = [],
   disabledSlots = [],
+  blockOverrides = {},
+  hiddenBlocks = [],
+  sectionImages = [],
 }: {
   themeRow: ThemeRow
   raw: RawInvitationData
@@ -28,6 +31,12 @@ export default function TemplateInvitationClient({
   fontFaces?: FontFace[]
   /** 테마는 지원하지만 이 청첩장 한 건만 꺼둔 기능(예: RSVP 제외 요청) */
   disabledSlots?: string[]
+  /** 블럭별 여백/타이틀 오버라이드 (customization_overrides.blocks) */
+  blockOverrides?: BlockOverrideMap
+  /** disabledSlots 중 섹션 전체를 감춰야 하는 블럭 키 (getHiddenBlocks) */
+  hiddenBlocks?: string[]
+  /** 섹션 사이 삽입 이미지 (customization_overrides.sectionImages) */
+  sectionImages?: SectionImage[]
 }) {
   const template = toThemeTemplate(themeRow)
   // 실제 청첩장은 화면 전체를 채운다 (뷰포트 기준)
@@ -47,7 +56,7 @@ export default function TemplateInvitationClient({
   const data = buildFieldData(normalizedRaw)
   const accent = (tokens["--accent"] as string) || "#D76C6C"
   const activeSlots = (template.slots ?? []).filter((s) => !disabledSlots.includes(s))
-  const slots = buildSlots(activeSlots, { accent, data, raw: normalizedRaw, invitationId })
+  const slots = buildSlots(activeSlots, { accent, data, raw: normalizedRaw, invitationId, blockOverrides })
 
   return (
     <div style={{ margin: 0, padding: 0, lineHeight: 0, background: "#fff" }}>
@@ -57,8 +66,12 @@ export default function TemplateInvitationClient({
         tokens={tokens}
         slots={slots}
         fontFaces={fontFaces}
+        blockOverrides={blockOverrides}
+        hiddenBlocks={hiddenBlocks}
+        sectionImages={sectionImages}
         width={size.w}
         height={size.h}
+        preventZoom
       />
     </div>
   )

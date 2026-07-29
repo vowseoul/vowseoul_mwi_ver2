@@ -1,6 +1,6 @@
 <div class="sb-container">
   <!-- 1. HERO SECTION -->
-  <section class="sb-hero">
+  <section class="sb-hero" data-block="hero">
     <!-- Background Image -->
     <img class="sb-hero__bg-img" data-field="main_image" src="https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=800&auto=format&fit=crop" alt="메인 사진" />
     
@@ -39,7 +39,7 @@
   </section>
 
   <!-- 2. GREETING SECTION -->
-  <section class="sb-greeting">
+  <section class="sb-greeting" data-block="greeting">
     <!-- Parent Names Spaced -->
     <div class="sb-parents">
       <!-- Groom Side -->
@@ -75,35 +75,40 @@
 기름 졸이듯 마음을 다하여
 사랑하며 삽시다. 오래도록.
     </div>
+
+    <!-- Greeting Image (선택) -->
+    <div class="sb-greeting__image" data-field-when="greeting_image">
+      <img data-field="greeting_image" alt="인사말 이미지" />
+    </div>
   </section>
 
   <!-- 3. GALLERY SECTION -->
-  <section class="sb-section sb-gallery-section">
-    <h4 class="sb-section__subtitle">Gallery</h4>
-    <h3 class="sb-section__title">사진첩</h3>
+  <section class="sb-section sb-gallery-section" data-block="gallery">
+    <h4 class="sb-section__subtitle" data-block-label>Gallery</h4>
+    <h3 class="sb-section__title" data-block-title>사진첩</h3>
     <div data-slot="gallery"></div>
   </section>
 
   <!-- 4. ORDER / SEQUENCE SECTION -->
-  <section class="sb-section sb-order-section">
-    <h4 class="sb-section__subtitle">WEDDING ORDER</h4>
-    <h3 class="sb-section__title">식순 안내</h3>
-    
+  <section class="sb-section sb-order-section" data-block="sequence">
+    <h4 class="sb-section__subtitle" data-block-label>WEDDING ORDER</h4>
+    <h3 class="sb-section__title" data-block-title>식순 안내</h3>
+
     <div data-slot="sequence"></div>
   </section>
 
   <!-- 5. CALENDAR SECTION -->
-  <section class="sb-section sb-calendar-section">
-    <h4 class="sb-section__subtitle">Calendar</h4>
-    <h3 class="sb-section__title">소중한 날</h3>
-    
+  <section class="sb-section sb-calendar-section" data-block="calendar">
+    <h4 class="sb-section__subtitle" data-block-label>Calendar</h4>
+    <h3 class="sb-section__title" data-block-title>소중한 날</h3>
+
     <div data-slot="calendar"></div>
   </section>
 
   <!-- 6. LOCATION / MAP SECTION -->
-  <section class="sb-section sb-location-section">
-    <h4 class="sb-section__subtitle">Location</h4>
-    <h3 class="sb-section__title">식장 위치</h3>
+  <section class="sb-section sb-location-section" data-block="location">
+    <h4 class="sb-section__subtitle" data-block-label>Location</h4>
+    <h3 class="sb-section__title" data-block-title>식장 위치</h3>
 
     <div class="sb-location-card">
       <h3 class="sb-location-card__name" data-field="venue_name">춘천 스카이컨벤션 4층 스카이홀</h3>
@@ -112,31 +117,46 @@
     </div>
 
     <div data-slot="map"></div>
+
+    <div class="sb-location__guides">
+      <div class="sb-location__guide">
+        <h4 class="sb-location__guide-title">교통 안내</h4>
+        <p class="sb-location__guide-desc" data-field="traffic_info">지하철 7호선 학동역 1번 출구 도보 5분</p>
+      </div>
+      <div class="sb-location__guide">
+        <h4 class="sb-location__guide-title">주차 안내</h4>
+        <p class="sb-location__guide-desc" data-field="parking_info">식장 내부 주차장 2시간 무료 주차 가능</p>
+      </div>
+      <div class="sb-location__guide">
+        <h4 class="sb-location__guide-title">셔틀버스 안내</h4>
+        <p class="sb-location__guide-desc" data-field="shuttle_info">운행 정보가 등록되면 이곳에 표시됩니다</p>
+      </div>
+    </div>
   </section>
 
   <!-- 7. ACCOUNT SECTION -->
-  <section class="sb-section sb-account-section">
-    <h4 class="sb-section__subtitle">Account</h4>
-    <h3 class="sb-section__title">마음 전하실 곳</h3>
+  <section class="sb-section sb-account-section" data-block="account">
+    <h4 class="sb-section__subtitle" data-block-label>Account</h4>
+    <h3 class="sb-section__title" data-block-title>마음 전하실 곳</h3>
     <div data-slot="account"></div>
   </section>
 
   <!-- 7-1. CONTACT SECTION -->
-  <section class="sb-section sb-contact-section">
-    <h4 class="sb-section__subtitle">Contact</h4>
-    <h3 class="sb-section__title">축하 연락하기</h3>
+  <section class="sb-section sb-contact-section" data-block="contact">
+    <h4 class="sb-section__subtitle" data-block-label>Contact</h4>
+    <h3 class="sb-section__title" data-block-title>축하 연락하기</h3>
     <div data-slot="contact"></div>
   </section>
 
   <!-- 8. RSVP SECTION -->
-  <section class="sb-section sb-rsvp-section">
-    <h4 class="sb-section__subtitle">RSVP</h4>
-    <h3 class="sb-section__title">참석 여부 알리기</h3>
+  <section class="sb-section sb-rsvp-section" data-block="rsvp">
+    <h4 class="sb-section__subtitle" data-block-label>RSVP</h4>
+    <h3 class="sb-section__title" data-block-title>참석 여부 알리기</h3>
     <div data-slot="rsvp"></div>
   </section>
 
-  <!-- 8-1. SHARE -->
-  <section class="sb-section sb-share-section" style="padding-top: 0;">
+  <!-- 8-1. SHARE (여백은 이 섹션 전용 클래스로 고정 — 인라인 style 금지, PLAN_DESIGN_CONTROLS.md §3.3) -->
+  <section class="sb-section sb-share-section" data-block="share">
     <div data-slot="share"></div>
   </section>
 
