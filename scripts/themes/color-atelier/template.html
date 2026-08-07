@@ -1,8 +1,9 @@
 <div class="ca-container">
-  <!-- 1. HERO SECTION (Dark Section) -->
-  <section class="ca-section ca-section--dark ca-hero" data-block="hero">
+  <!-- 1. HERO SECTION (배경/포인트 교대 — data-alt: invitation-frame.tsx가 보이는 섹션만 세어
+       vs-alt-a/vs-alt-b를 매긴다. 블럭을 꺼도 항상 A-B-A-B가 유지된다) -->
+  <section class="ca-section ca-hero" data-block="hero" data-alt="1">
     <div class="ca-hero__subtitle">SAVE THE DATE</div>
-    
+
     <!-- Hero Image Card -->
     <div class="ca-hero__img-wrap">
       <img class="ca-hero__img" data-field="main_image" src="https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=800&auto=format&fit=crop" alt="메인 사진" />
@@ -29,15 +30,15 @@
     </div>
   </section>
 
-  <!-- 2. GREETING SECTION (Light Section) -->
-  <section class="ca-section ca-section--light ca-greeting" data-block="greeting">
+  <!-- 2. GREETING SECTION -->
+  <section class="ca-section ca-greeting" data-block="greeting" data-alt="1">
     <!-- Heart Icon Decoration -->
     <div class="ca-greeting__icon-wrap">
       <svg class="ca-greeting__icon" viewBox="0 0 24 24" fill="currentColor">
         <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
       </svg>
     </div>
-    
+
     <div class="ca-greeting__message" data-field="greeting_message">
 사랑으로 하나 된 두 사람이
 서로를 이해하며 한 길을 걸어가려 합니다.
@@ -51,31 +52,31 @@
     </div>
   </section>
 
-  <!-- 3. GALLERY SECTION (Dark Section) -->
-  <section class="ca-section ca-section--dark ca-gallery-section" data-block="gallery">
+  <!-- 3. GALLERY SECTION -->
+  <section class="ca-section ca-gallery-section" data-block="gallery" data-alt="1">
     <h4 class="ca-section__header-sub" data-block-label>GALLERY</h4>
     <h3 class="ca-section__header-title" data-block-title>갤러리</h3>
     <div data-slot="gallery"></div>
   </section>
 
-  <!-- 4. ORDER / SEQUENCE SECTION (Light Section — A-B-A-B 교대) -->
-  <section class="ca-section ca-section--light ca-order-section" data-block="sequence">
+  <!-- 4. ORDER / SEQUENCE SECTION -->
+  <section class="ca-section ca-order-section" data-block="sequence" data-alt="1">
     <h4 class="ca-section__header-sub" data-block-label>WEDDING ORDER</h4>
     <h3 class="ca-section__header-title" data-block-title>식순 안내</h3>
 
     <div data-slot="sequence"></div>
   </section>
 
-  <!-- 5. CALENDAR & D-DAY SECTION (Dark Section) -->
-  <section class="ca-section ca-section--dark ca-calendar-section" data-block="calendar">
+  <!-- 5. CALENDAR & D-DAY SECTION -->
+  <section class="ca-section ca-calendar-section" data-block="calendar" data-alt="1">
     <h4 class="ca-section__header-sub" data-block-label>CALENDAR</h4>
     <h3 class="ca-section__header-title" data-block-title>소중한 날</h3>
 
     <div data-slot="calendar"></div>
   </section>
 
-  <!-- 6. LOCATION / MAP SECTION (Light Section — A-B-A-B 교대) -->
-  <section class="ca-section ca-section--light ca-location-section" data-block="location">
+  <!-- 6. LOCATION / MAP SECTION -->
+  <section class="ca-section ca-location-section" data-block="location" data-alt="1">
     <h4 class="ca-section__header-sub" data-block-label>LOCATION</h4>
     <h3 class="ca-section__header-title" data-block-title>식장 위치</h3>
 
@@ -102,29 +103,29 @@
     </div>
   </section>
 
-  <!-- 7. ACCOUNT SECTION (Dark Section — A-B-A-B 교대) -->
-  <section class="ca-section ca-section--dark ca-account-section" data-block="account">
+  <!-- 7. ACCOUNT SECTION -->
+  <section class="ca-section ca-account-section" data-block="account" data-alt="1">
     <h4 class="ca-section__header-sub" data-block-label>ACCOUNT</h4>
     <h3 class="ca-section__header-title" data-block-title>마음 전하실 곳</h3>
     <div data-slot="account"></div>
   </section>
 
-  <!-- 7-1. CONTACT SECTION (Light Section) -->
-  <section class="ca-section ca-section--light ca-contact-section" data-block="contact">
+  <!-- 7-1. CONTACT SECTION -->
+  <section class="ca-section ca-contact-section" data-block="contact" data-alt="1">
     <h4 class="ca-section__header-sub" data-block-label>CONTACT</h4>
     <h3 class="ca-section__header-title" data-block-title>축하 연락하기</h3>
     <div data-slot="contact"></div>
   </section>
 
-  <!-- 8. RSVP SECTION (Dark Section — A-B-A-B 교대) -->
-  <section class="ca-section ca-section--dark ca-rsvp-section" data-block="rsvp">
+  <!-- 8. RSVP SECTION -->
+  <section class="ca-section ca-rsvp-section" data-block="rsvp" data-alt="1">
     <h4 class="ca-section__header-sub" data-block-label>RSVP</h4>
     <h3 class="ca-section__header-title" data-block-title>참석 여부 알리기</h3>
     <div data-slot="rsvp"></div>
   </section>
 
-  <!-- 8-1. SHARE (Light Section, 여백은 이 섹션 전용 클래스로 고정 — 인라인 style 금지, PLAN_DESIGN_CONTROLS.md §3.3) -->
-  <section class="ca-section ca-section--light ca-share-section" data-block="share">
+  <!-- 8-1. SHARE (여백은 이 섹션 전용 클래스로 고정 — 인라인 style 금지, PLAN_DESIGN_CONTROLS.md §3.3) -->
+  <section class="ca-section ca-share-section" data-block="share" data-alt="1">
     <div data-slot="share"></div>
   </section>
 

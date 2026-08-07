@@ -32,16 +32,19 @@
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Dark Sections: bg is color2, text is color1 */
-.ca-section--dark {
-  background-color: var(--ink, #3D3D3D);
+/* 배경/포인트 교대 — vs-alt-a/vs-alt-b는 템플릿에 정적으로 박아두지 않고
+   invitation-frame.tsx가 [data-alt] 마커를 보고 "실제로 보이는 섹션 순서" 기준으로
+   매번 다시 매긴다(§ InvitationFrame의 data-alt 이펙트). 블럭을 꺼서 순서가 바뀌어도
+   항상 A-B-A-B가 유지된다 — 템플릿에 직접 dark/light를 쓰면 블럭 제거 시 깨진다.
+   이 테마의 핵심 2색은 배경색·포인트 색상이다. 본문 텍스트 색(--ink)은 여기서 쓰지 않는다. */
+.ca-section.vs-alt-a {
+  background-color: var(--accent, #C4A574);
   color: var(--bg, #FAF9F7);
 }
 
-/* Light Sections: bg is color1, text is color2 */
-.ca-section--light {
+.ca-section.vs-alt-b {
   background-color: var(--bg, #FAF9F7);
-  color: var(--ink, #3D3D3D);
+  color: var(--accent, #C4A574);
 }
 
 /* Section Header Typography */
@@ -283,7 +286,7 @@
   margin: 0 auto;
   border-radius: 50%;
   font-weight: 700;
-  color: var(--ink, #3D3D3D);
+  color: var(--accent, #C4A574);
   background-color: var(--bg, #FAF9F7);
 }
 
@@ -341,7 +344,7 @@
   font-weight: 600;
   font-size: 18px;
   letter-spacing: 0.05em;
-  color: var(--ink, #3D3D3D);
+  color: var(--accent, #C4A574);
 }
 
 .ca-location-card__address {
@@ -350,7 +353,7 @@
   white-space: pre-line;
   /* color 프로퍼티 자체의 값으로 currentColor 를 쓰면 조상 커스텀 프로퍼티가 바뀌어도
      일부 브라우저에서 재계산되지 않아 --ink 를 직접 참조한다 */
-  color: color-mix(in srgb, var(--ink, #3D3D3D) 80%, transparent);
+  color: color-mix(in srgb, var(--accent, #C4A574) 80%, transparent);
 }
 
 .ca-location__guides {
@@ -360,20 +363,20 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  border-top: 1px solid color-mix(in srgb, var(--ink, #3D3D3D) 12%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--accent, #C4A574) 12%, transparent);
   padding-top: 20px;
 }
 
 .ca-location__guide-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--ink, #3D3D3D);
+  color: var(--accent, #C4A574);
   margin-bottom: 4px;
 }
 
 .ca-location__guide-desc {
   font-size: var(--text-caption, 12px);
-  color: color-mix(in srgb, var(--ink, #3D3D3D) 70%, transparent);
+  color: color-mix(in srgb, var(--accent, #C4A574) 70%, transparent);
   line-height: 1.6;
   white-space: pre-line;
 }

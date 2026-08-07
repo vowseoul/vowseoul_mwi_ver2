@@ -38,7 +38,7 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Slider } from "@/components/ui/slider"
-import { ArrowDown, ArrowUp, ExternalLink, Image as ImageIcon, Loader2, Plus, Save, X } from "lucide-react"
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Copy, ExternalLink, Image as ImageIcon, Loader2, Plus, Save, X } from "lucide-react"
 import { toast } from "sonner"
 
 /**
@@ -507,6 +507,16 @@ export default function CustomizeClient({
     }
   }
 
+  const moveGalleryImage = (index: number, direction: -1 | 1) => {
+    setGalleryImages((cur) => {
+      const target = index + direction
+      if (target < 0 || target >= cur.length) return cur
+      const next = [...cur]
+      ;[next[index], next[target]] = [next[target], next[index]]
+      return next
+    })
+  }
+
   const save = async () => {
     setSaving(true)
 
@@ -565,6 +575,25 @@ export default function CustomizeClient({
     } else {
       toast.success("저장되었습니다.")
     }
+  }
+
+  const copyInvitationLink = async () => {
+    if (!publicSlug) return
+    const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
+    await navigator.clipboard.writeText(`${baseUrl}/w/${publicSlug}`)
+    toast.success("청첩장 주소가 클립보드에 복사되었습니다.")
+  }
+
+  const copyDashboardLink = async () => {
+    if (!publicSlug) return
+    const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
+    const password = String(invitation.dashboard_password ?? "")
+    // 대시보드는 /dashboard/[slug] 가 public_slug 로 조회한다(dashboard_slug 컬럼은 쓰지 않음).
+    const text = password
+      ? `${baseUrl}/dashboard/${publicSlug}\n비밀번호: ${password}`
+      : `${baseUrl}/dashboard/${publicSlug}`
+    await navigator.clipboard.writeText(text)
+    toast.success("고객용 대시보드 링크가 클립보드에 복사되었습니다.")
   }
 
   const groom = String(data.groom_name ?? "")
@@ -744,7 +773,7 @@ export default function CustomizeClient({
                       <FieldLabel>사진 목록</FieldLabel>
                       <div className="grid grid-cols-[repeat(auto-fill,minmax(90px,1fr))] gap-2">
                         {galleryImages.map((url, i) => (
-                          <div key={i} className="relative aspect-square overflow-hidden rounded-md border">
+                          <div key={i} className="group relative aspect-square overflow-hidden rounded-md border">
                             <img src={url} alt="" className="h-full w-full object-cover" />
                             <button
                               type="button"
@@ -754,6 +783,27 @@ export default function CustomizeClient({
                             >
                               <X className="h-3 w-3" />
                             </button>
+                            <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-black/50 px-1 py-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                              <button
+                                type="button"
+                                onClick={() => moveGalleryImage(i, -1)}
+                                disabled={i === 0}
+                                title="앞으로 이동"
+                                className="flex h-5 w-5 items-center justify-center rounded text-white hover:bg-white/20 disabled:opacity-30"
+                              >
+                                <ChevronLeft className="h-3.5 w-3.5" />
+                              </button>
+                              <span className="text-[10px] text-white/80">{i + 1}</span>
+                              <button
+                                type="button"
+                                onClick={() => moveGalleryImage(i, 1)}
+                                disabled={i === galleryImages.length - 1}
+                                title="뒤로 이동"
+                                className="flex h-5 w-5 items-center justify-center rounded text-white hover:bg-white/20 disabled:opacity-30"
+                              >
+                                <ChevronRight className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1347,6 +1397,16 @@ export default function CustomizeClient({
               <a href={`/w/${publicSlug}`} target="_blank" rel="noreferrer" className="gap-2">
                 발행 청첩장 열기 <ExternalLink className="h-3.5 w-3.5" />
               </a>
+            </Button>
+          )}
+          {publicSlug && (
+            <Button variant="outline" className="gap-2" onClick={copyInvitationLink}>
+              <Copy className="h-3.5 w-3.5" /> 청첩장 주소 복사하기
+            </Button>
+          )}
+          {publicSlug && (
+            <Button variant="outline" className="gap-2" onClick={copyDashboardLink}>
+              <Copy className="h-3.5 w-3.5" /> 고객용 대시보드 복사하기
             </Button>
           )}
         </div>

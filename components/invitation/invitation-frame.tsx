@@ -222,6 +222,23 @@ export function InvitationFrame({
     styleEl.textContent = rules.join("\n")
   }, [doc, blockOverrides, hiddenBlocks])
 
+  // 다크/라이트 배경이 번갈아 깔리는 테마(color-atelier 등)용 — data-alt 마커가 붙은
+  // [data-block] 섹션들을 순회하며 "실제로 보이는" 것만 걸러 vs-alt-a/vs-alt-b 를 새로 매긴다.
+  // 템플릿에 dark/light 클래스를 정적으로 박아두면 중간 블럭을 꺼서 순서가 바뀌어도 클래스는
+  // 그대로 남아 A-B-B-A 처럼 교대가 깨진다 — hiddenBlocks 가 바뀔 때마다 매번 다시 계산한다.
+  useEffect(() => {
+    if (!doc) return
+    let i = 0
+    doc.querySelectorAll<HTMLElement>("[data-alt][data-block]").forEach((el) => {
+      const key = el.getAttribute("data-block")
+      const isHidden = key ? hiddenBlocks.includes(key) : false
+      el.classList.remove("vs-alt-a", "vs-alt-b")
+      if (isHidden) return
+      el.classList.add(i % 2 === 0 ? "vs-alt-a" : "vs-alt-b")
+      i++
+    })
+  }, [doc, hiddenBlocks])
+
   // 블럭 타이틀/영문 소제목 바인딩 — 빈 값이면 템플릿 기본 텍스트를 그대로 둔다 ([data-field]와 동일 규칙)
   useEffect(() => {
     if (!doc) return

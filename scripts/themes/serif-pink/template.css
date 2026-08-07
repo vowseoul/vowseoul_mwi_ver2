@@ -22,7 +22,12 @@
   margin: 0 auto;
   background-color: var(--bg, #EFD0D0);
   color: var(--ink, #FFFFFF);
-  font-family: var(--font-en, 'Radio Canada Big', sans-serif);
+  /* 한글 폰트를 기본값으로 삼는다 — 청첩장 내용 대부분이 한글이라, 영문 폰트를
+     기본으로 두면 개별 요소마다 일일이 --font-kr 을 다시 지정해야 하고 빠뜨리기
+     쉽다(실제로 예식장 주소·오시는 길 안내 등 여러 곳이 빠져 있었다). 영문/장식용
+     텍스트(표지 타이틀, 서명, D-day 숫자 등)는 이미 각자 폰트를 직접 지정해두므로
+     이 기본값 변경의 영향을 받지 않는다. */
+  font-family: var(--font-kr, 'Noto Serif KR', serif);
   overflow-x: hidden;
   position: relative;
   word-break: keep-all;

@@ -22,7 +22,11 @@
   margin: 0 auto;
   background-color: var(--bg, #9EB7CE);
   color: var(--ink, #FFFFFF);
-  font-family: var(--font-en, 'Radio Canada Big', sans-serif);
+  /* 한글 폰트를 기본값으로 삼는다 — serif-pink와 동일한 이유(§ 해당 파일 주석 참고):
+     대부분의 텍스트가 한글이라 영문을 기본값으로 두면 개별 요소마다 --font-kr을
+     다시 지정해야 해서 빠뜨리기 쉽다. 영문/장식용 텍스트는 이미 각자 폰트를 직접
+     지정해두므로 이 기본값 변경의 영향을 받지 않는다. */
+  font-family: var(--font-kr, 'Noto Serif KR', serif);
   overflow-x: hidden;
   position: relative;
   word-break: keep-all;
