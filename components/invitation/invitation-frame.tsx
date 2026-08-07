@@ -39,6 +39,8 @@ export interface BlockOverride {
   /** rsvp 블럭 전용 서브옵션 (§slot-registry.tsx RsvpIsland) */
   mealEnabled?: boolean
   shuttleEnabled?: boolean
+  /** calendar 블럭 전용 서브옵션 (§slot-registry.tsx CalendarIsland) */
+  ddayEnabled?: boolean
 }
 export type BlockOverrideMap = Record<string, BlockOverride>
 /** 섹션(블럭) 사이에 끼워 넣는 이미지. lib/theme-template.ts 의 SectionImage 와 동일한 형태 */

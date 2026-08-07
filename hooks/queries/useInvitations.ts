@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { DATA_RETENTION_SETTINGS_KEY, computeExpiryDate, parseRetentionSettings } from '@/lib/data-retention'
+import { buildContentDataFromForm, deriveOgMetaFromForm, deriveOverridesFromForm, resolveBgmUrlFromSnapshot } from '@/lib/invitation-data'
 
 export interface Invitation {
   id: string
@@ -202,6 +203,41 @@ export function useCreateInvitationMutation() {
         customStyles: {}
       }
 
+      // 고객이 이미 폼을 제출했다면 그 값(계좌 정보, 메인 이미지, 갤러리 이미지 등)을 초안에
+      // 바로 반영한다 — 예전엔 이 단계에서 customers 컬럼만 썼고, 폼 제출값은 어드민이
+      // "최신 폼 제출 내용으로 업데이트" 버튼을 별도로 눌러야만 들어갔다(청첩장 생성 직후엔
+      // 계좌/사진이 전부 비어 있었다).
+      const { data: latestSubmission } = await supabase
+        .from('form_submissions')
+        .select('data, form_instances(fields_snapshot)')
+        .eq('customer_id', targetCustomerId)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      const submittedData = (latestSubmission?.data && typeof latestSubmission.data === 'object')
+        ? latestSubmission.data as Record<string, unknown>
+        : null
+
+      // bgm 필드는 고른 음원의 URL이 아니라 파일명만 저장하므로(§lib/invitation-data.ts
+      // resolveBgmUrlFromSnapshot), 폼 발행 시점에 고정된 fields_snapshot과 함께 봐야 실제
+      // 재생 URL을 찾을 수 있다.
+      const fieldsSnapshot = (latestSubmission as { form_instances?: { fields_snapshot?: unknown } } | null)?.form_instances?.fields_snapshot ?? null
+      const resolvedBgmUrl = submittedData ? resolveBgmUrlFromSnapshot(fieldsSnapshot, submittedData.bgm) : null
+
+      const mergedContentData = submittedData
+        ? { ...contentData, ...buildContentDataFromForm(submittedData) }
+        : contentData
+
+      const ogMeta = submittedData ? deriveOgMetaFromForm(submittedData) : null
+
+      // 고객이 폼에서 "RSVP/방명록/계좌/오시는 길 넣을지" 등을 답했으면 초안 생성 시점부터
+      // 해당 블럭이 켜진/꺼진 상태로 시작하고, "식사·셔틀 질문", "D-day 표시" 여부도 함께 반영한다.
+      const formOverrides = submittedData ? deriveOverridesFromForm(submittedData) : null
+      const overrides = formOverrides && (formOverrides.disabledSlotsAdd.length > 0 || Object.keys(formOverrides.blockPatches).length > 0)
+        ? { disabled_slots: formOverrides.disabledSlotsAdd, blocks: formOverrides.blockPatches }
+        : {}
+
       const newInvite = {
         customer_id: targetCustomerId,
         theme_version_id: latestVersion?.id || null,
@@ -209,8 +245,10 @@ export function useCreateInvitationMutation() {
         dashboard_slug: dashboardSlug,
         dashboard_password: dashboardPassword,
         block_order: blockOrder,
-        content_data: contentData,
-        customization_overrides: {},
+        content_data: mergedContentData,
+        customization_overrides: overrides,
+        og_meta: ogMeta || {},
+        bgm_url: resolvedBgmUrl,
         status: 'draft',
         expires_at: expiresAt.toISOString(),
       }

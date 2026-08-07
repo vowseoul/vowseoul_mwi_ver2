@@ -71,6 +71,8 @@ const CONTENT_FIELD_DEFS: FieldDef[] = [
   { key: "groom_mother_phone", label: "신랑 어머니 연락처", type: "tel" },
   { key: "bride_father_phone", label: "신부 아버지 연락처", type: "tel" },
   { key: "bride_mother_phone", label: "신부 어머니 연락처", type: "tel" },
+  { key: "groom_sns_instagram", label: "신랑 인스타그램", type: "text" },
+  { key: "bride_sns_instagram", label: "신부 인스타그램", type: "text" },
   { key: "venue_name", label: "예식장명", type: "text" },
   { key: "venue_hall", label: "홀 이름", type: "text" },
   { key: "venue_address", label: "예식장 주소", type: "text" },
@@ -82,6 +84,7 @@ const CONTENT_FIELD_DEFS: FieldDef[] = [
   { key: "groom_photo", label: "신랑 사진", type: "image" },
   { key: "bride_photo", label: "신부 사진", type: "image" },
   { key: "greeting_image", label: "인사말 이미지 (선택)", type: "image" },
+  { key: "rsvp_meal_menu", label: "식사 종류 (쉼표로 구분, 비우면 한식/양식 기본)", type: "text" },
 ]
 
 /** slot_manifest 에 'account' 가 있을 때만 노출 (필드키 마커가 아니라 슬롯 데이터라 field_manifest 에 없음) */
@@ -133,7 +136,7 @@ const ALL_TEXT_FIELD_DEFS = [...CONTENT_FIELD_DEFS, ...ACCOUNT_FIELD_DEFS]
 const MANAGED_CONTENT_KEYS = new Set([
   ...ALL_TEXT_FIELD_DEFS.map((f) => f.key),
   "wedding_date", "wedding_time", "gallery_images", "gallery_view_type", "gallery_align", "wedding_programs", "show_wedding_program",
-  "phone_expose",
+  "phone_expose", "groom_show_phone", "bride_show_phone",
   ...DECEASED_KEYS,
 ])
 
@@ -156,7 +159,7 @@ function normalizeSequenceRows(value: unknown): SequenceRow[] {
 
 /** '아니오'/false/'off' 가 아니면 표시로 간주 (미설정은 항상 표시) — 식순 노출, 연락처 노출 토글에 공용으로 쓴다 */
 function isShown(value: unknown): boolean {
-  return !(value === false || value === "false" || value === "아니오" || value === "off")
+  return !(value === false || value === "false" || value === "아니오" || value === "아니요" || value === "off")
 }
 
 /**
@@ -365,9 +368,22 @@ export default function CustomizeClient({
   const [sequenceRows, setSequenceRows] = useState<SequenceRow[]>(() => normalizeSequenceRows(initialRaw.wedding_programs))
   const [showProgram, setShowProgram] = useState(() => isShown(initialRaw.show_wedding_program))
   const [phoneExpose, setPhoneExpose] = useState(() => isShown(initialRaw.phone_expose))
+  // 연락처 표시가 켜져 있어도 신랑/신부 본인만 개별로 숨길 수 있다 (혼주 연락처는 전체 스위치만 따른다)
+  const [groomShowPhone, setGroomShowPhone] = useState(() => isShown(initialRaw.groom_show_phone))
+  const [brideShowPhone, setBrideShowPhone] = useState(() => isShown(initialRaw.bride_show_phone))
   const [bgmUrl, setBgmUrl] = useState(String(invitation.bgm_url ?? ""))
   const [bgms, setBgms] = useState<{ id: string; name: string; url: string }[]>([])
   const [fonts, setFonts] = useState<RegisteredFont[]>([])
+
+  /** 카카오톡 등 공유 시 링크 미리보기에 쓰이는 값 — content_data 가 아니라
+   * invitations.og_meta 컬럼에 저장된다 (app/w/[slug]/page.tsx의 generateMetadata가 읽는 값과 동일). */
+  const ogMetaInitial = (invitation.og_meta && typeof invitation.og_meta === "object")
+    ? invitation.og_meta as Record<string, unknown>
+    : {}
+  const [ogTitle, setOgTitle] = useState(String(ogMetaInitial.title ?? ""))
+  const [ogDescription, setOgDescription] = useState(String(ogMetaInitial.description ?? ""))
+  const [ogImage, setOgImage] = useState(String(ogMetaInitial.image ?? ""))
+  const [uploadingOgImage, setUploadingOgImage] = useState(false)
 
   const [uploadingKey, setUploadingKey] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -395,8 +411,10 @@ export default function CustomizeClient({
     wedding_programs: sequenceRows,
     show_wedding_program: showProgram ? "예" : "아니오",
     phone_expose: phoneExpose ? "예" : "아니오",
+    groom_show_phone: groomShowPhone ? "예" : "아니오",
+    bride_show_phone: brideShowPhone ? "예" : "아니오",
     bgm_url: bgmUrl,
-  }), [initialRaw, content, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign, sequenceRows, showProgram, phoneExpose, bgmUrl])
+  }), [initialRaw, content, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone, bgmUrl])
 
   const data = useMemo(() => buildFieldData(liveRaw), [liveRaw])
 
@@ -465,6 +483,18 @@ export default function CustomizeClient({
     }
   }
 
+  const uploadOgImage = async (file: File) => {
+    setUploadingOgImage(true)
+    try {
+      const url = await uploadImage(file, "invitations/kakao-share")
+      setOgImage(url)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "이미지 업로드에 실패했습니다.")
+    } finally {
+      setUploadingOgImage(false)
+    }
+  }
+
   const addGalleryImages = async (files: FileList) => {
     setUploadingKey("gallery_images")
     try {
@@ -510,7 +540,13 @@ export default function CustomizeClient({
       wedding_programs: sequenceRows,
       show_wedding_program: showProgram ? "예" : "아니오",
       phone_expose: phoneExpose ? "예" : "아니오",
+      groom_show_phone: groomShowPhone ? "예" : "아니오",
+      bride_show_phone: brideShowPhone ? "예" : "아니오",
     }
+
+    const existingOgMeta = (invitation.og_meta && typeof invitation.og_meta === "object")
+      ? invitation.og_meta as Record<string, unknown>
+      : {}
 
     const { error } = await supabase
       .from("invitations")
@@ -519,6 +555,7 @@ export default function CustomizeClient({
         customization_overrides: { ...preservedOverrideKeys, ...cleanTokens, disabled_slots: disabledSlots, blocks: blockOverrides, sectionImages },
         bgm_url: bgmUrl || null,
         theme_version_id: themeVersionId,
+        og_meta: { ...existingOgMeta, title: ogTitle || null, description: ogDescription || null, image: ogImage || null },
         updated_at: new Date().toISOString(),
       })
       .eq("id", invitationId)
@@ -830,16 +867,38 @@ export default function CustomizeClient({
                     {phoneExpose && (
                       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                         <FieldGroup className="space-y-4">
-                          <p className="text-sm font-medium text-muted-foreground">신랑측</p>
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium text-muted-foreground">신랑측</p>
+                            <div className="flex items-center gap-2">
+                              <Label htmlFor="groomShowPhone" className="text-xs font-normal text-muted-foreground cursor-pointer">신랑 연락처 노출</Label>
+                              <Switch id="groomShowPhone" checked={groomShowPhone} onCheckedChange={setGroomShowPhone} />
+                            </div>
+                          </div>
                           {CONTACT_FIELD_DEFS.slice(0, 3).map((f) => (
                             <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
                           ))}
+                          <TextField
+                            def={CONTENT_FIELD_DEFS.find((f) => f.key === "groom_sns_instagram")!}
+                            value={content.groom_sns_instagram || ""}
+                            onChange={(v) => setField("groom_sns_instagram", v)}
+                          />
                         </FieldGroup>
                         <FieldGroup className="space-y-4">
-                          <p className="text-sm font-medium text-muted-foreground">신부측</p>
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium text-muted-foreground">신부측</p>
+                            <div className="flex items-center gap-2">
+                              <Label htmlFor="brideShowPhone" className="text-xs font-normal text-muted-foreground cursor-pointer">신부 연락처 노출</Label>
+                              <Switch id="brideShowPhone" checked={brideShowPhone} onCheckedChange={setBrideShowPhone} />
+                            </div>
+                          </div>
                           {CONTACT_FIELD_DEFS.slice(3, 6).map((f) => (
                             <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
                           ))}
+                          <TextField
+                            def={CONTENT_FIELD_DEFS.find((f) => f.key === "bride_sns_instagram")!}
+                            value={content.bride_sns_instagram || ""}
+                            onChange={(v) => setField("bride_sns_instagram", v)}
+                          />
                         </FieldGroup>
                       </div>
                     )}
@@ -878,6 +937,44 @@ export default function CustomizeClient({
                 </CardContent>
               </Card>
             )}
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-medium">카카오톡 공유</CardTitle>
+                <CardDescription>
+                  청첩장 링크를 카카오톡 등에 공유할 때 보여줄 썸네일·제목·설명입니다. 비워두면 신랑·신부 이름과 예식 정보로 자동 채워집니다.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <FieldGroup className="space-y-4">
+                  <ImageField
+                    def={{ key: "og_image", label: "썸네일 이미지", type: "image" }}
+                    value={ogImage}
+                    uploading={uploadingOgImage}
+                    onUpload={uploadOgImage}
+                    onClear={() => setOgImage("")}
+                  />
+                  <Field>
+                    <FieldLabel htmlFor="ogTitle">제목</FieldLabel>
+                    <Input
+                      id="ogTitle"
+                      value={ogTitle}
+                      onChange={(e) => setOgTitle(e.target.value)}
+                      placeholder={groom && bride ? `${groom} ♥ ${bride} 결혼합니다` : "철수 ♥ 영희 결혼합니다"}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="ogDescription">설명</FieldLabel>
+                    <Input
+                      id="ogDescription"
+                      value={ogDescription}
+                      onChange={(e) => setOgDescription(e.target.value)}
+                      placeholder="2026년 5월 7일 낮 12시"
+                    />
+                  </Field>
+                </FieldGroup>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="design" className="space-y-6">
@@ -1114,6 +1211,13 @@ export default function CustomizeClient({
                                     onCheckedChange={(c) => setBlockOverride(b.key, { mealEnabled: c })}
                                   />
                                 </div>
+                                {override?.mealEnabled !== false && (
+                                  <TextField
+                                    def={ALL_TEXT_FIELD_DEFS.find((f) => f.key === "rsvp_meal_menu")!}
+                                    value={content.rsvp_meal_menu || ""}
+                                    onChange={(v) => setField("rsvp_meal_menu", v)}
+                                  />
+                                )}
                                 <div className="flex items-center justify-between">
                                   <span className="text-sm">셔틀버스 이용 질문</span>
                                   <Switch
@@ -1122,6 +1226,15 @@ export default function CustomizeClient({
                                   />
                                 </div>
                               </>
+                            )}
+                            {b.key === "calendar" && (
+                              <div className="flex items-center justify-between border-t pt-4">
+                                <span className="text-sm">D-day 카운트다운 표시</span>
+                                <Switch
+                                  checked={override?.ddayEnabled !== false}
+                                  onCheckedChange={(c) => setBlockOverride(b.key, { ddayEnabled: c })}
+                                />
+                              </div>
                             )}
                           </AccordionContent>
                         </AccordionItem>

@@ -153,7 +153,9 @@ const DEFAULT_SEQUENCE: SequenceEvent[] = [
 /** 토글 필드 값 판정 ('예'/'아니오' 문자열 또는 boolean) */
 function isToggledOff(value: unknown): boolean {
   if (value == null) return false // 미설정은 '표시'로 간주
-  return value === false || value === "false" || value === "아니오" || value === "off"
+  // 폼 필드 카탈로그의 토글 선택지가 "아니오"/"아니요"로 통일돼 있지 않아 둘 다 받는다
+  // (예: show_direction 필드는 "아니요"로 등록돼 있음).
+  return value === false || value === "false" || value === "아니오" || value === "아니요" || value === "off"
 }
 
 function SequenceIsland({ raw }: SlotProps) {
@@ -204,8 +206,9 @@ function getCalendarDays(dateStr: string) {
   return { year, month, targetDay, days, date }
 }
 
-function CalendarIsland({ accent, data, raw }: SlotProps) {
+function CalendarIsland({ accent, data, raw, blockOverrides }: SlotProps) {
   const dateStr = (typeof raw?.wedding_date === "string" ? raw.wedding_date : data.wedding_date) || ""
+  const ddayEnabled = blockOverrides?.calendar?.ddayEnabled !== false
   const [now, setNow] = useState(() => new Date())
 
   useEffect(() => {
@@ -254,19 +257,21 @@ function CalendarIsland({ accent, data, raw }: SlotProps) {
       </div>
 
       {/* D-day 카운트다운 */}
-      <div style={{ marginTop: 48, paddingTop: 32, textAlign: "center", borderTop: `1px solid ${accent}` }}>
-        <p style={{ fontSize: 14, textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600, color: accent, marginBottom: 20, fontFamily: "var(--font-en, inherit)" }}>
-          Days left
-        </p>
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 40, maxWidth: 280, margin: "0 auto", color: accent, fontFamily: "var(--font-en, inherit)" }}>
-          {[["DAYS", daysLeft], ["HOURS", hoursLeft], ["MINUTES", minutesLeft]].map(([label, value]) => (
-            <div key={String(label)} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-              <p style={{ fontSize: 14, letterSpacing: ".05em", opacity: 0.6 }}>{label}</p>
-              <p style={{ fontSize: 36, marginTop: 4, lineHeight: 1 }}>{value}</p>
-            </div>
-          ))}
+      {ddayEnabled && (
+        <div style={{ marginTop: 48, paddingTop: 32, textAlign: "center", borderTop: `1px solid ${accent}` }}>
+          <p style={{ fontSize: 14, textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600, color: accent, marginBottom: 20, fontFamily: "var(--font-en, inherit)" }}>
+            Days left
+          </p>
+          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 40, maxWidth: 280, margin: "0 auto", color: accent, fontFamily: "var(--font-en, inherit)" }}>
+            {[["DAYS", daysLeft], ["HOURS", hoursLeft], ["MINUTES", minutesLeft]].map(([label, value]) => (
+              <div key={String(label)} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                <p style={{ fontSize: 14, letterSpacing: ".05em", opacity: 0.6 }}>{label}</p>
+                <p style={{ fontSize: 36, marginTop: 4, lineHeight: 1 }}>{value}</p>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
@@ -475,11 +480,22 @@ function AccountIsland({ accent, data }: SlotProps) {
  * 지금까지 렌더 경로가 없어 아무 데도 표시되지 않았다 — 이 슬롯이 그 값을 받는다.
  * phone_expose 가 '아니오'/false 로 꺼져있으면(미설정은 표시로 간주) 섹션 자체를 숨긴다.
  * ------------------------------------------------------------------ */
-function ContactRow({ label, name, phone, accent }: { label: string; name?: string; phone: string; accent: string }) {
+/** 폼에 "@" 포함/미포함, 전체 URL 등 여러 형태로 들어올 수 있는 인스타그램 값을 핸들만 남겨 정리한다 */
+function normalizeInstagramHandle(raw?: string): string | null {
+  if (!raw) return null
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  const afterUrl = trimmed.replace(/^https?:\/\/(www\.)?instagram\.com\//i, "")
+  const handle = afterUrl.replace(/^@/, "").replace(/\/$/, "")
+  return handle || null
+}
+
+function ContactRow({ label, name, phone, instagram, accent }: { label: string; name?: string; phone: string; instagram?: string; accent: string }) {
   const linkStyle: React.CSSProperties = {
     padding: "6px 12px", borderRadius: 7, whiteSpace: "nowrap", textDecoration: "none",
     border: `1px solid ${accent}`, color: accent, fontSize: 12, display: "inline-flex", alignItems: "center",
   }
+  const handle = normalizeInstagramHandle(instagram)
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${soft(25)}`, gap: 8 }}>
       <div style={{ textAlign: "left", minWidth: 0 }}>
@@ -489,6 +505,7 @@ function ContactRow({ label, name, phone, accent }: { label: string; name?: stri
       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
         <a href={`tel:${phone}`} style={linkStyle}>전화</a>
         <a href={`sms:${phone}`} style={linkStyle}>문자</a>
+        {handle && <a href={`https://instagram.com/${handle}`} target="_blank" rel="noreferrer" style={linkStyle}>인스타</a>}
       </div>
     </div>
   )
@@ -496,8 +513,10 @@ function ContactRow({ label, name, phone, accent }: { label: string; name?: stri
 function ContactIsland({ accent, data }: SlotProps) {
   if (isToggledOff(data.phone_expose)) return null
   const rows = [
-    { label: "신랑", name: data.groom_name, phone: data.groom_phone },
-    { label: "신부", name: data.bride_name, phone: data.bride_phone },
+    // 신랑·신부 본인은 전체 스위치가 켜져 있어도 개별로 더 숨길 수 있다(groom_show_phone/bride_show_phone).
+    // 혼주(부모) 연락처는 개별 토글이 없어 전체 스위치만 따른다.
+    { label: "신랑", name: data.groom_name, phone: isToggledOff(data.groom_show_phone) ? "" : data.groom_phone, instagram: data.groom_sns_instagram },
+    { label: "신부", name: data.bride_name, phone: isToggledOff(data.bride_show_phone) ? "" : data.bride_phone, instagram: data.bride_sns_instagram },
     { label: "신랑 아버지", name: data.groom_father_name, phone: data.groom_father_phone },
     { label: "신랑 어머니", name: data.groom_mother_name, phone: data.groom_mother_phone },
     { label: "신부 아버지", name: data.bride_father_name, phone: data.bride_father_phone },
@@ -508,7 +527,7 @@ function ContactIsland({ accent, data }: SlotProps) {
   return (
     <div style={{ textAlign: "left", maxWidth: 320, margin: "0 auto" }}>
       {rows.map((r) => (
-        <ContactRow key={r.label} label={r.label} name={r.name} phone={r.phone} accent={accent} />
+        <ContactRow key={r.label} label={r.label} name={r.name} phone={r.phone} instagram={r.instagram} accent={accent} />
       ))}
     </div>
   )
@@ -659,22 +678,37 @@ function MapIsland({ accent, data }: SlotProps) {
   )
 }
 
+/** 관리자가 rsvp_meal_menu에 입력한 자유 텍스트("한식, 양식, 어린이 메뉴" 등)를
+ * 콤마/세미콜론/줄바꿈 기준으로 나눠 커스텀 식사 옵션 목록을 만든다.
+ * 입력이 없으면 null을 반환해 호출부가 기존 기본값(한식/양식)을 쓰도록 한다. */
+function parseMealMenu(raw?: string): string[] | null {
+  if (!raw) return null
+  const items = raw.split(/[,;\n、]/).map((s) => s.trim()).filter(Boolean)
+  return items.length > 0 ? items : null
+}
+
+const MEAL_NONE = "__meal_none__"
+
 /* ------------------------------- RSVP ------------------------------ *
  * 이전 버전 UX(트리거 버튼 → 모달 폼)를 이식하되, 저장은 새 스키마
  * rsvp_responses 테이블에 맞춰 구현. invitationId 가 없으면 미리보기 모드.
  * ------------------------------------------------------------------ */
-function RsvpIsland({ accent, invitationId, blockOverrides }: SlotProps) {
+function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
   const [open, setOpen] = useState(false)
   const [done, setDone] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // 관리자가 콘텐츠 편집기에서 식사 종류를 직접 입력했으면 그 목록을, 아니면
+  // 기존 기본값(한식/양식)을 쓴다 — "안함"은 항상 마지막에 별도로 붙는다.
+  const mealMenu = parseMealMenu(data.rsvp_meal_menu) ?? ["한식", "양식"]
 
   const [name, setName] = useState("")
   const [phone, setPhone] = useState("")
   const [attending, setAttending] = useState<"yes" | "no">("yes")
   const [side, setSide] = useState<"groom" | "bride">("groom")
   const [partySize, setPartySize] = useState(1)
-  const [mealChoice, setMealChoice] = useState<"korean" | "western" | "none">("korean")
+  const [mealChoice, setMealChoice] = useState<string>(mealMenu[0])
   const [shuttleUsed, setShuttleUsed] = useState(false)
 
   // rsvp_responses.meal_choice/shuttle_required 컬럼은 이미 있었지만 이 폼이 값을
@@ -691,6 +725,7 @@ function RsvpIsland({ accent, invitationId, blockOverrides }: SlotProps) {
 
     if (invitationId) {
       const isAttending = attending === "yes"
+      const wantsMeal = isAttending && mealEnabled && mealChoice !== MEAL_NONE
       const { error: err } = await supabase.from("rsvp_responses").insert({
         invitation_id: invitationId,
         guest_name: name.trim(),
@@ -698,8 +733,8 @@ function RsvpIsland({ accent, invitationId, blockOverrides }: SlotProps) {
         side,
         is_attending: isAttending,
         party_size: isAttending ? partySize : 0,
-        meal_required: isAttending && mealEnabled && mealChoice !== "none",
-        meal_choice: isAttending && mealEnabled && mealChoice !== "none" ? mealChoice : null,
+        meal_required: wantsMeal,
+        meal_choice: wantsMeal ? mealChoice : null,
         shuttle_required: isAttending && shuttleEnabled ? shuttleUsed : false,
       })
       if (err) { setSaving(false); setError("전송에 실패했습니다. 잠시 후 다시 시도해주세요."); return }
@@ -778,9 +813,9 @@ function RsvpIsland({ accent, invitationId, blockOverrides }: SlotProps) {
                 {mealEnabled && (
                   <RsvpField label="식사 여부">
                     <Segmented
-                      options={[["korean", "한식"], ["western", "양식"], ["none", "안함"]]}
+                      options={[...mealMenu.map((m): [string, string] => [m, m]), [MEAL_NONE, "안함"]]}
                       value={mealChoice}
-                      onChange={(v) => setMealChoice(v as "korean" | "western" | "none")}
+                      onChange={(v) => setMealChoice(v)}
                       accent={accent}
                     />
                   </RsvpField>
