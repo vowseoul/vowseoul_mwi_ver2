@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import {
   Table,
   TableBody,
@@ -28,11 +27,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { 
-  useCustomersQuery, 
-  useDeleteCustomerMutation, 
-  Customer 
+import {
+  useCustomersQuery,
+  useDeleteCustomerMutation,
+  Customer
 } from '@/hooks/queries/useCustomers'
+import { CustomerStatusBadge } from '@/components/customer-status-badge'
 import { 
   Search, 
   MoreHorizontal, 
@@ -97,26 +97,6 @@ export default function CustomersPage() {
     link.click()
     document.body.removeChild(link)
     toast.success('CSV 내보내기가 완료되었습니다.')
-  }
-
-  // Get status color badges
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'registered':
-        return <Badge variant="secondary">신규 등록</Badge>
-      case 'form_sent':
-        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-200">폼 전송</Badge>
-      case 'form_completed':
-        return <Badge className="bg-green-100 text-green-800 hover:bg-green-200">폼 완료</Badge>
-      case 'draft':
-        return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-200">초안 작성</Badge>
-      case 'published':
-        return <Badge className="bg-indigo-100 text-indigo-800 hover:bg-indigo-200">청첩장 발행</Badge>
-      case 'expired':
-        return <Badge variant="destructive">만료됨</Badge>
-      default:
-        return <Badge variant="outline">{status}</Badge>
-    }
   }
 
   // Stats
@@ -253,7 +233,7 @@ export default function CustomersPage() {
                       {customer.wedding_date || '예식일 미정'}{customer.venue_name ? ` · ${customer.venue_name}` : ''}
                     </p>
                     <div className="mt-1.5 flex items-center gap-2">
-                      {getStatusBadge(customer.status)}
+                      <CustomerStatusBadge status={customer.status} />
                       <span className="text-[11px] text-muted-foreground">
                         {new Date(customer.created_at).toLocaleDateString('ko-KR')} 등록
                       </span>
@@ -337,7 +317,7 @@ export default function CustomersPage() {
                       {customer.wedding_date}
                     </TableCell>
                     <TableCell className="text-sm">{customer.venue_name}</TableCell>
-                    <TableCell>{getStatusBadge(customer.status)}</TableCell>
+                    <TableCell><CustomerStatusBadge status={customer.status} /></TableCell>
                     <TableCell className="text-sm text-right text-muted-foreground">
                       {new Date(customer.created_at).toLocaleDateString('ko-KR')}
                     </TableCell>

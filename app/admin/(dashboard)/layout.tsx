@@ -13,12 +13,11 @@ import {
 import { useAppStore } from '@/lib/store'
 import { supabase } from '@/lib/supabase'
 import { Logo } from '@/components/logo'
-import { 
-  LayoutDashboard, 
-  ShoppingCart, 
-  Palette, 
-  BarChart3, 
-  Settings, 
+import {
+  LayoutDashboard,
+  Palette,
+  BarChart3,
+  Settings,
   Menu,
   User,
   Users,
@@ -29,12 +28,13 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+// 주문 관리는 별도 메뉴 없이 고객 관리(상세 페이지)에 통합되었다 — orders 테이블/
+// 데이터 자체는 그대로 쓰지만 전용 목록 화면(/admin/orders)은 더 이상 없다.
 const navItems = [
   { href: '/admin', label: '대시보드', icon: LayoutDashboard },
   { href: '/admin/customers', label: '고객 관리', icon: Users },
   { href: '/admin/forms', label: '폼 관리', icon: FileText },
   { href: '/admin/invitations', label: '청첩장 관리', icon: Sparkles },
-  { href: '/admin/orders', label: '주문 관리', icon: ShoppingCart },
   { href: '/admin/assets', label: '에셋 관리', icon: Palette },
   { href: '/admin/statistics', label: '통계', icon: BarChart3 },
   { href: '/admin/inquiries', label: '문의 관리', icon: HelpCircle },

@@ -17,6 +17,8 @@ import {
 } from '@/components/ui/select'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { useFormInstanceBySlugQuery, useSubmitFormMutation } from '@/hooks/queries/useForms'
+import { useBgmLibraryQuery } from '@/hooks/queries/useBgms'
+import { mergeMusicChoices } from '@/lib/bgm-choices'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Calendar } from '@/components/ui/calendar'
@@ -53,6 +55,7 @@ function PublicFormContent({ slug }: { slug: string }) {
   const router = useRouter()
   const { data: instance, isLoading, error } = useFormInstanceBySlugQuery(slug)
   const submitMutation = useSubmitFormMutation()
+  const { data: bgmLibrary } = useBgmLibraryQuery()
 
   // Password Lock state
   const [password, setPassword] = useState('')
@@ -627,7 +630,7 @@ function PublicFormContent({ slug }: { slug: string }) {
         )
       }
       case 'music': {
-        const musicFiles = field.options?.music_files || []
+        const musicFiles = mergeMusicChoices(field.options?.music_files, bgmLibrary)
         if (musicFiles.length === 0) {
           return <div className="text-xs text-muted-foreground italic">업로드된 음원이 없습니다.</div>
         }
