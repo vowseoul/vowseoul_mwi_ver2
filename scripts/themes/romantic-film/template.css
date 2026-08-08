@@ -249,6 +249,7 @@
 }
 
 .sb-section__subtitle {
+  font-family: var(--font-en, 'Radio Canada Big', sans-serif);
   font-size: var(--text-label, 18px);
   text-transform: uppercase;
   letter-spacing: 0.15em;

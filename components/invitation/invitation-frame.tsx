@@ -125,6 +125,22 @@ ${template.html}
 </html>`
 }
 
+// 다크/라이트 배경이 번갈아 깔리는 테마(color-atelier 등)용 — data-alt 마커가 붙은
+// [data-block] 섹션들을 순회하며 "실제로 보이는" 것만 걸러 vs-alt-a/vs-alt-b 를 새로 매긴다.
+// 템플릿에 dark/light 클래스를 정적으로 박아두면 중간 블럭을 꺼서 순서가 바뀌어도 클래스는
+// 그대로 남아 A-B-B-A 처럼 교대가 깨진다 — hiddenBlocks 가 바뀔 때마다 다시 계산한다.
+function applyAltClasses(doc: Document, hiddenBlocks: string[]) {
+  let i = 0
+  doc.querySelectorAll<HTMLElement>("[data-alt][data-block]").forEach((el) => {
+    const key = el.getAttribute("data-block")
+    const isHidden = key ? hiddenBlocks.includes(key) : false
+    el.classList.remove("vs-alt-a", "vs-alt-b")
+    if (isHidden) return
+    el.classList.add(i % 2 === 0 ? "vs-alt-a" : "vs-alt-b")
+    i++
+  })
+}
+
 export function InvitationFrame({
   template,
   data,
@@ -154,6 +170,11 @@ export function InvitationFrame({
     d.open()
     d.write(srcDoc)
     d.close()
+
+    // 문서를 새로 write() 한 직후 페인트 전에 동기적으로 적용 — 이펙트를 기다리면 첫 페인트에
+    // 배경이 비어 있다가 스냅되고, 같은 iframe이 재사용되어 setDoc(d)가 이전과 동일한 Document
+    // 참조를 받아 리렌더가 생략되는 경우(예: 테마 템플릿 편집기)에도 유실되지 않는다.
+    applyAltClasses(d, hiddenBlocks)
 
     const nodes: Record<string, HTMLElement> = {}
     d.querySelectorAll<HTMLElement>("[data-slot]").forEach((el) => {
@@ -222,21 +243,11 @@ export function InvitationFrame({
     styleEl.textContent = rules.join("\n")
   }, [doc, blockOverrides, hiddenBlocks])
 
-  // 다크/라이트 배경이 번갈아 깔리는 테마(color-atelier 등)용 — data-alt 마커가 붙은
-  // [data-block] 섹션들을 순회하며 "실제로 보이는" 것만 걸러 vs-alt-a/vs-alt-b 를 새로 매긴다.
-  // 템플릿에 dark/light 클래스를 정적으로 박아두면 중간 블럭을 꺼서 순서가 바뀌어도 클래스는
-  // 그대로 남아 A-B-B-A 처럼 교대가 깨진다 — hiddenBlocks 가 바뀔 때마다 매번 다시 계산한다.
+  // hiddenBlocks 만 바뀌고 문서는 다시 write() 되지 않는 경우(편집기에서 블럭을 껐다 켤 때)를
+  // 위한 재계산 — 문서를 새로 쓴 직후의 최초 적용은 위 write 이펙트가 동기적으로 처리한다.
   useEffect(() => {
     if (!doc) return
-    let i = 0
-    doc.querySelectorAll<HTMLElement>("[data-alt][data-block]").forEach((el) => {
-      const key = el.getAttribute("data-block")
-      const isHidden = key ? hiddenBlocks.includes(key) : false
-      el.classList.remove("vs-alt-a", "vs-alt-b")
-      if (isHidden) return
-      el.classList.add(i % 2 === 0 ? "vs-alt-a" : "vs-alt-b")
-      i++
-    })
+    applyAltClasses(doc, hiddenBlocks)
   }, [doc, hiddenBlocks])
 
   // 블럭 타이틀/영문 소제목 바인딩 — 빈 값이면 템플릿 기본 텍스트를 그대로 둔다 ([data-field]와 동일 규칙)
@@ -276,6 +287,13 @@ export function InvitationFrame({
       const wrapper = doc.createElement("div")
       wrapper.className = "vs-section-image"
       wrapper.setAttribute("data-vs-section-image", img.id)
+      // background: inherit 는 DOM 부모(.ca-container 등)를 따라가 버려 바로 앞 섹션과 색이
+      // 안 맞는다 — anchor(직전 섹션)의 실제 계산된 배경/글자색을 그대로 복사해 이어 붙인다.
+      const anchorStyle = doc.defaultView?.getComputedStyle(anchor)
+      if (anchorStyle) {
+        wrapper.style.backgroundColor = anchorStyle.backgroundColor
+        wrapper.style.color = anchorStyle.color
+      }
 
       const imgEl = doc.createElement("img")
       imgEl.src = img.url

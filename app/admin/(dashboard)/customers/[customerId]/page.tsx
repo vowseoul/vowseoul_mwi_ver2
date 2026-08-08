@@ -767,7 +767,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                     <span className="text-xs font-medium text-muted-foreground">고객용 관리 대시보드 URL</span>
                     <div className="flex gap-2">
                       <Input
-                        value={`${baseUrl}/dashboard/${invitation.dashboard_slug}`}
+                        value={`${baseUrl}/dashboard/${invitation.public_slug}`}
                         readOnly
                         className="text-xs h-9 bg-muted"
                       />
@@ -776,7 +776,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                         variant="outline"
                         size="icon"
                         className="h-9 w-9 shrink-0"
-                        onClick={() => handleCopy(`${baseUrl}/dashboard/${invitation.dashboard_slug}`, 'dashboard')}
+                        onClick={() => handleCopy(`${baseUrl}/dashboard/${invitation.public_slug}`, 'dashboard')}
                       >
                         {copiedLink === 'dashboard' ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
                       </Button>

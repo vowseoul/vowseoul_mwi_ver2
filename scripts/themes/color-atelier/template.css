@@ -2,7 +2,6 @@
 
 :root {
   --bg: #FAF9F7;       /* color1 - Light background */
-  --ink: #3D3D3D;      /* color2 - Dark contrast color */
   --accent: #C4A574;   /* Point accent color */
   --font-kr: 'Noto Serif KR', serif;
   --font-en: 'Playfair Display', serif;
@@ -344,16 +343,16 @@
   font-weight: 600;
   font-size: 18px;
   letter-spacing: 0.05em;
-  color: var(--accent, #C4A574);
+  color: currentColor;
 }
 
 .ca-location-card__address {
   font-size: 14px;
   margin-top: 8px;
   white-space: pre-line;
-  /* color 프로퍼티 자체의 값으로 currentColor 를 쓰면 조상 커스텀 프로퍼티가 바뀌어도
-     일부 브라우저에서 재계산되지 않아 --ink 를 직접 참조한다 */
-  color: color-mix(in srgb, var(--accent, #C4A574) 80%, transparent);
+  /* --accent 를 직접 참조하면 vs-alt-a(배경이 --accent)일 때 글자색과 배경색이 같아진다 —
+     currentColor 로 조상 섹션이 그 순간 실제로 쓰는 텍스트 색(--bg 또는 --accent)을 따라간다 */
+  color: color-mix(in srgb, currentColor 80%, transparent);
 }
 
 .ca-location__guides {
@@ -370,13 +369,13 @@
 .ca-location__guide-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--accent, #C4A574);
+  color: currentColor;
   margin-bottom: 4px;
 }
 
 .ca-location__guide-desc {
   font-size: var(--text-caption, 12px);
-  color: color-mix(in srgb, var(--accent, #C4A574) 70%, transparent);
+  color: color-mix(in srgb, currentColor 70%, transparent);
   line-height: 1.6;
   white-space: pre-line;
 }

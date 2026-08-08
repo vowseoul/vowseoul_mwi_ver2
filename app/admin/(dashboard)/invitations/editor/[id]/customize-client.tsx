@@ -162,6 +162,15 @@ function isShown(value: unknown): boolean {
   return !(value === false || value === "false" || value === "아니오" || value === "아니요" || value === "off")
 }
 
+/** 목록 항목을 인접한 위치와 맞바꾼다 — 갤러리 사진 순서, 섹션 삽입 이미지 순서 재정렬에 공용으로 쓴다 */
+function moveArrayItem<T>(arr: T[], index: number, direction: -1 | 1): T[] {
+  const target = index + direction
+  if (index < 0 || target < 0 || target >= arr.length) return arr
+  const next = [...arr]
+  ;[next[index], next[target]] = [next[target], next[index]]
+  return next
+}
+
 /**
  * 테마 CSS에서 사이즈 토큰의 실제 폴백 값을 읽는다 (예: `var(--text-title, 18px)` → 18).
  * 사이즈 토큰은 themes.styles 에 기본값을 따로 저장하지 않고 CSS 폴백을 유일한 기본값 출처로
@@ -328,14 +337,7 @@ export default function CustomizeClient({
   const removeSectionImage = (id: string) =>
     setSectionImages((cur) => cur.filter((img) => img.id !== id))
   const moveSectionImage = (id: string, direction: -1 | 1) =>
-    setSectionImages((cur) => {
-      const idx = cur.findIndex((img) => img.id === id)
-      const target = idx + direction
-      if (idx < 0 || target < 0 || target >= cur.length) return cur
-      const next = [...cur]
-      ;[next[idx], next[target]] = [next[target], next[idx]]
-      return next
-    })
+    setSectionImages((cur) => moveArrayItem(cur, cur.findIndex((img) => img.id === id), direction))
 
   const [content, setContent] = useState<Record<string, string>>(() => {
     const out: Record<string, string> = {}
@@ -442,6 +444,12 @@ export default function CustomizeClient({
     const css = activeThemeRow.template_css || ""
     return SIZE_TOKEN_FIELDS.filter((t) => typeof css === "string" && css.includes(`var(${t.name}`))
   }, [activeThemeRow])
+  /** 색/폰트 토큰도 사이즈 토큰과 동일한 규칙으로 걸러낸다 — 테마 CSS가 참조하지 않는 토큰의
+   * 피커를 보여주면 바꿔도 아무 효과가 없다 */
+  const visibleTokenFields = useMemo(() => {
+    const css = activeThemeRow.template_css || ""
+    return TOKEN_FIELDS.filter((t) => typeof css === "string" && css.includes(`var(${t.name}`))
+  }, [activeThemeRow])
   const typographySizeTokens = useMemo(() => visibleSizeTokens.filter((t) => t.group === "typography"), [visibleSizeTokens])
   const layoutSizeTokens = useMemo(() => visibleSizeTokens.filter((t) => t.group === "layout"), [visibleSizeTokens])
   const sizeTokenDefaults = useMemo(() => {
@@ -507,15 +515,8 @@ export default function CustomizeClient({
     }
   }
 
-  const moveGalleryImage = (index: number, direction: -1 | 1) => {
-    setGalleryImages((cur) => {
-      const target = index + direction
-      if (target < 0 || target >= cur.length) return cur
-      const next = [...cur]
-      ;[next[index], next[target]] = [next[target], next[index]]
-      return next
-    })
-  }
+  const moveGalleryImage = (index: number, direction: -1 | 1) =>
+    setGalleryImages((cur) => moveArrayItem(cur, index, direction))
 
   const save = async () => {
     setSaving(true)
@@ -579,21 +580,27 @@ export default function CustomizeClient({
 
   const copyInvitationLink = async () => {
     if (!publicSlug) return
-    const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
-    await navigator.clipboard.writeText(`${baseUrl}/w/${publicSlug}`)
-    toast.success("청첩장 주소가 클립보드에 복사되었습니다.")
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/w/${publicSlug}`)
+      toast.success("청첩장 주소가 클립보드에 복사되었습니다.")
+    } catch {
+      toast.error("링크 복사에 실패했습니다.")
+    }
   }
 
   const copyDashboardLink = async () => {
     if (!publicSlug) return
-    const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
     const password = String(invitation.dashboard_password ?? "")
     // 대시보드는 /dashboard/[slug] 가 public_slug 로 조회한다(dashboard_slug 컬럼은 쓰지 않음).
     const text = password
-      ? `${baseUrl}/dashboard/${publicSlug}\n비밀번호: ${password}`
-      : `${baseUrl}/dashboard/${publicSlug}`
-    await navigator.clipboard.writeText(text)
-    toast.success("고객용 대시보드 링크가 클립보드에 복사되었습니다.")
+      ? `${window.location.origin}/dashboard/${publicSlug}\n비밀번호: ${password}`
+      : `${window.location.origin}/dashboard/${publicSlug}`
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success("고객용 대시보드 링크가 클립보드에 복사되었습니다.")
+    } catch {
+      toast.error("링크 복사에 실패했습니다.")
+    }
   }
 
   const groom = String(data.groom_name ?? "")
@@ -773,7 +780,7 @@ export default function CustomizeClient({
                       <FieldLabel>사진 목록</FieldLabel>
                       <div className="grid grid-cols-[repeat(auto-fill,minmax(90px,1fr))] gap-2">
                         {galleryImages.map((url, i) => (
-                          <div key={i} className="group relative aspect-square overflow-hidden rounded-md border">
+                          <div key={url} className="group relative aspect-square overflow-hidden rounded-md border">
                             <img src={url} alt="" className="h-full w-full object-cover" />
                             <button
                               type="button"
@@ -789,6 +796,7 @@ export default function CustomizeClient({
                                 onClick={() => moveGalleryImage(i, -1)}
                                 disabled={i === 0}
                                 title="앞으로 이동"
+                                aria-label="앞으로 이동"
                                 className="flex h-5 w-5 items-center justify-center rounded text-white hover:bg-white/20 disabled:opacity-30"
                               >
                                 <ChevronLeft className="h-3.5 w-3.5" />
@@ -799,6 +807,7 @@ export default function CustomizeClient({
                                 onClick={() => moveGalleryImage(i, 1)}
                                 disabled={i === galleryImages.length - 1}
                                 title="뒤로 이동"
+                                aria-label="뒤로 이동"
                                 className="flex h-5 w-5 items-center justify-center rounded text-white hover:bg-white/20 disabled:opacity-30"
                               >
                                 <ChevronRight className="h-3.5 w-3.5" />
@@ -1059,7 +1068,7 @@ export default function CustomizeClient({
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  {TOKEN_FIELDS.filter((t) => t.type === "color").map((t) => {
+                  {visibleTokenFields.filter((t) => t.type === "color").map((t) => {
                     const value = typeof overrides[t.name] === "string" ? (overrides[t.name] as string) : ""
                     const placeholder = themeTokens[t.name] || "테마 기본값"
                     return (
@@ -1093,7 +1102,7 @@ export default function CustomizeClient({
               </CardHeader>
               <CardContent className="space-y-5">
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  {TOKEN_FIELDS.filter((t) => t.type === "font").map((t) => {
+                  {visibleTokenFields.filter((t) => t.type === "font").map((t) => {
                     const value = typeof overrides[t.name] === "string" ? (overrides[t.name] as string) : ""
                     const placeholder = themeTokens[t.name] || "테마 기본값"
                     const matchedFontStack = fonts.map((f) => buildFontStack(f, t.name)).find((stack) => stack === value)
