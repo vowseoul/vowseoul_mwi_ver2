@@ -450,22 +450,18 @@ export function useSubmitFormMutation() {
 
         if (instanceError) throw instanceError
 
-        // 3. Update customer details using the submitted form fields
-        const customerUpdates: any = {
-          status: 'form_completed'
+        // 3. Update customer details using the submitted form fields.
+        // customers 는 RLS 상 authenticated 만 쓸 수 있어 공개 폼(anon)에서는
+        // 직접 update 할 수 없다 — service_role 을 쓰는 서버 라우트를 대신 호출한다.
+        const res = await fetch('/api/form-submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ instanceId, customerId, data }),
+        })
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body.error || '고객 정보를 갱신하지 못했습니다.')
         }
-        if (data.groom_name) customerUpdates.groom_name = data.groom_name
-        if (data.bride_name) customerUpdates.bride_name = data.bride_name
-        if (data.wedding_date) customerUpdates.wedding_date = data.wedding_date
-        if (data.venue_name) customerUpdates.venue_name = data.venue_name
-        if (data.venue_address) customerUpdates.venue_address = data.venue_address
-
-        const { error: customerError } = await supabase
-          .from('customers')
-          .update(customerUpdates)
-          .eq('id', customerId)
-
-        if (customerError) throw customerError
       }
 
       return true

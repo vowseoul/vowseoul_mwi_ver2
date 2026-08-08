@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase, logSupabaseError } from '@/lib/supabase'
 import { Loader2 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -36,14 +36,17 @@ export default function StatisticsPage() {
   })
 
   const [invitations, setInvitations] = useState<any[]>([])
-  const [stats, setStats] = useState<any[]>([])
+  const [orders, setOrdersData] = useState<any[]>([])
+  const [visitLogs, setVisitLogs] = useState<any[]>([])
+  const [themeNames, setThemeNames] = useState<Record<string, string>>({})
+  const [bgmNames, setBgmNames] = useState<Record<string, string>>({})
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
         setIsLoading(true)
-        const { data: invData } = await supabase
+        const { data: invData, error: invError } = await supabase
           .from('invitations')
           .select(`
             *,
@@ -54,13 +57,73 @@ export default function StatisticsPage() {
               wedding_date
             )
           `)
+        logSupabaseError('statistics: invitations', invError)
 
-        const { data: statsData } = await supabase
-          .from('visit_daily_stats')
-          .select('*')
+        // 매출은 청첩장 건당 5만원 고정이 아니라 실제 orders.amount 합계를 쓴다(§1-B).
+        const { data: ordersData, error: ordersError } = await supabase
+          .from('orders')
+          .select('amount, created_at')
+        logSupabaseError('statistics: orders', ordersError)
+
+        // 시간대별 트래픽은 visit_daily_stats(일 단위 집계)가 아니라 visit_logs 의
+        // 실제 방문 시각(visited_at)에서 직접 시간대를 뽑아야 정확하다.
+        const sevenDaysAgo = new Date()
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+        const { data: logsData, error: logsError } = await supabase
+          .from('visit_logs')
+          .select('visited_at')
+          .gte('visited_at', sevenDaysAgo.toISOString())
+        logSupabaseError('statistics: visit_logs', logsError)
 
         if (invData) setInvitations(invData)
-        if (statsData) setStats(statsData)
+        if (ordersData) setOrdersData(ordersData)
+        if (logsData) setVisitLogs(logsData)
+
+        // 테마 이름 해석: theme_version_id → theme_versions.theme_id → themes.name
+        const versionIds = Array.from(new Set((invData || []).map((i: any) => i.theme_version_id).filter(Boolean)))
+        if (versionIds.length > 0) {
+          const { data: versions, error: vErr } = await supabase
+            .from('theme_versions')
+            .select('id, theme_id')
+            .in('id', versionIds)
+          logSupabaseError('statistics: theme_versions', vErr)
+          const themeIds = Array.from(new Set((versions || []).map((v: any) => v.theme_id).filter(Boolean)))
+          const versionToTheme: Record<string, string> = {}
+          ;(versions || []).forEach((v: any) => { versionToTheme[v.id] = v.theme_id })
+
+          let themeIdToName: Record<string, string> = {}
+          if (themeIds.length > 0) {
+            const { data: themesData, error: tErr } = await supabase
+              .from('themes')
+              .select('id, name')
+              .in('id', themeIds)
+            logSupabaseError('statistics: themes', tErr)
+            ;(themesData || []).forEach((t: any) => { themeIdToName[t.id] = t.name })
+          }
+          const versionToName: Record<string, string> = {}
+          versionIds.forEach((vid: any) => {
+            const themeId = versionToTheme[vid]
+            versionToName[vid] = (themeId && themeIdToName[themeId]) || '알 수 없는 테마'
+          })
+          setThemeNames(versionToName)
+        }
+
+        // BGM 이름 해석: 레거시 content_data.bgmId 는 실제로는 bgms.id(uuid) 참조가
+        // 아니라 파일명 형태의 문자열이 그대로 들어있다("Paper Swan.mp3" 등) —
+        // bgms 테이블 uuid 조인을 시도하면 타입 에러가 난다. bgms.id 로 매칭되는
+        // 경우만 이름으로 치환하고, 아니면 원본 문자열을 그대로 이름으로 쓴다.
+        const bgmIds = Array.from(new Set((invData || []).map((i: any) => i.content_data?.bgmId).filter(Boolean)))
+        const uuidLike = bgmIds.filter((id: any) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))
+        if (uuidLike.length > 0) {
+          const { data: bgmsData, error: bErr } = await supabase
+            .from('bgms')
+            .select('id, name')
+            .in('id', uuidLike)
+          logSupabaseError('statistics: bgms', bErr)
+          const map: Record<string, string> = {}
+          ;(bgmsData || []).forEach((b: any) => { map[b.id] = b.name })
+          setBgmNames(map)
+        }
       } catch (err) {
         console.error('Error fetching statistics:', err)
       } finally {
@@ -70,72 +133,68 @@ export default function StatisticsPage() {
     fetchStats()
   }, [])
 
-  // 1. Group invitations by created_at date (MM/dd)
+  // 1. 일별 매출/건수 — orders.amount 실합계 (§1-B: 5만원 고정 아님)
   const revenueMap: Record<string, { date: string; revenue: number; count: number }> = {}
   for (let i = 6; i >= 0; i--) {
     const d = subDays(new Date(), i)
     const dateStr = format(d, 'MM/dd')
     revenueMap[dateStr] = { date: dateStr, revenue: 0, count: 0 }
   }
-  
-  invitations.forEach((inv) => {
-    if (!inv.created_at) return
-    const dateStr = format(new Date(inv.created_at), 'MM/dd')
+
+  orders.forEach((o) => {
+    if (!o.created_at) return
+    const dateStr = format(new Date(o.created_at), 'MM/dd')
     if (revenueMap[dateStr]) {
       revenueMap[dateStr].count += 1
-      revenueMap[dateStr].revenue += 50000
+      revenueMap[dateStr].revenue += o.amount || 0
     }
   })
   const revenueData = Object.values(revenueMap)
 
-  // 2. Theme Usage Counts
+  // 2. 테마 사용 현황 — theme_version_id(uuid)를 문자열 매칭으로 추측하지 않고
+  // themeNames(theme_versions → themes.name 조인 결과)로 실제 이름을 쓴다.
+  const themeColorPalette = ['#B08D57', '#1A1A1A', '#9CAF88', '#FFB6C1', '#7C9CBF', '#C97C5D']
   const themeCounts: Record<string, number> = {}
   invitations.forEach((inv) => {
-    const themeName = inv.theme_version_id || 'Classic White'
+    const themeName = (inv.theme_version_id && themeNames[inv.theme_version_id]) || '테마 미지정'
     themeCounts[themeName] = (themeCounts[themeName] || 0) + 1
   })
   const totalInvCount = invitations.length || 1
-  const themeUsageData = Object.entries(themeCounts).map(([key, val]) => {
-    return {
-      name: key === 'classic-white' || key === 'classic' ? 'Classic White' : (key.includes('rose') ? 'Romantic Rose' : (key.includes('minimal') ? 'Modern Minimal' : (key.includes('greenery') ? 'Garden Greenery' : key))),
-      value: Math.round((val / totalInvCount) * 100),
-      color: key.includes('rose') ? '#FFB6C1' : (key.includes('minimal') ? '#1A1A1A' : (key.includes('greenery') ? '#9CAF88' : '#888888'))
-    }
-  })
-  if (themeUsageData.length === 0) {
-    themeUsageData.push({ name: 'Classic White', value: 100, color: '#888888' })
-  }
+  const themeUsageData = Object.entries(themeCounts).map(([name, val], idx) => ({
+    name,
+    value: Math.round((val / totalInvCount) * 100),
+    color: themeColorPalette[idx % themeColorPalette.length],
+  }))
 
-  // 3. BGM Usage
+  // 3. BGM 사용 현황 — bgmNames(bgms.name 조인 결과)로 실제 이름을 쓴다.
+  // 템플릿 엔진 청첩장은 bgmId 대신 raw bgm_url 을 쓰므로 이 집계엔 포함되지 않는다.
   const bgmCounts: Record<string, number> = {}
   invitations.forEach((inv) => {
-    const bgmName = inv.content_data?.bgmId || 'Canon in D'
+    const bgmId = inv.content_data?.bgmId
+    if (!bgmId) return
+    const bgmName = bgmNames[bgmId] || bgmId
     bgmCounts[bgmName] = (bgmCounts[bgmName] || 0) + 1
   })
   const bgmUsageData = Object.entries(bgmCounts)
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 5)
-  if (bgmUsageData.length === 0) {
-    bgmUsageData.push({ name: 'Canon in D', count: 1 })
-  }
 
-  // 4. Traffic hourly visits
-  const trafficMap: Record<string, number> = {
-    '00': 15, '04': 5, '08': 42, '12': 85, '16': 64, '20': 50
-  }
-  stats.forEach(s => {
-    const count = s.visit_count || 0
-    trafficMap['08'] += Math.round(count * 0.2)
-    trafficMap['12'] += Math.round(count * 0.4)
-    trafficMap['16'] += Math.round(count * 0.2)
-    trafficMap['20'] += Math.round(count * 0.2)
+  // 4. 시간대별 트래픽 — visit_logs.visited_at 실제 방문 시각을 3시간 단위로 집계.
+  // 기저값을 깔지 않으므로 방문이 없으면 그래프도 0으로 정직하게 표시된다.
+  const trafficBuckets = ['00', '04', '08', '12', '16', '20']
+  const trafficMap: Record<string, number> = Object.fromEntries(trafficBuckets.map(h => [h, 0]))
+  visitLogs.forEach((log) => {
+    if (!log.visited_at) return
+    const hour = new Date(log.visited_at).getHours()
+    const bucket = trafficBuckets[Math.floor(hour / 4)] ?? '00'
+    trafficMap[bucket] += 1
   })
-  const trafficData = Object.entries(trafficMap).map(([hour, visits]) => ({ hour, visits }))
+  const trafficData = trafficBuckets.map((hour) => ({ hour, visits: trafficMap[hour] }))
 
-  const totalRevenue = invitations.length * 50000
-  const totalOrders = invitations.length
-  
+  const totalRevenue = orders.reduce((sum, o) => sum + (o.amount || 0), 0)
+  const totalOrders = orders.length
+
   // Calculate RSVP Activation rate
   const rsvpActiveCount = invitations.filter(inv => inv.content_data?.rsvpEnabled !== false).length
   const rsvpActivationRate = invitations.length > 0 ? Math.round((rsvpActiveCount / invitations.length) * 100) : 100
@@ -194,13 +253,13 @@ export default function StatisticsPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              총 결제 건수
+              총 주문 건수
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{totalOrders}건</div>
             <p className="mt-1 text-xs text-muted-foreground">
-              선택 기간 내 결제 건수
+              전체 누적 주문 건수
             </p>
           </CardContent>
         </Card>
@@ -213,7 +272,7 @@ export default function StatisticsPage() {
           <CardContent>
             <div className="text-3xl font-bold">{totalRevenue.toLocaleString()}원</div>
             <p className="mt-1 text-xs text-muted-foreground">
-              선택 기간 내 총 매출
+              전체 누적 매출 (orders.amount 합계)
             </p>
           </CardContent>
         </Card>
@@ -236,7 +295,7 @@ export default function StatisticsPage() {
       <Card>
         <CardHeader>
           <CardTitle>매출 추이</CardTitle>
-          <CardDescription>일별 결제 건수 및 매출액</CardDescription>
+          <CardDescription>최근 7일 일별 주문 건수 및 매출액</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="h-[300px]">
@@ -302,33 +361,40 @@ export default function StatisticsPage() {
           </CardHeader>
           <CardContent>
             <div className="h-[250px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={themeUsageData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={2}
-                    dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    labelLine={false}
-                  >
-                    {themeUsageData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} stroke="hsl(var(--border))" />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px'
-                    }}
-                    formatter={(value: any) => [`${value}%`, '사용률']}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+              {themeUsageData.length === 0 && (
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  아직 등록된 청첩장이 없습니다.
+                </div>
+              )}
+              {themeUsageData.length > 0 && (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={themeUsageData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={2}
+                      dataKey="value"
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      labelLine={false}
+                    >
+                      {themeUsageData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} stroke="hsl(var(--border))" />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px'
+                      }}
+                      formatter={(value: any) => [`${value}%`, '사용률']}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -337,32 +403,39 @@ export default function StatisticsPage() {
         <Card>
           <CardHeader>
             <CardTitle>BGM 사용 순위</CardTitle>
-            <CardDescription>가장 많이 선택된 배경음악</CardDescription>
+            <CardDescription>가장 많이 선택된 배경음악 (레거시 테마 한정)</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="h-[250px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={bgmUsageData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                  <YAxis 
-                    type="category" 
-                    dataKey="name" 
-                    stroke="hsl(var(--muted-foreground))" 
-                    fontSize={11}
-                    width={100}
-                  />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px'
-                    }}
-                    formatter={(value: any) => [`${value}회`, '선택 횟수']}
-                  />
-                  <Bar dataKey="count" fill="hsl(var(--foreground))" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {bgmUsageData.length === 0 && (
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  집계할 BGM 선택 데이터가 없습니다.
+                </div>
+              )}
+              {bgmUsageData.length > 0 && (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={bgmUsageData} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={11}
+                      width={100}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px'
+                      }}
+                      formatter={(value: any) => [`${value}회`, '선택 횟수']}
+                    />
+                    <Bar dataKey="count" fill="hsl(var(--foreground))" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </CardContent>
         </Card>

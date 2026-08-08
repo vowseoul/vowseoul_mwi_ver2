@@ -20,9 +20,11 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Save, Globe, Mail, CreditCard, Bell, Shield, Image as ImageIcon, Upload, Loader2, Check, Users, Trash2, Plus } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { createClient } from "@supabase/supabase-js"
+import { DATA_RETENTION_SETTINGS_KEY, DEFAULT_RETENTION_DAYS, parseRetentionSettings } from "@/lib/data-retention"
 import { useProfilesQuery } from "@/hooks/queries/useCustomers"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
+import PaperTypesCard from "./paper-types-card"
 
 export default function AdminSettingsPage() {
   const [isSaving, setIsSaving] = useState(false)
@@ -154,6 +156,10 @@ export default function AdminSettingsPage() {
   const [logoPath, setLogoPath] = useState<string>('')
   const [isUploadingLogo, setIsUploadingLogo] = useState(false)
 
+  // 데이터 자동 파기 정책 — 예식일 + 보관일수가 지나면 청첩장을 자동 삭제한다 (§lib/data-retention.ts)
+  const [retentionDays, setRetentionDays] = useState<number>(DEFAULT_RETENTION_DAYS)
+  const [isSavingRetention, setIsSavingRetention] = useState(false)
+
   useEffect(() => {
     fetchCurrentSetting()
     fetchImages()
@@ -199,6 +205,32 @@ export default function AdminSettingsPage() {
 
     if (logoData?.value?.path) {
       setLogoPath(logoData.value.path)
+    }
+
+    const { data: retentionData } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', DATA_RETENTION_SETTINGS_KEY)
+      .maybeSingle()
+
+    setRetentionDays(parseRetentionSettings(retentionData?.value).daysAfterWedding)
+  }
+
+  const handleSaveRetention = async () => {
+    if (!Number.isFinite(retentionDays) || retentionDays < 1) {
+      toast.error('보관일수는 1일 이상이어야 합니다.')
+      return
+    }
+    setIsSavingRetention(true)
+    const { error } = await supabase.from('settings').upsert({
+      key: DATA_RETENTION_SETTINGS_KEY,
+      value: { daysAfterWedding: Math.floor(retentionDays) },
+    })
+    setIsSavingRetention(false)
+    if (error) {
+      toast.error('데이터 보관 정책 저장에 실패했습니다.')
+    } else {
+      toast.success('데이터 보관 정책이 저장되었습니다.')
     }
   }
 
@@ -339,7 +371,9 @@ export default function AdminSettingsPage() {
         </TabsList>
 
         {/* General Settings */}
-        <TabsContent value="general">
+        <TabsContent value="general" className="space-y-6">
+          <PaperTypesCard />
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -451,6 +485,45 @@ export default function AdminSettingsPage() {
                 <Button onClick={handleSave} disabled={isSaving}>
                   <Save className="w-4 h-4 mr-2" />
                   {isSaving ? "저장 중..." : "저장"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="w-5 h-5" />
+                데이터 보관 정책
+              </CardTitle>
+              <CardDescription>
+                예식일로부터 지정한 일수가 지나면 청첩장이 자동으로 삭제(소프트 삭제)됩니다.
+                청첩장 목록에서 &quot;SAMPLE&quot;로 지정한 청첩장은 예식일과 무관하게 항상 제외됩니다.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">예식일 기준 보관일수</p>
+                  <p className="text-xs text-muted-foreground">
+                    변경하면 기존 청첩장에도 즉시 적용됩니다 (매일 자동 실행되는 파기 작업이 이 값을 그때그때 읽습니다).
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    value={retentionDays}
+                    onChange={(e) => setRetentionDays(Number(e.target.value))}
+                    className="w-24"
+                  />
+                  <span className="text-sm text-muted-foreground">일 후</span>
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <Button onClick={handleSaveRetention} disabled={isSavingRetention}>
+                  <Save className="w-4 h-4 mr-2" />
+                  {isSavingRetention ? "저장 중..." : "저장"}
                 </Button>
               </div>
             </CardContent>
@@ -1018,61 +1091,89 @@ export default function AdminSettingsPage() {
               </Dialog>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left border-collapse">
-                  <thead>
-                    <tr className="bg-muted/30 border-b border-border text-muted-foreground font-medium">
-                      <th className="p-3.5">이름</th>
-                      <th className="p-3.5">연락처</th>
-                      <th className="p-3.5">이메일</th>
-                      <th className="p-3.5">권한</th>
-                      <th className="p-3.5 text-right w-16">관리</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {isLoadingProfiles ? (
-                      <tr>
-                        <td colSpan={5} className="p-8 text-center text-muted-foreground">
-                          <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-primary" />
-                          직원 목록을 불러오는 중입니다...
-                        </td>
-                      </tr>
-                    ) : profiles?.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="p-8 text-center text-muted-foreground">
-                          등록된 직원 계정이 없습니다.
-                        </td>
-                      </tr>
-                    ) : (
-                      profiles?.map((profile: any) => {
-                        const [namePart, phonePart] = (profile.name || "").split("|").map((s: string) => s.trim())
-                        return (
-                          <tr key={profile.id} className="border-b border-border hover:bg-muted/10 transition-colors">
-                            <td className="p-3.5 font-medium">{namePart || "이름 없음"}</td>
-                            <td className="p-3.5 text-muted-foreground">{phonePart || "-"}</td>
-                            <td className="p-3.5 font-mono">{profile.email}</td>
-                            <td className="p-3.5">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${profile.role === 'ADMIN' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-950/30 dark:text-blue-300'}`}>
+              {isLoadingProfiles ? (
+                <div className="p-8 text-center text-xs text-muted-foreground">
+                  <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-primary" />
+                  직원 목록을 불러오는 중입니다...
+                </div>
+              ) : profiles?.length === 0 ? (
+                <div className="p-8 text-center text-xs text-muted-foreground">
+                  등록된 직원 계정이 없습니다.
+                </div>
+              ) : (
+                <>
+                  {/* 모바일 카드 리스트 — sm 미만에서는 5열 테이블 대신 카드로 보여준다 */}
+                  <div className="sm:hidden divide-y divide-border">
+                    {profiles?.map((profile: any) => {
+                      const [namePart, phonePart] = (profile.name || "").split("|").map((s: string) => s.trim())
+                      return (
+                        <div key={profile.id} className="flex items-start justify-between gap-3 p-3.5">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium">{namePart || "이름 없음"}</span>
+                              <span className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-bold ${profile.role === 'ADMIN' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-950/30 dark:text-blue-300'}`}>
                                 {profile.role === 'ADMIN' ? '운영자' : '디자이너'}
                               </span>
-                            </td>
-                            <td className="p-3.5 text-right">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-destructive hover:bg-destructive/10"
-                                onClick={() => handleDeleteStaff(profile.id, profile.email)}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
-                            </td>
-                          </tr>
-                        )
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                            </div>
+                            <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">{profile.email}</p>
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">{phonePart || "-"}</p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0 text-destructive hover:bg-destructive/10"
+                            onClick={() => handleDeleteStaff(profile.id, profile.email)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* 데스크톱/태블릿 테이블 — sm 이상에서만 보인다 */}
+                  <div className="hidden sm:block overflow-x-auto">
+                    <table className="w-full text-xs text-left border-collapse">
+                      <thead>
+                        <tr className="bg-muted/30 border-b border-border text-muted-foreground font-medium">
+                          <th className="p-3.5">이름</th>
+                          <th className="p-3.5">연락처</th>
+                          <th className="p-3.5">이메일</th>
+                          <th className="p-3.5">권한</th>
+                          <th className="p-3.5 text-right w-16">관리</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {profiles?.map((profile: any) => {
+                          const [namePart, phonePart] = (profile.name || "").split("|").map((s: string) => s.trim())
+                          return (
+                            <tr key={profile.id} className="border-b border-border hover:bg-muted/10 transition-colors">
+                              <td className="p-3.5 font-medium">{namePart || "이름 없음"}</td>
+                              <td className="p-3.5 text-muted-foreground">{phonePart || "-"}</td>
+                              <td className="p-3.5 font-mono">{profile.email}</td>
+                              <td className="p-3.5">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${profile.role === 'ADMIN' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-950/30 dark:text-blue-300'}`}>
+                                  {profile.role === 'ADMIN' ? '운영자' : '디자이너'}
+                                </span>
+                              </td>
+                              <td className="p-3.5 text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                                  onClick={() => handleDeleteStaff(profile.id, profile.email)}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

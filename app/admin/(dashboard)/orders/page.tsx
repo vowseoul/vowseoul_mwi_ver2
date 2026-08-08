@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
 import { useAppStore, type Order, sampleThemes } from '@/lib/store'
-import { supabase } from '@/lib/supabase'
+import { supabase, logSupabaseError } from '@/lib/supabase'
 import { Search, CalendarIcon, Eye, Plus, Settings, MoreVertical, Link2, Pencil, Copy, Trash2, Loader2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
@@ -55,23 +55,13 @@ export default function OrdersPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [selectedOrderForEdit, setSelectedOrderForEdit] = useState<Order | null>(null)
   const [editForm, setEditForm] = useState<{
-    id: string
-    createdAt: string
-    groomName: string
-    brideName: string
-    weddingDate: string
-    theme: string
     amount: number
     status: Order['status']
+    notes: string
   }>({
-    id: '',
-    createdAt: '',
-    groomName: '',
-    brideName: '',
-    weddingDate: '',
-    theme: '',
     amount: 0,
-    status: 'pending'
+    status: 'registered',
+    notes: ''
   })
 
   const [invitationThemes, setInvitationThemes] = useState<Record<string, string>>({})
@@ -128,12 +118,27 @@ export default function OrdersPage() {
   }, [orders])
 
   // Action Handlers
+  const fetchPublicSlug = async (invitationId: string): Promise<string | null> => {
+    const { data, error } = await supabase
+      .from('invitations')
+      .select('public_slug')
+      .eq('id', invitationId)
+      .maybeSingle()
+    logSupabaseError('orders: fetch public_slug', error)
+    return data?.public_slug || null
+  }
+
   const handleCopyLink = async (invitationId: string) => {
     if (!invitationId) {
       toast.error('청첩장 ID가 유효하지 않습니다.')
       return
     }
-    const url = `${window.location.origin}/invitation/${invitationId}`
+    const slug = await fetchPublicSlug(invitationId)
+    if (!slug) {
+      toast.error('발행 슬러그가 없어 청첩장 링크를 만들 수 없습니다.')
+      return
+    }
+    const url = `${window.location.origin}/w/${slug}`
     try {
       await navigator.clipboard.writeText(url)
       toast.success('청첩장 링크가 클립보드에 복사되었습니다.')
@@ -147,7 +152,12 @@ export default function OrdersPage() {
       toast.error('청첩장 ID가 유효하지 않습니다.')
       return
     }
-    const url = `${window.location.origin}/invitation/${invitationId}/dashboard`
+    const slug = await fetchPublicSlug(invitationId)
+    if (!slug) {
+      toast.error('발행 슬러그가 없어 대시보드 링크를 만들 수 없습니다.')
+      return
+    }
+    const url = `${window.location.origin}/dashboard/${slug}`
     try {
       await navigator.clipboard.writeText(url)
       toast.success('고객 대시보드 링크가 클립보드에 복사되었습니다.')
@@ -159,97 +169,42 @@ export default function OrdersPage() {
   const handleOpenEditDialog = (order: Order) => {
     setSelectedOrderForEdit(order)
     setEditForm({
-      id: order.id,
-      createdAt: order.createdAt,
-      groomName: order.groomName,
-      brideName: order.brideName,
-      weddingDate: order.weddingDate,
-      theme: order.theme,
       amount: order.amount,
-      status: order.status
+      status: order.status,
+      notes: order.notes || '',
     })
     setIsEditDialogOpen(true)
   }
 
+  // 신랑/신부명·예식일·테마는 customers/invitations 소유라 여기서 편집하지 않는다(§1-B).
+  // 필요하면 고객 상세(/admin/customers/[customerId]) 또는 청첩장 편집기에서 수정할 것.
   const handleSaveOrderDetails = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedOrderForEdit) return
 
-    if (!editForm.id.trim()) {
-      toast.error('주문번호를 입력해주세요.')
-      return
-    }
-
     setIsActionLoading(selectedOrderForEdit.id)
     try {
-      // 1. If Order ID has changed, check if new ID already exists
-      if (editForm.id !== selectedOrderForEdit.id) {
-        const { data: existingOrder } = await supabase
-          .from('orders')
-          .select('id')
-          .eq('id', editForm.id)
-          .maybeSingle()
-
-        if (existingOrder) {
-          toast.error('이미 존재하는 주문번호입니다.')
-          setIsActionLoading(null)
-          return
-        }
-      }
-
-      const availableThemes = themes.length > 0 ? themes : sampleThemes
-      const matchedTheme = availableThemes.find(t => t.name === editForm.theme) || 
-                            availableThemes[0] || 
-                            { id: 'classic-white', name: 'Classic White' }
-
-      // 2. Update Order details in DB
       const { error: orderError } = await supabase
         .from('orders')
         .update({
-          id: editForm.id,
-          createdAt: editForm.createdAt,
-          groomName: editForm.groomName,
-          brideName: editForm.brideName,
-          weddingDate: editForm.weddingDate,
-          theme: editForm.theme,
           amount: editForm.amount,
-          status: editForm.status
+          status: editForm.status,
+          notes: editForm.notes,
         })
         .eq('id', selectedOrderForEdit.id)
 
       if (orderError) throw orderError
 
-      // 3. Update Invitation details in DB to sync
-      if (selectedOrderForEdit.invitationId) {
-        const { error: inviteError } = await supabase
-          .from('invitations')
-          .update({
-            groomName: editForm.groomName,
-            brideName: editForm.brideName,
-            weddingDate: editForm.weddingDate,
-            themeId: matchedTheme.id
-          })
-          .eq('id', selectedOrderForEdit.invitationId)
-
-        if (inviteError) throw inviteError
-      }
-
-      // 4. Update Zustand store
       const updatedOrder: Order = {
         ...selectedOrderForEdit,
-        id: editForm.id,
-        createdAt: editForm.createdAt,
-        groomName: editForm.groomName,
-        brideName: editForm.brideName,
-        weddingDate: editForm.weddingDate,
-        theme: editForm.theme,
         amount: editForm.amount,
-        status: editForm.status
+        status: editForm.status,
+        notes: editForm.notes,
       }
 
       setOrders(orders.map(o => o.id === selectedOrderForEdit.id ? updatedOrder : o))
       setIsEditDialogOpen(false)
-      toast.success('주문 정보 및 청첩장이 정상적으로 수정되었습니다.')
+      toast.success('주문 정보가 정상적으로 수정되었습니다.')
     } catch (err: any) {
       console.error('Error saving order details:', err)
       toast.error(err.message || '수정 중 오류가 발생했습니다.')
@@ -261,57 +216,61 @@ export default function OrdersPage() {
   const handleDuplicateOrder = async (order: Order) => {
     setIsActionLoading(order.id)
     try {
-      // 1. Fetch current invitation data
-      const { data: invitation, error: inviteFetchError } = await supabase
-        .from('invitations')
-        .select('*')
-        .eq('id', order.invitationId)
-        .single()
+      // 1. Fetch current invitation + order (customer_id 포함) data
+      const [{ data: invitation, error: inviteFetchError }, { data: orderRow, error: orderFetchError }] = await Promise.all([
+        supabase.from('invitations').select('*').eq('id', order.invitationId).single(),
+        supabase.from('orders').select('*').eq('id', order.id).single(),
+      ])
 
       if (inviteFetchError) throw inviteFetchError
       if (!invitation) throw new Error('청첩장을 찾을 수 없습니다.')
+      if (orderFetchError) throw orderFetchError
 
-      // 2. Generate new invitation ID
-      const randId = typeof window !== 'undefined' && window.crypto?.randomUUID 
-        ? window.crypto.randomUUID() 
-        : 'inv-admin-' + Math.random().toString(36).substring(2, 15)
-      const newInvitationId = `custom__${randId}`
-
-      // 3. Copy invitation data with new ID
+      // 2. Copy invitation data with new ID
       const newInvitation = {
         ...invitation,
-        id: newInvitationId,
-        createdAt: new Date().toISOString(),
-        status: 'draft'
+        id: undefined, // DB가 새 uuid 생성
+        public_slug: `${invitation.public_slug}-copy-${Date.now().toString(36)}`,
+        dashboard_slug: `${invitation.dashboard_slug}-copy-${Date.now().toString(36)}`,
+        status: 'draft',
+        published_at: null,
       }
 
-      const { error: inviteInsertError } = await supabase
+      const { data: newInviteRow, error: inviteInsertError } = await supabase
         .from('invitations')
         .insert(newInvitation)
+        .select('id')
+        .single()
 
       if (inviteInsertError) throw inviteInsertError
 
-      // 4. Generate new order ID
-      const newOrderId = 'ORD-' + Math.floor(100000 + Math.random() * 900000)
-
-      // 5. Copy order data
-      const newOrder: Order = {
-        ...order,
-        id: newOrderId,
-        invitationId: newInvitationId,
-        customerName: `${order.customerName} (복사본)`,
-        status: 'pending',
-        createdAt: new Date().toISOString().split('T')[0]
+      // 3. Copy order data (실제 orders 컬럼만)
+      const newOrder = {
+        customer_id: orderRow?.customer_id ?? null,
+        invitation_id: newInviteRow.id,
+        product_type: orderRow?.product_type ?? 'mobile',
+        amount: order.amount,
+        status: 'registered',
+        notes: order.notes,
       }
 
-      const { error: orderInsertError } = await supabase
+      const { data: insertedOrder, error: orderInsertError } = await supabase
         .from('orders')
         .insert(newOrder)
+        .select('*')
+        .single()
 
       if (orderInsertError) throw orderInsertError
 
-      // 6. Update local store
-      setOrders([...orders, newOrder])
+      // 4. Update local store
+      setOrders([...orders, {
+        ...order,
+        id: insertedOrder.id,
+        invitationId: insertedOrder.invitation_id,
+        customerName: `${order.customerName} (복사본)`,
+        status: 'registered',
+        createdAt: (insertedOrder.created_at || '').split('T')[0],
+      }])
       toast.success('청첩장과 주문 정보가 성공적으로 복사되었습니다.')
     } catch (err: any) {
       console.error('Error duplicating order/invitation:', err)
@@ -440,11 +399,13 @@ export default function OrdersPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">전체 상태</SelectItem>
-                <SelectItem value="pending">대기중</SelectItem>
-                <SelectItem value="paid">결제완료</SelectItem>
-                <SelectItem value="deployed">배포중</SelectItem>
-                <SelectItem value="expired">만료됨</SelectItem>
-                <SelectItem value="refunded">환불</SelectItem>
+                <SelectItem value="registered">고객 등록</SelectItem>
+                <SelectItem value="form_sent">폼 발송</SelectItem>
+                <SelectItem value="form_completed">폼 작성완료</SelectItem>
+                <SelectItem value="in_production">제작중</SelectItem>
+                <SelectItem value="design_review">디자인 피드백중</SelectItem>
+                <SelectItem value="published">발행완료</SelectItem>
+                <SelectItem value="delivered">전달완료</SelectItem>
               </SelectContent>
             </Select>
 
@@ -502,7 +463,119 @@ export default function OrdersPage() {
           <CardTitle className="text-lg">주문 목록 ({sortedOrders.length}건)</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          {/* 모바일 카드 리스트 — sm 미만에서는 8열 테이블 대신 카드로 보여준다 (가로 스크롤 없이 스캔 가능) */}
+          <div className="sm:hidden divide-y divide-border">
+            {sortedOrders.map((order) => {
+              const actualThemeId = invitationThemes[order.invitationId]
+              const matchedTheme = actualThemeId ? (themes.find(t => t.id === actualThemeId) || sampleThemes.find(t => t.id === actualThemeId)) : null
+              const themeName = matchedTheme ? matchedTheme.name : order.theme
+              return (
+                <div key={order.id} className="py-4 first:pt-0 last:pb-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{order.groomName} & {order.brideName}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{order.id} · {order.createdAt}</p>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="icon" className="h-8 w-8 shrink-0">
+                          {isActionLoading === order.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Settings className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-[200px]">
+                        <DropdownMenuItem asChild>
+                          <Link href={`/admin/orders/${order.id}`} className="cursor-pointer flex items-center gap-2 w-full">
+                            <Pencil className="h-4 w-4" />
+                            <span>청첩장 수정하기</span>
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleCopyLink(order.invitationId)}
+                          className="cursor-pointer flex items-center gap-2 w-full"
+                        >
+                          <Link2 className="h-4 w-4" />
+                          <span>링크 복사하기</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleCopyDashboardLink(order.invitationId)}
+                          className="cursor-pointer flex items-center gap-2 w-full"
+                        >
+                          <Copy className="h-4 w-4" />
+                          <span>대시보드 링크 복사</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleOpenEditDialog(order)}
+                          className="cursor-pointer flex items-center gap-2 w-full"
+                        >
+                          <Settings className="h-4 w-4" />
+                          <span>주문 내역 수정</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleDuplicateOrder(order)}
+                          className="cursor-pointer flex items-center gap-2 w-full"
+                        >
+                          <Copy className="h-4 w-4" />
+                          <span>청첩장 복사하기</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => handleDeleteOrder(order.id, order.invitationId)}
+                          className="cursor-pointer text-destructive focus:bg-destructive/10 dark:focus:bg-destructive/20 focus:text-destructive flex items-center gap-2 w-full"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          <span>청첩장 삭제하기</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2.5 text-sm">
+                    <div>
+                      <span className="block text-xs text-muted-foreground">예식일</span>
+                      {order.weddingDate}
+                    </div>
+                    <div>
+                      <span className="block text-xs text-muted-foreground">테마</span>
+                      {themeName}
+                    </div>
+                    <div>
+                      <span className="block text-xs text-muted-foreground">금액</span>
+                      {order.amount.toLocaleString()}원
+                    </div>
+                    <div>
+                      <span className="mb-1 block text-xs text-muted-foreground">상태</span>
+                      <Select
+                        value={order.status}
+                        onValueChange={(value: Order['status']) => handleStatusChange(order.id, value)}
+                      >
+                        <SelectTrigger className="h-8 w-full text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="registered">고객 등록</SelectItem>
+                          <SelectItem value="form_sent">폼 발송</SelectItem>
+                          <SelectItem value="form_completed">폼 작성완료</SelectItem>
+                          <SelectItem value="in_production">제작중</SelectItem>
+                          <SelectItem value="design_review">디자인 피드백중</SelectItem>
+                          <SelectItem value="published">발행완료</SelectItem>
+                          <SelectItem value="delivered">전달완료</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+            {filteredOrders.length === 0 && (
+              <p className="py-8 text-center text-sm text-muted-foreground">조건에 맞는 주문이 없습니다.</p>
+            )}
+          </div>
+
+          {/* 데스크톱/태블릿 테이블 — sm 이상에서만 보인다 */}
+          <div className="hidden sm:block overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border text-left text-sm text-muted-foreground select-none">
@@ -614,11 +687,13 @@ export default function OrdersPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="pending">대기중</SelectItem>
-                          <SelectItem value="paid">결제완료</SelectItem>
-                          <SelectItem value="deployed">배포중</SelectItem>
-                          <SelectItem value="expired">만료됨</SelectItem>
-                          <SelectItem value="refunded">환불</SelectItem>
+                          <SelectItem value="registered">고객 등록</SelectItem>
+                          <SelectItem value="form_sent">폼 발송</SelectItem>
+                          <SelectItem value="form_completed">폼 작성완료</SelectItem>
+                          <SelectItem value="in_production">제작중</SelectItem>
+                          <SelectItem value="design_review">디자인 피드백중</SelectItem>
+                          <SelectItem value="published">발행완료</SelectItem>
+                          <SelectItem value="delivered">전달완료</SelectItem>
                         </SelectContent>
                       </Select>
                     </td>
@@ -701,82 +776,12 @@ export default function OrdersPage() {
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">주문 내역 직접 수정</DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground">
-              선택한 주문 내역을 직접 편집합니다. 신랑/신부명, 예식일, 테마는 청첩장 내용에도 자동으로 동기화됩니다.
+              금액·이행 상태·메모를 수정합니다. 신랑/신부명·예식일·테마는 고객 상세 또는
+              청첩장 편집기에서 관리합니다.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSaveOrderDetails} className="space-y-4 pt-4">
             <FieldGroup className="space-y-4">
-              <Field>
-                <FieldLabel htmlFor="edit-id" className="text-sm font-medium">주문번호</FieldLabel>
-                <Input
-                  id="edit-id"
-                  value={editForm.id}
-                  onChange={(e) => setEditForm({ ...editForm, id: e.target.value })}
-                  required
-                />
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="edit-createdAt" className="text-sm font-medium">주문일시</FieldLabel>
-                <Input
-                  id="edit-createdAt"
-                  value={editForm.createdAt}
-                  onChange={(e) => setEditForm({ ...editForm, createdAt: e.target.value })}
-                  required
-                />
-              </Field>
-
-              <div className="grid grid-cols-2 gap-4">
-                <Field>
-                  <FieldLabel htmlFor="edit-groomName" className="text-sm font-medium">신랑 이름</FieldLabel>
-                  <Input
-                    id="edit-groomName"
-                    value={editForm.groomName}
-                    onChange={(e) => setEditForm({ ...editForm, groomName: e.target.value })}
-                    required
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="edit-brideName" className="text-sm font-medium">신부 이름</FieldLabel>
-                  <Input
-                    id="edit-brideName"
-                    value={editForm.brideName}
-                    onChange={(e) => setEditForm({ ...editForm, brideName: e.target.value })}
-                    required
-                  />
-                </Field>
-              </div>
-
-              <Field>
-                <FieldLabel htmlFor="edit-weddingDate" className="text-sm font-medium">예식일</FieldLabel>
-                <Input
-                  id="edit-weddingDate"
-                  type="date"
-                  value={editForm.weddingDate}
-                  onChange={(e) => setEditForm({ ...editForm, weddingDate: e.target.value })}
-                  required
-                />
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="edit-theme" className="text-sm font-medium">테마</FieldLabel>
-                <Select
-                  value={editForm.theme}
-                  onValueChange={(val) => setEditForm({ ...editForm, theme: val })}
-                >
-                  <SelectTrigger id="edit-theme" className="w-full">
-                    <SelectValue placeholder="테마 선택" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(themes && themes.length > 0 ? themes : sampleThemes).map((theme) => (
-                      <SelectItem key={theme.id} value={theme.name}>
-                        {theme.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-
               <div className="grid grid-cols-2 gap-4">
                 <Field>
                   <FieldLabel htmlFor="edit-amount" className="text-sm font-medium">금액 (원)</FieldLabel>
@@ -798,15 +803,26 @@ export default function OrdersPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="pending">대기중</SelectItem>
-                      <SelectItem value="paid">결제완료</SelectItem>
-                      <SelectItem value="deployed">배포중</SelectItem>
-                      <SelectItem value="expired">만료됨</SelectItem>
-                      <SelectItem value="refunded">환불</SelectItem>
+                      <SelectItem value="registered">고객 등록</SelectItem>
+                      <SelectItem value="form_sent">폼 발송</SelectItem>
+                      <SelectItem value="form_completed">폼 작성완료</SelectItem>
+                      <SelectItem value="in_production">제작중</SelectItem>
+                      <SelectItem value="design_review">디자인 피드백중</SelectItem>
+                      <SelectItem value="published">발행완료</SelectItem>
+                      <SelectItem value="delivered">전달완료</SelectItem>
                     </SelectContent>
                   </Select>
                 </Field>
               </div>
+
+              <Field>
+                <FieldLabel htmlFor="edit-notes" className="text-sm font-medium">메모</FieldLabel>
+                <Input
+                  id="edit-notes"
+                  value={editForm.notes}
+                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                />
+              </Field>
             </FieldGroup>
             
             <div className="flex justify-end gap-2 pt-4 border-t border-border">

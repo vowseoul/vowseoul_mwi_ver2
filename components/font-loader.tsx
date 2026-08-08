@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase, logSupabaseError } from '@/lib/supabase'
+import { buildFontFaceRule } from '@/lib/fonts'
 
 export function FontLoader() {
   const [customFonts, setCustomFonts] = useState<any[]>([])
@@ -9,7 +10,8 @@ export function FontLoader() {
   useEffect(() => {
     const loadFonts = async () => {
       try {
-        const { data } = await supabase.from('settings').select('*').eq('key', 'fonts')
+        const { data, error } = await supabase.from('settings').select('*').eq('key', 'fonts')
+        logSupabaseError('loadFonts (FontLoader)', error)
         if (data && data.length > 0 && data[0].value) {
           setCustomFonts(data[0].value)
         }
@@ -44,17 +46,7 @@ export function FontLoader() {
 
   const fontFaces = customFonts
     .filter(f => f.type === 'file' && f.fileUrl)
-    .map(f => {
-      // Use local API proxy to bypass CORS restrictions on cross-origin font files
-      const proxiedUrl = `/api/fonts?url=${encodeURIComponent(f.fileUrl)}`;
-      return `
-        @font-face {
-          font-family: '${f.family}';
-          src: url('${proxiedUrl}') format('truetype');
-          font-display: swap;
-        }
-      `;
-    })
+    .map(f => buildFontFaceRule(f.family, f.fileUrl))
     .join('\n');
 
   const css = `${defaultGoogleFonts}\n${imports}\n${directImports}\n${fontFaces}`;

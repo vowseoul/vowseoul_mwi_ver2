@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Table,
   TableBody,
@@ -25,11 +26,13 @@ import {
 } from '@/components/ui/dialog'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { 
-  useInvitationsQuery, 
-  useCreateInvitationMutation, 
+import {
+  useInvitationsQuery,
+  useCreateInvitationMutation,
   useUpdateInvitationStatusMutation,
-  useDeleteInvitationMutation 
+  useUpdateInvitationSlugMutation,
+  useUpdateInvitationSampleMutation,
+  useDeleteInvitationMutation
 } from '@/hooks/queries/useInvitations'
 import { useCustomersQuery } from '@/hooks/queries/useCustomers'
 import { useThemesQuery } from '@/hooks/queries/useThemes'
@@ -46,7 +49,9 @@ import {
   Calendar,
   Sparkles,
   Link2,
-  Trash2
+  Trash2,
+  ClipboardList,
+  Pencil
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -57,6 +62,8 @@ export default function InvitationsListPage() {
 
   const createMutation = useCreateInvitationMutation()
   const statusMutation = useUpdateInvitationStatusMutation()
+  const slugMutation = useUpdateInvitationSlugMutation()
+  const sampleMutation = useUpdateInvitationSampleMutation()
   const deleteMutation = useDeleteInvitationMutation()
 
   const [search, setSearch] = useState('')
@@ -69,6 +76,38 @@ export default function InvitationsListPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  const [slugEditTarget, setSlugEditTarget] = useState<{ id: string; name: string } | null>(null)
+  const [editedSlug, setEditedSlug] = useState('')
+  const [isSavingSlug, setIsSavingSlug] = useState(false)
+
+  const openSlugEditor = (id: string, currentSlug: string, name: string) => {
+    setSlugEditTarget({ id, name })
+    setEditedSlug(currentSlug)
+  }
+
+  const handleSlugSave = async () => {
+    if (!slugEditTarget) return
+    const trimmed = editedSlug.trim()
+    if (!trimmed) {
+      toast.error('링크 주소를 입력해주세요.')
+      return
+    }
+    if (!/^[a-z0-9-]+$/.test(trimmed)) {
+      toast.error('링크 주소는 영문 소문자, 숫자, 하이픈(-)만 허용됩니다.')
+      return
+    }
+    setIsSavingSlug(true)
+    try {
+      await slugMutation.mutateAsync({ invitationId: slugEditTarget.id, publicSlug: trimmed })
+      toast.success('접속 링크 주소가 변경되었습니다.')
+      setSlugEditTarget(null)
+    } catch (err: any) {
+      toast.error(err.message || '링크 주소 변경에 실패했습니다.')
+    } finally {
+      setIsSavingSlug(false)
+    }
+  }
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -105,7 +144,7 @@ export default function InvitationsListPage() {
       setPublicSlug('')
       
       // Redirect to the client-side editor
-      window.location.href = `/editor/${created.id}`
+      window.location.href = `/admin/invitations/editor/${created.id}`
     } catch (err: any) {
       console.error(err)
       toast.error(err.message || '초안 생성에 실패했습니다.')
@@ -121,6 +160,16 @@ export default function InvitationsListPage() {
     } catch (err: any) {
       console.error(err)
       toast.error('상태 변경 실패')
+    }
+  }
+
+  const handleSampleToggle = async (invitationId: string, isSample: boolean) => {
+    try {
+      await sampleMutation.mutateAsync({ invitationId, isSample })
+      toast.success(isSample ? '샘플용으로 지정되어 자동 파기 대상에서 제외됩니다.' : '샘플 지정이 해제되었습니다.')
+    } catch (err: any) {
+      console.error(err)
+      toast.error('샘플 지정 변경 실패')
     }
   }
 
@@ -244,6 +293,131 @@ export default function InvitationsListPage() {
       {/* Invitations List */}
       <Card>
         <CardContent className="p-0">
+          {/* 모바일 카드 리스트 — sm 미만에서는 6열 테이블 대신 카드로 보여준다 */}
+          <div className="sm:hidden divide-y divide-border">
+            {isLoading ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">청첩장 목록을 로딩 중입니다...</p>
+            ) : error ? (
+              <p className="py-8 text-center text-sm text-destructive">목록 조회 중 오류가 발생했습니다.</p>
+            ) : filteredInvitations?.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">제작중인 청첩장이 없습니다.</p>
+            ) : (
+              filteredInvitations?.map((inv) => (
+                <div key={inv.id} className="space-y-3 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold">
+                        {inv.customer?.groom_name} & {inv.customer?.bride_name}
+                      </div>
+                      <div className="mt-1 flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
+                        <span className="truncate">/w/{inv.public_slug}</span>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="h-6 w-6 shrink-0"
+                          title="링크 주소 수정"
+                          onClick={() => openSlugEditor(
+                            inv.id,
+                            inv.public_slug,
+                            `${inv.customer?.groom_name || '신랑'} & ${inv.customer?.bride_name || '신부'}`
+                          )}
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
+                    <Badge
+                      variant={
+                        inv.status === 'published'
+                          ? 'default'
+                          : inv.status === 'draft'
+                          ? 'secondary'
+                          : 'destructive'
+                      }
+                      className="shrink-0"
+                    >
+                      {inv.status === 'published'
+                        ? '공개중'
+                        : inv.status === 'draft'
+                        ? '초안작성'
+                        : inv.status === 'paused'
+                        ? '정지'
+                        : '만료'}
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5" />
+                      {inv.customer?.wedding_date || '-'}
+                    </div>
+                    <label className="flex w-fit cursor-pointer items-center gap-1.5">
+                      <Checkbox
+                        checked={inv.is_sample === true}
+                        onCheckedChange={(checked) => handleSampleToggle(inv.id, checked === true)}
+                      />
+                      SAMPLE
+                    </label>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-[11px]"
+                      onClick={() => handleCopyLink(inv.public_slug, inv.id)}
+                    >
+                      {copiedId === inv.id ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Link2 className="w-3.5 h-3.5" />}
+                      <span className="ml-1">복사</span>
+                    </Button>
+                    <Button variant="outline" size="sm" asChild className="h-8 text-[11px] gap-1">
+                      <Link href={`/admin/invitations/editor/${inv.id}`}>
+                        <Edit3 className="w-3.5 h-3.5" /> 편집
+                      </Link>
+                    </Button>
+                    <Button variant="outline" size="sm" asChild className="h-8 text-[11px] gap-1">
+                      <Link href={`/admin/invitations/${inv.id}/responses`}>
+                        <ClipboardList className="w-3.5 h-3.5" /> 응답
+                      </Link>
+                    </Button>
+                    {inv.status === 'published' ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-[11px] text-amber-600 hover:text-amber-700"
+                        onClick={() => handleStatusChange(inv.id, 'paused')}
+                      >
+                        <Pause className="w-3.5 h-3.5" /> 정지
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        className="h-8 text-[11px]"
+                        onClick={() => handleStatusChange(inv.id, 'published')}
+                      >
+                        <Play className="w-3.5 h-3.5" /> 공개
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-[11px] text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                      onClick={() => setDeleteTarget({
+                        id: inv.id,
+                        name: `${inv.customer?.groom_name || '신랑'} & ${inv.customer?.bride_name || '신부'}`
+                      })}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> 삭제
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* 데스크톱/태블릿 테이블 — sm 이상에서만 보인다 */}
+          <div className="hidden sm:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -281,9 +455,31 @@ export default function InvitationsListPage() {
                       <div className="font-semibold text-sm">
                         {inv.customer?.groom_name} & {inv.customer?.bride_name}
                       </div>
+                      <label className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer w-fit">
+                        <Checkbox
+                          checked={inv.is_sample === true}
+                          onCheckedChange={(checked) => handleSampleToggle(inv.id, checked === true)}
+                        />
+                        SAMPLE
+                      </label>
                     </TableCell>
                     <TableCell className="font-mono text-xs">
-                      /w/{inv.public_slug}
+                      <div className="flex items-center gap-1.5">
+                        <span>/w/{inv.public_slug}</span>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="h-6 w-6 shrink-0"
+                          title="링크 주소 수정"
+                          onClick={() => openSlugEditor(
+                            inv.id,
+                            inv.public_slug,
+                            `${inv.customer?.groom_name || '신랑'} & ${inv.customer?.bride_name || '신부'}`
+                          )}
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </Button>
+                      </div>
                     </TableCell>
                     <TableCell className="text-center">
                       <Badge 
@@ -324,11 +520,17 @@ export default function InvitationsListPage() {
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1.5">
                         <Button variant="outline" size="sm" asChild className="h-8 text-[11px] gap-1">
-                          <Link href={`/editor/${inv.id}`}>
+                          <Link href={`/admin/invitations/editor/${inv.id}`}>
                             <Edit3 className="w-3.5 h-3.5" /> 편집
                           </Link>
                         </Button>
-                        
+
+                        <Button variant="outline" size="sm" asChild className="h-8 text-[11px] gap-1">
+                          <Link href={`/admin/invitations/${inv.id}/responses`}>
+                            <ClipboardList className="w-3.5 h-3.5" /> 응답
+                          </Link>
+                        </Button>
+
                         {inv.status === 'published' ? (
                           <Button 
                             variant="outline" 
@@ -367,6 +569,7 @@ export default function InvitationsListPage() {
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 
@@ -406,6 +609,43 @@ export default function InvitationsListPage() {
             >
               {isDeleting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
               삭제하기
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Slug Edit Modal */}
+      <Dialog open={!!slugEditTarget} onOpenChange={(open) => !open && setSlugEditTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>접속 링크 주소 수정</DialogTitle>
+            <DialogDescription>
+              <strong className="text-foreground">{slugEditTarget?.name}</strong> 청첩장의 하객 접속 링크 주소를 변경합니다.
+              기존 링크는 더 이상 연결되지 않으니, 이미 공유된 링크라면 주의해주세요.
+            </DialogDescription>
+          </DialogHeader>
+          <FieldGroup className="mt-2">
+            <Field>
+              <FieldLabel htmlFor="editedSlug">접속 링크 (Slug)</FieldLabel>
+              <Input
+                id="editedSlug"
+                value={editedSlug}
+                onChange={(e) => setEditedSlug(e.target.value)}
+                placeholder="예: sample-wedding"
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSlugSave() }}
+              />
+              <p className="text-[10px] text-muted-foreground">
+                영문 소문자, 숫자, 하이픈(-)만 가능합니다. 예: /w/{editedSlug || 'sample-wedding'}
+              </p>
+            </Field>
+          </FieldGroup>
+          <DialogFooter className="mt-4 gap-2">
+            <Button variant="outline" size="sm" onClick={() => setSlugEditTarget(null)} disabled={isSavingSlug}>
+              취소
+            </Button>
+            <Button size="sm" onClick={handleSlugSave} disabled={isSavingSlug}>
+              {isSavingSlug ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+              저장
             </Button>
           </DialogFooter>
         </DialogContent>

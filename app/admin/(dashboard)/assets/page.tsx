@@ -12,9 +12,13 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { sampleThemes, sampleBGMs, Theme, samplePhrases } from '@/lib/store'
-import { supabase } from '@/lib/supabase'
+import { supabase, logSupabaseError } from '@/lib/supabase'
+import { resolveThemeSwatch } from '@/lib/theme-template'
+import { fontPreviewStyle, fontFileFormatLabel, type RegisteredFont } from '@/lib/fonts'
+import { useInjectFontFaces } from '@/lib/use-font-faces'
 import { Plus, Play, Pause, Trash2, Upload, Loader2, CheckCircle2 } from 'lucide-react'
 import { uploadFile, deleteFile } from '@/lib/storage'
+import { uploadImage } from '@/lib/image-upload'
 import Link from 'next/link'
 
 export default function AssetsPage() {
@@ -64,14 +68,18 @@ export default function AssetsPage() {
     }
   }, [])
 
+  // 폰트 목록 카드에서 폰트명을 그 폰트로 미리 보여주기 위해 실제 로드해둔다 (이슈: 이름만 봐선 어떤 폰트인지 알기 어려움)
+  useInjectFontFaces(fonts as RegisteredFont[])
+
   const fetchFonts = async () => {
     setIsLoadingFonts(true)
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('settings')
         .select('*')
         .eq('key', 'fonts')
-      
+      logSupabaseError('fetchFonts (assets page)', error)
+
       if (data && data.length > 0 && data[0].value) {
         setFonts(data[0].value)
       } else {
@@ -87,9 +95,15 @@ export default function AssetsPage() {
 
   const handleFontFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return
+    const file = e.target.files[0]
+    if (!/\.(ttf|otf|woff2?|eot)$/i.test(file.name)) {
+      alert('TTF/OTF/WOFF/WOFF2 형식의 폰트 파일만 업로드할 수 있습니다.')
+      if (e.target) e.target.value = ''
+      return
+    }
     setIsUploadingFont(true)
     try {
-      const url = await uploadFile(e.target.files[0], 'fonts')
+      const url = await uploadFile(file, 'fonts')
       setFontFileUrl(url)
     } catch (err) {
       alert('폰트 파일 업로드에 실패했습니다.')
@@ -102,7 +116,7 @@ export default function AssetsPage() {
   const handleSaveFont = async () => {
     if (!newFontName || !newFontFamily) return alert('폰트명과 폰트 패밀리명을 입력해주세요.')
     if (fontType === 'embed' && !embedCode) return alert('웹 폰트 임베드 코드를 입력해주세요.')
-    if (fontType === 'file' && !fontFileUrl) return alert('TTF 폰트 파일을 업로드해주세요.')
+    if (fontType === 'file' && !fontFileUrl) return alert('폰트 파일을 업로드해주세요.')
 
     setIsSavingFont(true)
     try {
@@ -116,10 +130,10 @@ export default function AssetsPage() {
       }
 
       const updatedFonts = [...fonts, newFont]
-      
+
       const { error } = await supabase
         .from('settings')
-        .upsert({ key: 'fonts', value: updatedFonts, updatedAt: new Date().toISOString() })
+        .upsert({ key: 'fonts', value: updatedFonts })
 
       if (error) throw error
 
@@ -149,7 +163,7 @@ export default function AssetsPage() {
       const updatedFonts = fonts.filter(f => f.id !== id)
       const { error } = await supabase
         .from('settings')
-        .upsert({ key: 'fonts', value: updatedFonts, updatedAt: new Date().toISOString() })
+        .upsert({ key: 'fonts', value: updatedFonts })
 
       if (error) throw error
       await fetchFonts()
@@ -169,7 +183,8 @@ export default function AssetsPage() {
 
   const fetchBgms = async () => {
     setIsLoadingBgms(true)
-    const { data } = await supabase.from('bgms').select('*')
+    const { data, error } = await supabase.from('bgms').select('*')
+    logSupabaseError('fetchBgms (assets page)', error)
     if (data && data.length > 0) {
       setBgms(data)
     } else {
@@ -214,7 +229,7 @@ export default function AssetsPage() {
     if (!e.target.files || e.target.files.length === 0) return
     setIsUploadingTheme(true)
     try {
-      const url = await uploadFile(e.target.files[0], 'theme-thumbnails')
+      const url = await uploadImage(e.target.files[0], 'theme-thumbnails')
       setThemeImageUrl(url)
     } catch (err) {
       alert('테마 이미지 업로드에 실패했습니다.')
@@ -245,15 +260,15 @@ export default function AssetsPage() {
   const handleSaveBgm = async () => {
     if (!bgmUrl || !newBgmName) return alert('음원 파일과 곡명을 입력해주세요.')
     setIsSavingBgm(true)
+    // bgms.id 는 uuid 컬럼이라 유효한 UUID 형식이어야 한다 ('bgm_'+타임스탬프는 삽입이 실패함).
     const newBgm = {
-      id: editingBgmId || `bgm_${Date.now()}`,
+      id: editingBgmId || crypto.randomUUID(),
       name: newBgmName,
       artist: newBgmArtist || 'Unknown',
       genre: newBgmGenre,
       hashtags: newBgmHashtags,
       duration: '-', // 나중에 메타데이터를 파싱하여 넣을 수 있습니다.
       url: bgmUrl,
-      isRecommended: false // Deprecated: Now managed per theme
     }
     const { error } = await supabase.from('bgms').upsert(newBgm)
     setIsSavingBgm(false)
@@ -334,10 +349,7 @@ export default function AssetsPage() {
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {themes.map((theme) => {
-                    // 안전한 렌더링을 위해 colorSets 배열과 그 안의 colors가 존재하는지 확인합니다.
-                    const defaultBg = theme.colorSets?.[0]?.colors?.[0] || theme.styles?.backgroundColor || '#FFF8F0';
-                    const defaultText = theme.colorSets?.[0]?.colors?.[2] || theme.styles?.textColor || '#3A3A3A';
-                    const defaultPrimary = theme.colorSets?.[0]?.colors?.[1] || theme.styles?.primaryColor || '#E8A87C';
+                    const { bg: defaultBg, text: defaultText, primary: defaultPrimary } = resolveThemeSwatch(theme);
                     
                     return (
                       <div 
@@ -345,21 +357,31 @@ export default function AssetsPage() {
                         className="overflow-hidden rounded-lg border border-border transition-all hover:border-primary/50"
                       >
                         <Link href={`/admin/assets/themes/${theme.id}`} className="block">
-                          <div 
-                            className="aspect-[3/4] p-4 cursor-pointer"
-                            style={{ backgroundColor: defaultBg }}
-                          >
-                            <div 
-                              className="flex h-full flex-col items-center justify-center text-center"
-                              style={{ color: defaultText }}
-                            >
-                              <p className="font-serif text-sm">Preview</p>
-                              <div 
-                                className="mt-3 h-12 w-10 rounded-sm"
-                                style={{ backgroundColor: defaultPrimary }}
+                          {theme.thumbnail ? (
+                            <div className="aspect-[3/4] cursor-pointer overflow-hidden">
+                              <img
+                                src={theme.thumbnail}
+                                alt={theme.name}
+                                className="h-full w-full object-cover"
                               />
                             </div>
-                          </div>
+                          ) : (
+                            <div
+                              className="aspect-[3/4] p-4 cursor-pointer"
+                              style={{ backgroundColor: defaultBg }}
+                            >
+                              <div
+                                className="flex h-full flex-col items-center justify-center text-center"
+                                style={{ color: defaultText }}
+                              >
+                                <p className="font-serif text-sm">Preview</p>
+                                <div
+                                  className="mt-3 h-12 w-10 rounded-sm"
+                                  style={{ backgroundColor: defaultPrimary }}
+                                />
+                              </div>
+                            </div>
+                          )}
                         </Link>
                         <div className="border-t border-border bg-background p-3">
                           <div className="flex items-center justify-between">
@@ -591,7 +613,7 @@ export default function AssetsPage() {
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-lg">폰트 관리</CardTitle>
-                <CardDescription>구글 웹 폰트 임베드 코드 등록 및 TTF 폰트 파일을 에셋으로 등록합니다.</CardDescription>
+                <CardDescription>구글 웹 폰트 임베드 코드 등록 및 폰트 파일(TTF/OTF/WOFF/WOFF2)을 에셋으로 등록합니다.</CardDescription>
               </div>
               <Dialog open={isFontDialogOpen} onOpenChange={(open) => {
                 if (!open) resetFontForm()
@@ -606,7 +628,7 @@ export default function AssetsPage() {
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>새 폰트 등록</DialogTitle>
-                    <DialogDescription>임베드 코드 입력 혹은 TTF 파일을 통해 폰트를 등록합니다.</DialogDescription>
+                    <DialogDescription>임베드 코드 입력 혹은 폰트 파일(TTF/OTF/WOFF/WOFF2)을 통해 폰트를 등록합니다.</DialogDescription>
                   </DialogHeader>
                   <FieldGroup className="mt-4">
                     <Field>
@@ -626,7 +648,7 @@ export default function AssetsPage() {
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="embed">웹 폰트 임베드 코드 (CSS @import)</SelectItem>
-                          <SelectItem value="file">TTF 파일 직접 업로드</SelectItem>
+                          <SelectItem value="file">폰트 파일 직접 업로드</SelectItem>
                         </SelectContent>
                       </Select>
                     </Field>
@@ -643,7 +665,7 @@ export default function AssetsPage() {
                       </Field>
                     ) : (
                       <Field>
-                        <FieldLabel>TTF 파일 (.ttf)</FieldLabel>
+                        <FieldLabel>폰트 파일 (.ttf/.otf/.woff/.woff2)</FieldLabel>
                         <div className="flex aspect-video items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/50 cursor-pointer" onClick={() => fontFileInputRef.current?.click()}>
                           <div className="text-center">
                             {fontFileUrl ? (
@@ -659,14 +681,14 @@ export default function AssetsPage() {
                             ) : (
                               <>
                                 <Upload className="mx-auto h-6 w-6 text-muted-foreground" />
-                                <p className="mt-1 text-xs text-muted-foreground">TTF 파일 업로드</p>
+                                <p className="mt-1 text-xs text-muted-foreground">폰트 파일 업로드</p>
                               </>
                             )}
                           </div>
                         </div>
                         <input 
                           type="file" 
-                          accept=".ttf" 
+                          accept=".ttf,.otf,.woff,.woff2"
                           className="hidden" 
                           ref={fontFileInputRef}
                           onChange={handleFontFileUpload}
@@ -699,11 +721,11 @@ export default function AssetsPage() {
                       className="flex items-center justify-between rounded-lg border border-border p-4"
                     >
                       <div>
-                        <p className="font-semibold text-sm">{font.name}</p>
+                        <p className="font-semibold text-base" style={fontPreviewStyle(font)}>{font.name}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">Family: {font.family}</p>
                         <div className="mt-1.5">
                           <Badge variant="outline" className="text-[10px]">
-                            {font.type === 'embed' ? 'CSS @import' : 'TTF 파일'}
+                            {font.type === 'embed' ? 'CSS @import' : fontFileFormatLabel(font.fileUrl)}
                           </Badge>
                         </div>
                       </div>

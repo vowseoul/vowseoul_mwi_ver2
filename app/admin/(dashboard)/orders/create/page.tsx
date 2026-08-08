@@ -11,17 +11,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { useAppStore, sampleThemes } from '@/lib/store'
 import { supabase } from '@/lib/supabase'
+import { useCreateInvitationMutation } from '@/hooks/queries/useInvitations'
 import { ChevronLeft, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 export default function CreateOrderPage() {
   const router = useRouter()
   const { themes, fetchData } = useAppStore()
-  
+  const createInvitation = useCreateInvitationMutation()
+
   const [isLoading, setIsLoading] = useState(false)
   const [customerName, setCustomerName] = useState('')
   const [amount, setAmount] = useState('50000')
-  const [status, setStatus] = useState<'pending' | 'paid' | 'deployed'>('paid')
+  const [status, setStatus] = useState<'registered' | 'form_sent' | 'form_completed' | 'in_production' | 'design_review' | 'published' | 'delivered'>('registered')
   const [notes, setNotes] = useState('')
   const [selectedThemeId, setSelectedThemeId] = useState('')
 
@@ -55,96 +57,40 @@ export default function CreateOrderPage() {
 
     setIsLoading(true)
     try {
-      const themeObj = availableThemes.find(t => t.id === selectedThemeId) || availableThemes[0]
-      
-      // 1. Generate invitation ID
-      const randId = typeof window !== 'undefined' && window.crypto?.randomUUID 
-        ? window.crypto.randomUUID() 
-        : 'inv-admin-' + Math.random().toString(36).substring(2, 15)
-      const invitationId = `custom__${randId}`
-
-      // Default wedding date is 3 months from now
-      const defaultDate = new Date()
-      defaultDate.setMonth(defaultDate.getMonth() + 3)
-      const defaultDateStr = defaultDate.toISOString().split('T')[0]
-
-      // 2. Create Default Invitation Data
-      const defaultInvitation = {
-        id: invitationId,
-        groomName: '신랑',
-        groomNameEn: 'Groom',
-        groomParentRelation: '의 장남',
-        brideName: '신부',
-        brideNameEn: 'Bride',
-        brideParentRelation: '의 장녀',
-        weddingDate: defaultDateStr,
-        weddingTime: '12:00',
-        venueName: '아름다운 웨딩홀',
-        venueHall: '그랜드홀',
-        venueAddress: '서울특별시 중구 태평로1가 31',
+      // 청첩장 생성은 /admin/invitations 와 동일한 뮤테이션을 그대로 쓴다.
+      //
+      // 이 화면은 원래 invitations 에 직접 insert 했는데, groomName/weddingDate 같은
+      // 레거시 키를 최상위 컬럼처럼 넣고(실제로는 content_data jsonb 안에 들어가야 한다)
+      // customer_id/public_slug/dashboard_slug/dashboard_password/block_order/expires_at
+      // (전부 NOT NULL)을 아예 채우지 않아 **항상 PGRST204 로 실패**했다.
+      // 스키마를 아는 곳이 두 군데로 갈라져 있던 게 원인이라 한 곳으로 합친다.
+      const publicSlug = `vow-${Math.random().toString(36).slice(2, 8)}`
+      const invitation = await createInvitation.mutateAsync({
+        customerId: 'mock', // 이 화면은 고객 레코드 없이 시작한다 — 임시 고객이 자동 생성된다
         themeId: selectedThemeId,
-        colorSet: themeObj.colorSets?.[0]?.id || 'default',
-        fontSet: themeObj.fontSets?.[0]?.id || 'default',
-        mainImage: null,
-        invitationMessage: '서로 다른 길을 걸어온 저희 두 사람이\n이제 하나의 길을 함께 걸어가려 합니다.\n귀한 걸음으로 축복해 주시면 감사하겠습니다.',
-        galleryImages: [],
-        galleryViewType: 'slide',
-        trafficInfo: '지하철 시청역 5번 출구 바로 앞',
-        parkingInfo: '하객 전용 주차장 2시간 무료 이용 가능',
-        rsvpEnabled: true,
-        rsvpMealEnabled: true,
-        rsvpCommentEnabled: true,
-        guestbookType: 'text',
-        bgmId: (themeObj as any).recommendedBgms?.[0] || 'bgm1',
-        kakaoThumbnail: null,
-        kakaoTitle: '신랑 ❤️ 신부 결혼합니다!',
-        kakaoDescription: `${defaultDate.getFullYear()}년 ${defaultDate.getMonth() + 1}월 ${defaultDate.getDate()}일`,
-        bankAccounts: [],
-        contacts: [],
-        status: 'draft',
-        createdAt: new Date().toISOString(),
-        publishedUrl: null,
-        customStyles: {}
-      }
+        publicSlug,
+      })
 
-      const { error: inviteError } = await supabase.from('invitations').insert(defaultInvitation)
-      if (inviteError) throw inviteError
-
-      // 3. Create Default Order Data
-      const orderId = 'ORD-' + Math.floor(100000 + Math.random() * 900000)
-      const newOrder = {
-        id: orderId,
-        invitationId: invitationId,
-        customerName: customerName,
-        groomName: '신랑',
-        brideName: '신부',
-        weddingDate: defaultDateStr,
-        theme: themeObj.name,
-        amount: parseInt(amount) || 50000,
-        status: status,
-        createdAt: new Date().toISOString().split('T')[0],
-        notes: notes
-      }
-
-      const { error: orderError } = await supabase.from('orders').insert(newOrder)
+      // 관리자가 입력한 주문자명은 참고용으로 external_order_ref 에 남긴다(§1-B).
+      const { data: insertedOrder, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          invitation_id: invitation.id,
+          external_order_ref: customerName,
+          product_type: 'mobile',
+          amount: parseInt(amount) || 50000,
+          status: status,
+          notes: notes,
+        })
+        .select('id')
+        .single()
       if (orderError) throw orderError
 
       toast.success('수동 주문 및 청첩장 초안이 정상 생성되었습니다!')
-      router.push(`/admin/orders/${orderId}`)
-    } catch (err: any) {
+      router.push(`/admin/orders/${insertedOrder.id}`)
+    } catch (err) {
       console.error('Error creating manual order:', err)
-      
-      const isMissingColumn = err.code === 'PGRST204' || 
-                              (err.message && (err.message.includes('customStyles') || err.message.includes('column')));
-      
-      if (isMissingColumn) {
-        toast.error(
-          'Supabase 테이블에 "customStyles" 컬럼이 없거나 캐시되지 않았습니다. Supabase SQL Editor에서 ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS "customStyles" jsonb; 를 실행해주세요.',
-          { duration: 8000 }
-        )
-      } else {
-        toast.error(err.message || '생성 중 오류가 발생했습니다.')
-      }
+      toast.error(err instanceof Error ? err.message : '생성 중 오류가 발생했습니다.')
     } finally {
       setIsLoading(false)
     }
@@ -204,9 +150,13 @@ export default function CreateOrderPage() {
                       <SelectValue placeholder="상태 선택" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="pending">결제대기 (Pending)</SelectItem>
-                      <SelectItem value="paid">결제완료 (Paid)</SelectItem>
-                      <SelectItem value="deployed">배포중 (Deployed)</SelectItem>
+                      <SelectItem value="registered">고객 등록</SelectItem>
+                      <SelectItem value="form_sent">폼 발송</SelectItem>
+                      <SelectItem value="form_completed">폼 작성완료</SelectItem>
+                      <SelectItem value="in_production">제작중</SelectItem>
+                      <SelectItem value="design_review">디자인 피드백중</SelectItem>
+                      <SelectItem value="published">발행완료</SelectItem>
+                      <SelectItem value="delivered">전달완료</SelectItem>
                     </SelectContent>
                   </Select>
                 </Field>

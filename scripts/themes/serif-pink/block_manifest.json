@@ -1,0 +1,12 @@
+[
+  { "key": "hero", "label": "표지", "title": false, "padding": false },
+  { "key": "greeting", "label": "인사말", "title": false, "padding": false },
+  { "key": "gallery", "label": "갤러리", "title": true, "padding": true },
+  { "key": "sequence", "label": "식순", "title": true, "padding": true },
+  { "key": "calendar", "label": "캘린더 · D-day", "title": false, "padding": true },
+  { "key": "location", "label": "식장 위치", "title": true, "padding": true },
+  { "key": "account", "label": "마음 전하실 곳", "title": true, "padding": true },
+  { "key": "contact", "label": "연락처", "title": true, "padding": true },
+  { "key": "rsvp", "label": "참석 여부 알리기", "title": true, "padding": true },
+  { "key": "share", "label": "청첩장 공유", "title": false, "padding": false }
+]

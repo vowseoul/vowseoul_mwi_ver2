@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
+import { buildContentDataFromForm, deriveOgMetaFromForm, deriveOverridesFromForm, resolveBgmUrlFromSnapshot } from '@/lib/invitation-data'
 import { 
   useCustomerQuery, 
   useUpdateCustomerMutation, 
@@ -139,16 +140,37 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
   const [isCreatingInvite, setIsCreatingInvite] = useState(false)
   const [isSyncingInvite, setIsSyncingInvite] = useState(false)
 
-  // Populate publicSlug and selectedThemeId when modal opens
+  // Populate publicSlug and selectedThemeId when modal opens.
+  // 폼에 mwi_address(원하는 링크 주소)를 적어둔 고객이면 그 값을 슬러그 규칙에 맞게 다듬어
+  // 기본값으로 제안한다 — 관리자가 그대로 쓰거나 고쳐서 쓸 수 있다(무작위 값보다 훨씬 유용하다).
   useEffect(() => {
-    if (isCreateModalOpen && customer) {
-      const randomPart = Math.random().toString(36).substring(2, 8)
-      setPublicSlug(`vow-${randomPart}`)
-      if (themes && themes.length > 0) {
-        setSelectedThemeId(themes[0].id)
-      }
-    }
-  }, [isCreateModalOpen, customer, themes])
+    if (!isCreateModalOpen || !customer) return
+    if (themes && themes.length > 0) setSelectedThemeId(themes[0].id)
+
+    const randomPart = Math.random().toString(36).substring(2, 8)
+    const fallbackSlug = `vow-${randomPart}`
+    setPublicSlug(fallbackSlug)
+
+    let cancelled = false
+    supabase
+      .from('form_submissions')
+      .select('data')
+      .eq('customer_id', customerId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data: sub }) => {
+        if (cancelled) return
+        const rawAddress = (sub?.data as Record<string, unknown> | null)?.mwi_address
+        if (typeof rawAddress !== 'string' || !rawAddress.trim()) return
+        const sanitized = rawAddress.trim().toLowerCase()
+          .replace(/[^a-z0-9-]/g, '-')
+          .replace(/-+/g, '-')
+          .replace(/^-|-$/g, '')
+        if (sanitized) setPublicSlug(sanitized)
+      })
+    return () => { cancelled = true }
+  }, [isCreateModalOpen, customer, themes, customerId])
 
   // Copy helper
   const handleCopy = (text: string, type: string) => {
@@ -215,7 +237,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
       // Fetch latest form submission for this customer
       const { data: subData, error: subErr } = await supabase
         .from('form_submissions')
-        .select('*')
+        .select('*, form_instances(fields_snapshot)')
         .eq('customer_id', customerId)
         .order('updated_at', { ascending: false })
         .limit(1)
@@ -240,6 +262,15 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
 
       const updatedContentData = {
         ...existingContent,
+
+        // 1) 폼 제출값(필드키) 전체를 보존하되, 폼 카탈로그와 렌더러의 필드키가 어긋나는
+        //    항목(예: 폼의 direction_tpt → 렌더러의 traffic_info)은 여기서 보정한다.
+        //    아래 camelCase 매핑은 일부 항목만 다루므로, 이게 없으면 식순(wedding_programs),
+        //    혼주 이름, 계좌 정보, 개별 사진 등 나머지 필드가 전부 유실된다.
+        //    새 템플릿 렌더러는 이 필드키를 직접 사용한다.
+        ...buildContentDataFromForm(rawData),
+
+        // 2) 레거시 렌더러 호환용 camelCase 키 (필드키와 이름이 겹치지 않아 공존 가능)
         groomName: getVal('groom_name', 'groomName', 'groom_name_kr') || customer?.groom_name || existingContent.groomName || '',
         brideName: getVal('bride_name', 'brideName', 'bride_name_kr') || customer?.bride_name || existingContent.brideName || '',
         weddingDate: getVal('wedding_date', 'weddingDate', 'date') || customer?.wedding_date || existingContent.weddingDate || '',
@@ -249,21 +280,58 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
         venueHall: getVal('venue_hall', 'venueHall', 'hall') || existingContent.venueHall || '',
         invitationMessage: getVal('invitation_message', 'greeting_message', 'greeting', 'invitationMessage', 'select_text') || existingContent.invitationMessage || '',
         galleryImages: getVal('gallery_images', 'galleryImages', 'photos', 'images') || existingContent.galleryImages || [],
-        galleryViewType: getVal('gallery_view_type', 'galleryViewType', 'gallery_type') || existingContent.galleryViewType || 'slide',
-        trafficInfo: getVal('traffic_info', 'trafficInfo') || existingContent.trafficInfo || '',
-        parkingInfo: getVal('parking_info', 'parkingInfo') || existingContent.parkingInfo || '',
+        galleryViewType: getVal('gallery_view_type', 'gallery_format', 'galleryViewType', 'gallery_type') || existingContent.galleryViewType || 'slide',
+        trafficInfo: getVal('traffic_info', 'direction_tpt', 'trafficInfo') || existingContent.trafficInfo || '',
+        parkingInfo: getVal('parking_info', 'direction_prk', 'parkingInfo') || existingContent.parkingInfo || '',
         bgmId: getVal('bgm', 'music', 'bgmId') || existingContent.bgmId || null,
-        kakaoTitle: getVal('kakao_title', 'kakaoTitle') || existingContent.kakaoTitle || '',
-        kakaoDescription: getVal('kakao_description', 'kakaoDescription') || existingContent.kakaoDescription || '',
-        kakaoThumbnail: getVal('kakao_thumbnail', 'kakaoThumbnail') || existingContent.kakaoThumbnail || null,
       }
 
-      const bgmUrl = getVal('bgm_url', 'music_url', 'bgm') || invitation.bgm_url
+      // bgm 필드는 URL이 아니라 고른 음원의 파일명만 저장한다 — 실제 재생 URL은
+      // 폼 발행 시점 스냅샷(fields_snapshot)의 음원 목록에서 찾아야 한다
+      // (§lib/invitation-data.ts resolveBgmUrlFromSnapshot). 못 찾으면 기존 값을 유지한다.
+      const fieldsSnapshot = (subData[0] as { form_instances?: { fields_snapshot?: unknown } }).form_instances?.fields_snapshot ?? null
+      const bgmUrl = getVal('bgm_url', 'music_url')
+        || resolveBgmUrlFromSnapshot(fieldsSnapshot, rawData.bgm)
+        || invitation.bgm_url
+
+      // 폼의 카카오 공유 필드(kakao_share_title/text/img)가 채워져 있으면 청첩장의
+      // 실제 발행 링크 미리보기(og_meta, generateMetadata가 읽는 값)에 반영한다.
+      // 관리자가 편집기에서 직접 넣어둔 값을 빈 값으로 덮어쓰지 않도록 존재하는 키만 병합한다.
+      const existingOgMeta = (invitation.og_meta && typeof invitation.og_meta === 'object')
+        ? invitation.og_meta as Record<string, unknown>
+        : {}
+      const derivedOgMeta = deriveOgMetaFromForm(rawData)
+      const updatedOgMeta = derivedOgMeta ? { ...existingOgMeta, ...derivedOgMeta } : existingOgMeta
+
+      // 고객이 폼에서 "RSVP/방명록/계좌/오시는 길 넣을지", "식사·셔틀 질문 넣을지",
+      // "D-day 표시할지" 답한 게 있으면 편집기의 블럭 켜기/끄기·서브옵션에 그대로 반영한다.
+      // 관리자가 편집기에서 이미 다르게 손대둔 다른 블럭 설정은 건드리지 않는다.
+      const existingOverrides = (invitation.customization_overrides && typeof invitation.customization_overrides === 'object')
+        ? invitation.customization_overrides as Record<string, unknown>
+        : {}
+      const existingDisabledSlots: string[] = Array.isArray(existingOverrides.disabled_slots)
+        ? existingOverrides.disabled_slots as string[]
+        : []
+      const existingBlocks = (existingOverrides.blocks && typeof existingOverrides.blocks === 'object')
+        ? existingOverrides.blocks as Record<string, Record<string, unknown>>
+        : {}
+      const formOverrides = deriveOverridesFromForm(rawData)
+      const mergedDisabledSlots = Array.from(new Set([
+        ...existingDisabledSlots.filter((s) => !formOverrides.disabledSlotsRemove.includes(s)),
+        ...formOverrides.disabledSlotsAdd,
+      ]))
+      const mergedBlocks = { ...existingBlocks }
+      for (const [blockKey, patch] of Object.entries(formOverrides.blockPatches)) {
+        mergedBlocks[blockKey] = { ...(existingBlocks[blockKey] || {}), ...patch }
+      }
+      const updatedOverrides = { ...existingOverrides, disabled_slots: mergedDisabledSlots, blocks: mergedBlocks }
 
       const { error: updateErr } = await supabase
         .from('invitations')
         .update({
           content_data: updatedContentData,
+          og_meta: updatedOgMeta,
+          customization_overrides: updatedOverrides,
           bgm_url: bgmUrl,
           updated_at: new Date().toISOString(),
         })
@@ -699,7 +767,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                     <span className="text-xs font-medium text-muted-foreground">고객용 관리 대시보드 URL</span>
                     <div className="flex gap-2">
                       <Input
-                        value={`${baseUrl}/dashboard/${invitation.dashboard_slug}`}
+                        value={`${baseUrl}/dashboard/${invitation.public_slug}`}
                         readOnly
                         className="text-xs h-9 bg-muted"
                       />
@@ -708,7 +776,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                         variant="outline"
                         size="icon"
                         className="h-9 w-9 shrink-0"
-                        onClick={() => handleCopy(`${baseUrl}/dashboard/${invitation.dashboard_slug}`, 'dashboard')}
+                        onClick={() => handleCopy(`${baseUrl}/dashboard/${invitation.public_slug}`, 'dashboard')}
                       >
                         {copiedLink === 'dashboard' ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
                       </Button>

@@ -1,58 +1,5 @@
 import { create } from 'zustand'
-import { supabase } from './supabase'
-
-export interface WeddingInvitation {
-  id: string
-  groomName: string
-  groomNameEn: string
-  groomParentRelation: string
-  brideName: string
-  brideNameEn: string
-  brideParentRelation: string
-  weddingDate: string
-  weddingTime: string
-  venueName: string
-  venueHall: string
-  venueAddress: string
-  themeId: string
-  colorSet: string
-  fontSet: string
-  mainImage: string | null
-  invitationMessage: string
-  galleryImages: string[]
-  galleryViewType: 'grid' | 'slide'
-  trafficInfo: string
-  parkingInfo: string
-  rsvpEnabled: boolean
-  rsvpMealEnabled?: boolean
-  rsvpCommentEnabled?: boolean
-  guestbookType: 'text' | 'audio' | 'none'
-  bgmId: string | null
-  kakaoThumbnail: string | null
-  kakaoTitle: string
-  kakaoDescription: string
-  bankAccounts: BankAccount[]
-  contacts: Contact[]
-  status: 'draft' | 'paid' | 'published' | 'expired'
-  createdAt: string
-  publishedUrl: string | null
-  customStyles?: Record<string, any>
-}
-
-export interface BankAccount {
-  id: string
-  bank: string
-  accountNumber: string
-  accountHolder: string
-  relation: 'groom' | 'bride' | 'groomParent' | 'brideParent'
-}
-
-export interface Contact {
-  id: string
-  name: string
-  phone: string
-  relation: string
-}
+import { supabase, logSupabaseError } from './supabase'
 
 export interface Theme {
   id: string
@@ -88,6 +35,8 @@ export interface BGM {
   duration: string
   url: string
   isRecommended: boolean
+  genre?: string
+  hashtags?: string
 }
 
 export interface Order {
@@ -99,138 +48,15 @@ export interface Order {
   weddingDate: string
   theme: string
   amount: number
-  status: 'pending' | 'paid' | 'deployed' | 'expired' | 'refunded'
+  status: 'registered' | 'form_sent' | 'form_completed' | 'in_production' | 'design_review' | 'published' | 'delivered'
   createdAt: string
   notes: string
-}
-
-export interface FAQ {
-  id: string
-  question: string
-  answer: string
-  category?: string
-  createdAt: string
-}
-
-export interface Notice {
-  id: string
-  title: string
-  content: string
-  category: string
-  createdAt: string
-}
-
-// Helper to map DB record to WeddingInvitation (unpack content_data)
-export function mapFromDb(dbRecord: any): WeddingInvitation {
-  if (!dbRecord) return null as any
-  const content = dbRecord.content_data || {}
-  return {
-    id: dbRecord.id,
-    themeId: dbRecord.theme_version_id || 'classic-white',
-    colorSet: dbRecord.customization_overrides?.colorSet || 'default',
-    fontSet: dbRecord.customization_overrides?.fontSet || 'default',
-    status: dbRecord.status,
-    createdAt: dbRecord.created_at,
-    publishedUrl: dbRecord.published_at ? `${dbRecord.public_slug}` : null,
-    
-    // content_data fields
-    groomName: content.groomName || '',
-    groomNameEn: content.groomNameEn || '',
-    groomParentRelation: content.groomParentRelation || '',
-    brideName: content.brideName || '',
-    brideNameEn: content.brideNameEn || '',
-    brideParentRelation: content.brideParentRelation || '',
-    weddingDate: content.weddingDate || '',
-    weddingTime: content.weddingTime || '',
-    venueName: content.venueName || '',
-    venueHall: content.venueHall || '',
-    venueAddress: content.venueAddress || '',
-    invitationMessage: content.invitationMessage || '',
-    galleryImages: content.galleryImages || [],
-    galleryViewType: content.galleryViewType || 'slide',
-    trafficInfo: content.trafficInfo || '',
-    parkingInfo: content.parkingInfo || '',
-    rsvpEnabled: content.rsvpEnabled !== false,
-    rsvpMealEnabled: content.rsvpMealEnabled !== false,
-    rsvpCommentEnabled: content.rsvpCommentEnabled !== false,
-    guestbookType: content.guestbookType || 'text',
-    bgmId: content.bgmId || null,
-    kakaoThumbnail: content.kakaoThumbnail || null,
-    kakaoTitle: content.kakaoTitle || '',
-    kakaoDescription: content.kakaoDescription || '',
-    bankAccounts: content.bankAccounts || [],
-    contacts: content.contacts || [],
-    customStyles: content.customStyles || {},
-  }
-}
-
-// Helper to map WeddingInvitation to DB record (pack content_data)
-export function mapToDb(inv: any) {
-  if (!inv) return null as any
-  return {
-    id: inv.id,
-    customer_id: inv.customerId || inv.customer_id || '00000000-0000-0000-0000-000000000000',
-    theme_version_id: inv.themeId || inv.theme_version_id || null,
-    public_slug: inv.public_slug || inv.publicSlug || inv.id || 'slug',
-    dashboard_slug: inv.dashboard_slug || `dash-${inv.public_slug || inv.id || 'slug'}`,
-    dashboard_password: inv.dashboard_password || '1234',
-    status: inv.status || 'draft',
-    expires_at: inv.expires_at || new Date(Date.now() + 30*24*60*60*1000).toISOString(),
-    block_order: inv.block_order || ["cover", "greeting", "couple-info", "event-info", "gallery", "map", "account", "rsvp", "guestbook"],
-    
-    // Packed JSONB fields
-    customization_overrides: {
-      colorSet: inv.colorSet || 'default',
-      fontSet: inv.fontSet || 'default',
-    },
-    content_data: {
-      groomName: inv.groomName || '',
-      groomNameEn: inv.groomNameEn || '',
-      groomParentRelation: inv.groomParentRelation || '',
-      brideName: inv.brideName || '',
-      brideNameEn: inv.brideNameEn || '',
-      brideParentRelation: inv.brideParentRelation || '',
-      weddingDate: inv.weddingDate || '',
-      weddingTime: inv.weddingTime || '',
-      venueName: inv.venueName || '',
-      venueHall: inv.venueHall || '',
-      venueAddress: inv.venueAddress || '',
-      invitationMessage: inv.invitationMessage || '',
-      galleryImages: inv.galleryImages || [],
-      galleryViewType: inv.galleryViewType || 'slide',
-      trafficInfo: inv.trafficInfo || '',
-      parkingInfo: inv.parkingInfo || '',
-      rsvpEnabled: inv.rsvpEnabled !== false,
-      rsvpMealEnabled: inv.rsvpMealEnabled !== false,
-      rsvpCommentEnabled: inv.rsvpCommentEnabled !== false,
-      guestbookType: inv.guestbookType || 'text',
-      bgmId: inv.bgmId || null,
-      kakaoThumbnail: inv.kakaoThumbnail || null,
-      kakaoTitle: inv.kakaoTitle || '',
-      kakaoDescription: inv.kakaoDescription || '',
-      bankAccounts: inv.bankAccounts || [],
-      contacts: inv.contacts || [],
-      customStyles: inv.customStyles || {},
-    }
-  }
 }
 
 interface AppState {
   // Data fetching
   fetchData: () => Promise<void>
-  
-  // Current invitation being edited
-  currentInvitation: Partial<WeddingInvitation> | null
-  setCurrentInvitation: (invitation: Partial<WeddingInvitation> | null) => void
-  updateCurrentInvitation: (updates: Partial<WeddingInvitation>) => void
-  loadInvitation: (id: string) => Promise<void>
-  saveInvitation: () => Promise<string | null>
-  
-  // User's invitations
-  invitations: WeddingInvitation[]
-  setInvitations: (invitations: WeddingInvitation[]) => void
-  addInvitation: (invitation: WeddingInvitation) => Promise<void>
-  
+
   // Themes
   themes: Theme[]
   setThemes: (themes: Theme[]) => void
@@ -243,21 +69,7 @@ interface AppState {
   orders: Order[]
   setOrders: (orders: Order[]) => void
   updateOrder: (id: string, updates: Partial<Order>) => Promise<void>
-  
-  // FAQ state
-  faqs: FAQ[]
-  setFaqs: (faqs: FAQ[]) => void
-  addFaq: (faq: FAQ) => Promise<void>
-  updateFaq: (id: string, faq: Partial<FAQ>) => Promise<void>
-  deleteFaq: (id: string) => Promise<void>
 
-  // Notice state
-  notices: Notice[]
-  setNotices: (notices: Notice[]) => void
-  addNotice: (notice: Notice) => Promise<void>
-  updateNotice: (id: string, notice: Partial<Notice>) => Promise<void>
-  deleteNotice: (id: string) => Promise<void>
-  
   // UI state
   editorStep: number
   setEditorStep: (step: number) => void
@@ -270,23 +82,15 @@ interface AppState {
   setAuth: (isAuthenticated: boolean, isAdmin: boolean) => void
   user: any | null
   setUser: (user: any | null) => void
-  loadUserInvitations: () => Promise<void>
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
   fetchData: async () => {
     try {
-      let faqs: any[] = []
-      try {
-        const { data } = await supabase.from('faqs').select('*')
-        faqs = data || []
-      } catch (err) {
-        faqs = []
-      }
-
       let themes: any[] = []
       try {
-        const { data } = await supabase.from('themes').select('*')
+        const { data, error } = await supabase.from('themes').select('*')
+        logSupabaseError('fetchData: themes', error)
         themes = data || []
       } catch (err) {
         themes = []
@@ -294,7 +98,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       let bgms: any[] = []
       try {
-        const { data } = await supabase.from('bgms').select('*')
+        const { data, error } = await supabase.from('bgms').select('*')
+        logSupabaseError('fetchData: bgms', error)
         bgms = data || []
       } catch (err) {
         bgms = []
@@ -302,162 +107,51 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       let customers: any[] = []
       try {
-        const { data } = await supabase.from('customers').select('*')
+        const { data, error } = await supabase.from('customers').select('*')
+        logSupabaseError('fetchData: customers', error)
         customers = data || []
       } catch (err) {
         customers = []
       }
 
-      let invitations: any[] = []
+      // orders 는 제작 의뢰/이행 기록이다(§1-B). customer_id 로 표시용 이름/예식일을 채운다.
+      const customerMap: Record<string, any> = {}
+      customers.forEach((c: any) => { customerMap[c.id] = c })
+
+      let mappedOrders: Order[] = []
       try {
-        const { data } = await supabase.from('invitations').select('*')
-        invitations = data || []
-      } catch (err) {
-        invitations = []
-      }
-
-      const inviteMap: Record<string, any> = {}
-      invitations.forEach(inv => {
-        inviteMap[inv.customer_id] = inv
-      })
-
-      const mappedOrders: Order[] = customers.map((cust: any) => {
-        const inv = inviteMap[cust.id]
-        return {
-          id: `ORD-${cust.id.substring(0, 8).toUpperCase()}`,
-          invitationId: inv ? inv.id : '',
-          customerName: `${cust.groom_name} & 	ext: ${cust.bride_name}`.replace('text: ', ''), // Avoid text keyword issues
-          groomName: cust.groom_name || '',
-          brideName: cust.bride_name || '',
-          weddingDate: cust.wedding_date || '',
-          theme: inv ? (inv.theme_version_id || 'Classic White') : 'Classic White',
-          amount: 50000,
-          status: inv ? (inv.status === 'published' ? 'deployed' : 'paid') : 'paid',
-          createdAt: cust.created_at ? cust.created_at.split('T')[0] : '',
-          notes: cust.memo || ''
-        }
-      })
-
-      let noticesList = []
-      try {
-        const { data: noticesData } = await supabase.from('notices').select('*')
-        if (noticesData && noticesData.length > 0) {
-          noticesList = noticesData
-        } else {
-          const localNotices = typeof window !== 'undefined' ? localStorage.getItem('vow_seoul_local_notices') : null
-          if (localNotices) {
-            noticesList = JSON.parse(localNotices)
-          } else {
-            noticesList = sampleNotices
+        const { data: ordersData, error } = await supabase.from('orders').select('*')
+        logSupabaseError('fetchData: orders', error)
+        mappedOrders = (ordersData || []).map((o: any) => {
+          const cust = o.customer_id ? customerMap[o.customer_id] : null
+          return {
+            id: o.id,
+            invitationId: o.invitation_id || '',
+            customerName: cust ? `${cust.groom_name} & ${cust.bride_name}` : (o.external_order_ref || '고객 미지정'),
+            groomName: cust?.groom_name || '',
+            brideName: cust?.bride_name || '',
+            weddingDate: cust?.wedding_date || '',
+            theme: '',
+            amount: o.amount,
+            status: o.status,
+            createdAt: o.created_at ? o.created_at.split('T')[0] : '',
+            notes: o.notes || '',
           }
-        }
+        })
       } catch (err) {
-        const localNotices = typeof window !== 'undefined' ? localStorage.getItem('vow_seoul_local_notices') : null
-        if (localNotices) {
-          noticesList = JSON.parse(localNotices)
-        } else {
-          noticesList = sampleNotices
-        }
+        mappedOrders = []
       }
 
       set({
-        faqs: faqs.length > 0 ? faqs : sampleFaqs,
         themes: themes || [],
         bgmList: bgms.length > 0 ? bgms : sampleBGMs,
         orders: mappedOrders,
-        notices: noticesList
       })
     } catch (e) {
       console.error('Error fetching data from Supabase:', e)
     }
   },
 
-  currentInvitation: null,
-  setCurrentInvitation: (invitation) => set({ currentInvitation: invitation }),
-  updateCurrentInvitation: (updates) => set((state) => ({
-    currentInvitation: state.currentInvitation 
-      ? { ...state.currentInvitation, ...updates }
-      : updates
-  })),
-  loadInvitation: async (id) => {
-    try {
-      const { data, error } = await supabase
-        .from('invitations')
-        .select('*')
-        .eq('id', id)
-        .single()
-
-      if (error) throw error
-
-      if (data) {
-        const mapped = mapFromDb(data)
-        set({ currentInvitation: mapped })
-      }
-    } catch (e) {
-      console.error('Error loading invitation from Supabase:', e)
-    }
-  },
-  saveInvitation: async (): Promise<string | null> => {
-    const state = get()
-    const current = state.currentInvitation
-    if (!current) return null
-
-    try {
-      let id = current.id
-      const isNew = !id || id === 'new'
-
-      if (isNew) {
-        const userId = state.user?.id
-        const randId = typeof window !== 'undefined' && window.crypto?.randomUUID 
-          ? window.crypto.randomUUID() 
-          : 'inv-' + Math.random().toString(36).substring(2, 15)
-        
-        id = userId ? `${userId}__${randId}` : randId
-      }
-
-      const flatInvitation = {
-        ...current,
-        id,
-      } as any
-
-      const dbPayload = mapToDb(flatInvitation)
-
-      if (isNew) {
-        const { error } = await supabase.from('invitations').insert(dbPayload)
-        if (error) throw error
-      } else {
-        const { error } = await supabase.from('invitations').update(dbPayload).eq('id', id)
-        if (error) throw error
-      }
-
-      set((state) => {
-        const updatedInvitation = { ...current, id } as WeddingInvitation
-        const updatedList = isNew 
-          ? [...state.invitations, updatedInvitation]
-          : state.invitations.map(inv => inv.id === id ? updatedInvitation : inv)
-        
-        return {
-          currentInvitation: updatedInvitation,
-          invitations: updatedList
-        }
-      })
-
-      return id || null
-    } catch (e) {
-      console.error('Error saving invitation to Supabase:', e)
-      return null
-    }
-  },
-  
-  invitations: [],
-  setInvitations: (invitations) => set({ invitations }),
-  addInvitation: async (invitation) => {
-    await supabase.from('invitations').insert(invitation)
-    set((state) => ({
-      invitations: [...state.invitations, invitation]
-    }))
-  },
-  
   themes: [],
   setThemes: (themes) => set({ themes }),
   
@@ -468,104 +162,38 @@ export const useAppStore = create<AppState>((set, get) => ({
   setOrders: (orders) => set({ orders }),
   updateOrder: async (id, updates) => {
     try {
-      const state = get()
-      const order = state.orders.find(o => o.id === id)
-      if (order) {
-        if (order.invitationId) {
-          const invStatus = updates.status === 'deployed' ? 'published' : (updates.status === 'paid' ? 'draft' : 'paused')
-          await supabase.from('invitations').update({
-            status: invStatus,
-            updated_at: new Date().toISOString()
-          }).eq('id', order.invitationId)
-        }
+      const orderUpdates: any = {}
+      if (updates.amount !== undefined) orderUpdates.amount = updates.amount
+      if (updates.status !== undefined) orderUpdates.status = updates.status
+      if (updates.notes !== undefined) orderUpdates.notes = updates.notes
 
-        const custSeg = id.replace('ORD-', '').toLowerCase()
-        const { data: custs } = await supabase.from('customers').select('id, memo')
-        const targetCustomer = custs?.find(c => c.id.substring(0, 8) === custSeg)
+      if (Object.keys(orderUpdates).length > 0) {
+        const { error } = await supabase.from('orders').update(orderUpdates).eq('id', id)
+        logSupabaseError('updateOrder', error)
+      }
 
-        if (targetCustomer) {
+      // 고객 기본 정보(이름/예식일)는 orders 가 아니라 customers 소유이므로,
+      // 주문에 연결된 customer_id 를 찾아 함께 갱신한다.
+      if (updates.groomName || updates.brideName || updates.weddingDate) {
+        const state = get()
+        const order = state.orders.find(o => o.id === id)
+        const { data: orderRow } = await supabase.from('orders').select('customer_id').eq('id', id).maybeSingle()
+        const customerId = orderRow?.customer_id
+        if (customerId) {
           const customerUpdates: any = {}
-          if (updates.status) {
-            customerUpdates.status = updates.status === 'deployed' ? 'published' : 'draft'
-          }
           if (updates.groomName) customerUpdates.groom_name = updates.groomName
           if (updates.brideName) customerUpdates.bride_name = updates.brideName
           if (updates.weddingDate) customerUpdates.wedding_date = updates.weddingDate
-          if (updates.notes !== undefined) customerUpdates.memo = updates.notes
-
-          await supabase.from('customers').update(customerUpdates).eq('id', targetCustomer.id)
+          await supabase.from('customers').update(customerUpdates).eq('id', customerId)
         }
       }
     } catch (err) {
-      console.error('Error updating order database mappings:', err)
+      console.error('Error updating order:', err)
     }
 
     set((state) => ({
       orders: state.orders.map(o => o.id === id ? { ...o, ...updates } : o)
     }))
-  },
-  
-  faqs: [],
-  setFaqs: (faqs) => set({ faqs }),
-  notices: [],
-  setNotices: (notices) => set({ notices }),
-  addFaq: async (faq) => {
-    await supabase.from('faqs').insert(faq)
-    set((state) => ({ faqs: [...state.faqs, faq] }))
-  },
-  updateFaq: async (id, faq) => {
-    await supabase.from('faqs').update(faq).eq('id', id)
-    set((state) => ({
-      faqs: state.faqs.map(f => f.id === id ? { ...f, ...faq } : f)
-    }))
-  },
-  deleteFaq: async (id) => {
-    await supabase.from('faqs').delete().eq('id', id)
-    set((state) => ({
-      faqs: state.faqs.filter(f => f.id !== id)
-    }))
-  },
-  addNotice: async (notice) => {
-    try {
-      await supabase.from('notices').insert(notice)
-    } catch (err) {
-      console.error('Error inserting notice to Supabase:', err)
-    }
-    set((state) => {
-      const updated = [...state.notices, notice]
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('vow_seoul_local_notices', JSON.stringify(updated))
-      }
-      return { notices: updated }
-    })
-  },
-  updateNotice: async (id, notice) => {
-    try {
-      await supabase.from('notices').update(notice).eq('id', id)
-    } catch (err) {
-      console.error('Error updating notice in Supabase:', err)
-    }
-    set((state) => {
-      const updated = state.notices.map(n => n.id === id ? { ...n, ...notice } : n)
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('vow_seoul_local_notices', JSON.stringify(updated))
-      }
-      return { notices: updated }
-    })
-  },
-  deleteNotice: async (id) => {
-    try {
-      await supabase.from('notices').delete().eq('id', id)
-    } catch (err) {
-      console.error('Error deleting notice from Supabase:', err)
-    }
-    set((state) => {
-      const updated = state.notices.filter(n => n.id !== id)
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('vow_seoul_local_notices', JSON.stringify(updated))
-      }
-      return { notices: updated }
-    })
   },
   
   editorStep: 1,
@@ -578,23 +206,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   setAuth: (isAuthenticated, isAdmin) => set({ isAuthenticated, isAdmin }),
   user: null as any | null,
   setUser: (user) => set({ user }),
-  loadUserInvitations: async () => {
-    const state = get()
-    const userId = state.user?.id
-    if (!userId) return
-
-    try {
-      const { data, error } = await supabase.from('invitations').select('*')
-      if (data) {
-        const userInvites = data
-          .filter((inv: any) => inv.id.startsWith(userId + '__'))
-          .map(mapFromDb)
-        set({ invitations: userInvites })
-      }
-    } catch (err) {
-      console.error('Error loading user invitations:', err)
-    }
-  },
 }))
 
 if (typeof window !== 'undefined') {
@@ -603,12 +214,6 @@ if (typeof window !== 'undefined') {
     if (session?.user) {
       store.setUser(session.user)
       store.setAuth(true, session.user.email === 'vovvseoul@gmail.com')
-      
-      // Only load user invitations if we are on a page that needs them (mypage, editor, etc.) to prevent Web Locks error on other pages
-      const path = window.location.pathname
-      if (path.startsWith('/mypage') || path.startsWith('/my-invitations') || path.startsWith('/editor')) {
-        store.loadUserInvitations()
-      }
     } else {
       store.setUser(null)
       store.setAuth(false, false)
@@ -770,86 +375,6 @@ export const sampleBGMs: BGM[] = [
   { id: 'bgm5', name: 'Perfect', artist: 'Ed Sheeran', duration: '4:23', url: '/bgm/perfect.mp3', isRecommended: true },
 ]
 
-export const sampleOrders: Order[] = [
-  { id: 'ORD001', invitationId: 'INV001', customerName: '김철수', groomName: '김철수', brideName: '이영희', weddingDate: '2025-03-15', theme: 'Classic White', amount: 50000, status: 'deployed', createdAt: '2025-01-10', notes: '' },
-  { id: 'ORD002', invitationId: 'INV002', customerName: '박민수', groomName: '박민수', brideName: '최수진', weddingDate: '2025-04-20', theme: 'Romantic Rose', amount: 50000, status: 'paid', createdAt: '2025-01-12', notes: '배경음악 변경 요청' },
-  { id: 'ORD003', invitationId: 'INV003', customerName: '정대호', groomName: '정대호', brideName: '한지민', weddingDate: '2025-02-28', theme: 'Modern Minimal', amount: 50000, status: 'deployed', createdAt: '2025-01-08', notes: '' },
-]
-
-export const sampleFaqs: FAQ[] = [
-  { id: 'faq1', question: '청첩장 제작은 얼마나 걸리나요?', answer: '기본 템플릿을 사용할 경우 결제 완료 후 10분 내로 즉시 제작되어 배포가 가능합니다.', category: '제작', createdAt: '2025-01-01' },
-  { id: 'faq2', question: '완성된 청첩장을 수정할 수 있나요?', answer: '네, 결제 후에도 언제든지 내용을 수정하실 수 있으며, 변경 사항은 실시간으로 반영됩니다.', category: '수정', createdAt: '2025-01-02' },
-  { id: 'faq3', question: '환불 규정이 어떻게 되나요?', answer: '결제 후 7일 이내, 청첩장을 한 번도 공유하지 않은 경우에 한하여 전액 환불이 가능합니다.', category: '결제', createdAt: '2025-01-03' },
-]
-
-export const sampleInvitations: WeddingInvitation[] = [
-  {
-    id: 'INV001',
-    groomName: '김철수',
-    groomNameEn: 'Kim Cheolsu',
-    groomParentRelation: '아버지 김영수, 어머니 박미영의 장남',
-    brideName: '이영희',
-    brideNameEn: 'Lee Younghee',
-    brideParentRelation: '아버지 이정호, 어머니 최순희의 차녀',
-    weddingDate: '2025-03-15',
-    weddingTime: '14:00',
-    venueName: '그랜드 하얏트 서울',
-    venueHall: '그랜드볼룸',
-    venueAddress: '서울특별시 용산구 소월로 322',
-    themeId: 'classic-white',
-    colorSet: 'ivory',
-    fontSet: 'serif',
-    mainImage: null,
-    invitationMessage: '서로 다른 길을 걸어온 저희 두 사람이\n이제 하나의 길을 함께 걸어가려 합니다.\n귀한 걸음으로 축복해 주시면 감사하겠습니다.',
-    galleryImages: [],
-    galleryViewType: 'slide',
-    trafficInfo: '지하철 6호선 이태원역 1번 출구에서 도보 5분',
-    parkingInfo: '호텔 지하주차장 이용 가능 (3시간 무료)',
-    rsvpEnabled: true,
-    rsvpMealEnabled: true,
-    rsvpCommentEnabled: true,
-    guestbookType: 'text',
-    bgmId: 'bgm1',
-    kakaoThumbnail: null,
-    kakaoTitle: '철수 ♥ 영희 결혼합니다',
-    kakaoDescription: '2025년 3월 15일 오후 2시',
-    bankAccounts: [
-      { id: '1', bank: '신한은행', accountNumber: '110-123-456789', accountHolder: '김철수', relation: 'groom' },
-      { id: '2', bank: '국민은행', accountNumber: '123-456-789012', accountHolder: '이영희', relation: 'bride' },
-    ],
-    contacts: [
-      { id: '1', name: '김철수', phone: '010-1234-5678', relation: '신랑' },
-      { id: '2', name: '이영희', phone: '010-8765-4321', relation: '신부' },
-    ],
-    status: 'published',
-    createdAt: '2025-01-10',
-    publishedUrl: 'https://vow.seoul/inv/abc123',
-  },
-]
-
-export const sampleNotices: Notice[] = [
-  {
-    id: 'notice1',
-    title: 'VOW SEOUL 모바일 청첩장 서비스 정식 오픈 안내',
-    content: '안녕하세요. VOW SEOUL입니다.\n가장 소중한 날을 아름답게 장식할 수 있도록 우아하고 프리미엄한 모바일 청첩장 서비스를 시작합니다.\n\n다양한 테마와 실시간 미리보기, 배경음악(BGM) 설정 및 송금 계좌 연동 등 완벽한 기능들을 지금 바로 만나보세요.\n\n앞으로도 더 나은 서비스로 보답하겠습니다.\n감사합니다.',
-    category: '안내',
-    createdAt: '2026-06-01'
-  },
-  {
-    id: 'notice2',
-    title: '축의금 송금 계좌 및 연락처 편집 기능 업데이트 완료',
-    content: '안녕하세요. VOW SEOUL입니다.\n고객님들의 피드백을 반영하여 청첩장 만들기 페이지에서 등록하신 축의금 송금 계좌번호 및 연락처의 "수정" 기능이 추가되었습니다.\n이제 오타 수정 및 세부 사항 변경을 위해 삭제 후 재등록할 필요 없이 즉시 수정하여 편리하게 청첩장을 제작할 수 있습니다.\n\n더 나은 사용성을 위해 계속 노력하겠습니다.',
-    category: '업데이트',
-    createdAt: '2026-06-03'
-  },
-  {
-    id: 'notice3',
-    title: '6월 서비스 안정화 및 정기 점검 안내 (6월 10일)',
-    content: '안녕하세요. VOW SEOUL 개발팀입니다.\n안정적인 서비스 제공을 위해 정기 서버 점검 및 최적화 작업이 진행될 예정입니다.\n\n- 일시: 2026년 6월 10일(수) 오전 02:00 ~ 05:00 (약 3시간)\n- 대상: VOW SEOUL 전체 서비스\n- 내용: 데이터베이스 안정화 작업 및 보안 패치 적용\n\n점검 시간 동안에는 청첩장 작성 및 수정이 일시적으로 제한될 수 있으니 양해 부탁드립니다.',
-    category: '점검',
-    createdAt: '2026-06-02'
-  }
-]
 
 export interface Phrase {
   id: string

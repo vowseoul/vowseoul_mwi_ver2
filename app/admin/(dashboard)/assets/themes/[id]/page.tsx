@@ -12,11 +12,19 @@ import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { ChevronLeft, Save, Upload, Download, Loader2, Link as LinkIcon, Music, Heart, Copy, Phone, Calendar as CalendarIcon, Share2, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
-import { supabase } from '@/lib/supabase'
+import { supabase, logSupabaseError } from '@/lib/supabase'
+import { resolveThemeSwatch, buildThemeTokens } from '@/lib/theme-template'
 import { uploadFile } from '@/lib/storage'
+import { uploadImage } from '@/lib/image-upload'
 import { sampleThemes } from '@/lib/store'
+import { DEFAULT_BLOCK_ORDER } from '@/lib/constants'
 import { cn, getLegibleColor } from '@/lib/utils'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { InvitationFrame, type ThemeTemplate, type TokenMap } from '@/components/invitation/invitation-frame'
+import { ScaledPreview } from '@/components/ui/scaled-preview'
+import { buildSlots } from '@/components/invitation/slot-registry'
+import { buildFieldData } from '@/lib/invitation-data'
+import { SAMPLE_RAW } from '@/lib/sample-invitation'
 
 export default function ThemeEditorPage() {
   const params = useParams()
@@ -54,7 +62,7 @@ export default function ThemeEditorPage() {
     heroStyle: 'center',
     heroConnector: '&',
     accountLayout: '1col',
-    sectionOrder: ['hero', 'greeting', 'sequence', 'gallery', 'calendar', 'location', 'contact', 'account', 'rsvp', 'guestbook'] as string[],
+    sectionOrder: [...DEFAULT_BLOCK_ORDER],
     recommendedBgms: [] as string[],
     duotoneEnabled: false,
     heroSubtitleText: 'save the date',
@@ -83,6 +91,14 @@ export default function ThemeEditorPage() {
   const [newColorSetName, setNewColorSetName] = useState('')
   const [newFontSetName, setNewFontSetName] = useState('')
 
+  /** 템플릿(B+iframe) 엔진 테마 여부 및 실제 마크업 — 실시간 미리보기에 사용 */
+  const [engineInfo, setEngineInfo] = useState<{
+    renderEngine: string
+    templateHtml: string
+    templateCss: string
+    slotManifest: string[]
+  } | null>(null)
+
   useEffect(() => {
     fetchBgms()
     fetchFonts()
@@ -92,13 +108,15 @@ export default function ThemeEditorPage() {
   }, [themeId])
 
   const fetchBgms = async () => {
-    const { data } = await supabase.from('bgms').select('*')
+    const { data, error } = await supabase.from('bgms').select('*')
+    logSupabaseError('fetchBgms (theme editor)', error)
     if (data) setBgms(data)
   }
 
   const fetchFonts = async () => {
     try {
-      const { data } = await supabase.from('settings').select('*').eq('key', 'fonts')
+      const { data, error } = await supabase.from('settings').select('*').eq('key', 'fonts')
+      logSupabaseError('fetchFonts (theme editor)', error)
       if (data && data.length > 0 && data[0].value) {
         setCustomFonts(data[0].value)
       }
@@ -163,7 +181,7 @@ export default function ThemeEditorPage() {
         heroStyle: data.styles?.heroStyle || 'center',
         heroConnector: data.styles?.heroConnector || '&',
         accountLayout: data.styles?.accountLayout || '1col',
-        sectionOrder: data.styles?.sectionOrder || ['hero', 'greeting', 'sequence', 'gallery', 'calendar', 'location', 'contact', 'account', 'rsvp', 'guestbook'],
+        sectionOrder: data.styles?.sectionOrder || [...DEFAULT_BLOCK_ORDER],
         recommendedBgms: data.recommendedBgms || [],
         duotoneEnabled: data.styles?.duotoneEnabled === true || themeId === 'duotone-contrast',
         heroSubtitleText: data.styles?.heroSubtitleText || 'save the date',
@@ -180,9 +198,16 @@ export default function ThemeEditorPage() {
         name: '기본 폰트',
         fonts: [data.styles?.fontKr || 'font-serif', data.styles?.fontEn || 'font-serif']
       }])
+      setEngineInfo({
+        renderEngine: data.render_engine || 'legacy',
+        templateHtml: data.template_html || '',
+        templateCss: data.template_css || '',
+        slotManifest: Array.isArray(data.slot_manifest) ? data.slot_manifest : [],
+      })
     } else {
       const sample = sampleThemes.find(t => t.id === themeId)
       if (sample) {
+        const swatch = resolveThemeSwatch(sample)
         setTheme({
           name: sample.name,
           thumbnail: sample.thumbnail,
@@ -192,9 +217,9 @@ export default function ThemeEditorPage() {
           fontEn: 'font-serif',
           fontSize: '16',
           letterSpacing: '-0.02',
-          primaryColor: sample.colorSets?.[0]?.colors?.[1] || '#E8A87C',
-          backgroundColor: sample.colorSets?.[0]?.colors?.[0] || '#FFF8F0',
-          textColor: sample.colorSets?.[0]?.colors?.[2] || '#3A3A3A',
+          primaryColor: swatch.primary,
+          backgroundColor: swatch.bg,
+          textColor: swatch.text,
           secondaryColor: '#D3D3D3',
           secondaryTextColor: '#8A8A8A',
           // Custom style values defaults
@@ -206,7 +231,7 @@ export default function ThemeEditorPage() {
           heroStyle: 'center',
           heroConnector: '&',
           accountLayout: '1col',
-          sectionOrder: ['hero', 'greeting', 'sequence', 'gallery', 'calendar', 'location', 'contact', 'account', 'rsvp', 'guestbook'],
+          sectionOrder: [...DEFAULT_BLOCK_ORDER],
           recommendedBgms: (sample as any).recommendedBgms || [],
           duotoneEnabled: sample.id === 'duotone-contrast' || (sample.styles as any)?.duotoneEnabled === true,
           heroSubtitleText: (sample.styles as any)?.heroSubtitleText || 'save the date',
@@ -317,7 +342,7 @@ export default function ThemeEditorPage() {
     if (!e.target.files || e.target.files.length === 0) return
     setIsUploadingTheme(true)
     try {
-      const url = await uploadFile(e.target.files[0], 'theme-thumbnails')
+      const url = await uploadImage(e.target.files[0], 'theme-thumbnails')
       setTheme({ ...theme, thumbnail: url })
     } catch (err) {
       toast.error('테마 이미지 업로드에 실패했습니다.')
@@ -508,6 +533,34 @@ export default function ThemeEditorPage() {
     color1 = theme.backgroundColor || '#CCECFF'
     color2 = theme.primaryColor || '#361623'
   }
+
+  // 템플릿(B+iframe) 엔진 테마면 실제 template_html/css 로 미리보기 (레거시 목업 대신)
+  const isTemplateEngine = engineInfo?.renderEngine === 'template' && !!engineInfo.templateHtml
+  const previewTemplate: ThemeTemplate | null = isTemplateEngine && engineInfo ? {
+    key: themeId,
+    name: theme.name,
+    html: engineInfo.templateHtml,
+    css: engineInfo.templateCss,
+    slots: engineInfo.slotManifest,
+  } : null
+  const previewTokens: TokenMap = buildThemeTokens({
+    id: themeId,
+    styles: {
+      primaryColor: theme.primaryColor,
+      backgroundColor: theme.backgroundColor,
+      textColor: theme.textColor,
+      fontKr: theme.fontKr,
+      fontEn: theme.fontEn,
+    },
+  })
+  const previewFieldData = buildFieldData(SAMPLE_RAW)
+  const previewSlots = previewTemplate
+    ? buildSlots(previewTemplate.slots ?? [], {
+        accent: previewTokens['--accent'] || theme.primaryColor,
+        data: previewFieldData,
+        raw: SAMPLE_RAW,
+      })
+    : {}
 
   const getSectionColors = (sectionId: string, index: number) => {
     if (!isDuotone) {
@@ -1114,7 +1167,22 @@ export default function ThemeEditorPage() {
       {/* Right Panel: Mobile Preview */}
       <div className="w-full md:w-[400px] flex-shrink-0 bg-muted/20 border rounded-lg p-6 flex flex-col items-center justify-center shadow-inner overflow-hidden">
         <h3 className="mb-4 text-sm font-medium text-muted-foreground">실시간 모바일 미리보기</h3>
-        <div 
+        {/* 우측 패널 폭이 목업(테두리 포함 336px)보다 좁아지면(모바일 등) 잘리는 대신
+            비율을 유지한 채 축소한다 */}
+        <ScaledPreview width={336} height={666}>
+        {isTemplateEngine && previewTemplate ? (
+          <div className="w-[320px] rounded-[2.5rem] overflow-hidden border-8 border-gray-900 shadow-xl">
+            <InvitationFrame
+              template={previewTemplate}
+              data={previewFieldData}
+              tokens={previewTokens}
+              slots={previewSlots}
+              width={304}
+              height={650}
+            />
+          </div>
+        ) : (
+        <div
           className="w-[320px] h-[650px] border-8 border-gray-900 rounded-[2.5rem] shadow-xl overflow-y-auto relative transition-colors duration-300 scrollbar-hide"
           style={{ 
             backgroundColor: isDuotone ? color1 : theme.backgroundColor, 
@@ -1549,6 +1617,8 @@ export default function ThemeEditorPage() {
             })}
           </div>
         </div>
+        )}
+        </ScaledPreview>
       </div>
 
       {/* Visual Section Style Customizer Dialog */}

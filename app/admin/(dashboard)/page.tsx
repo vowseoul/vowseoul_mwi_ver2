@@ -38,8 +38,12 @@ const weeklyData = [
 export default function AdminDashboard() {
   const { orders } = useAppStore()
 
-  const todayPayments = orders.filter(o => o.status === 'paid' || o.status === 'deployed').length
-  const todayRevenue = todayPayments * 50000
+  // 실제 결제는 네이버 스마트스토어에서 앱 밖에서 이뤄지므로, 여기서는
+  // "오늘 등록된 주문"을 집계한다(§1-B orders 재정의 참고).
+  const todayStr = new Date().toISOString().split('T')[0]
+  const todaysOrders = orders.filter(o => o.createdAt === todayStr)
+  const todayPayments = todaysOrders.length
+  const todayRevenue = todaysOrders.reduce((sum, o) => sum + (o.amount || 0), 0)
   const thisWeekWeddings = orders.filter(o => {
     const weddingDate = new Date(o.weddingDate)
     const now = new Date()
@@ -59,7 +63,7 @@ export default function AdminDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              금일 결제 건수
+              금일 등록 건수
             </CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -202,7 +206,34 @@ export default function AdminDashboard() {
           </Button>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          {/* 모바일 카드 리스트 — sm 미만에서는 6열 테이블 대신 카드로 보여준다 */}
+          <div className="sm:hidden divide-y divide-border">
+            {orders.slice(0, 5).map((order) => (
+              <div key={order.id} className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{order.groomName} & {order.brideName}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{order.createdAt} · {order.weddingDate}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{order.theme} · {order.amount.toLocaleString()}원</p>
+                </div>
+                <span className={`inline-flex shrink-0 rounded-full px-2 py-1 text-xs font-medium ${
+                  order.status === 'published' || order.status === 'delivered' ? 'bg-green-100 text-green-700' :
+                  order.status === 'in_production' || order.status === 'design_review' ? 'bg-blue-100 text-blue-700' :
+                  order.status === 'form_completed' ? 'bg-amber-100 text-amber-700' :
+                  'bg-gray-100 text-gray-700'
+                }`}>
+                  {order.status === 'registered' ? '고객 등록' :
+                   order.status === 'form_sent' ? '폼 발송' :
+                   order.status === 'form_completed' ? '폼 작성완료' :
+                   order.status === 'in_production' ? '제작중' :
+                   order.status === 'design_review' ? '디자인 피드백중' :
+                   order.status === 'published' ? '발행완료' : '전달완료'}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* 데스크톱/태블릿 테이블 — sm 이상에서만 보인다 */}
+          <div className="hidden sm:block overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border text-left text-sm text-muted-foreground">
@@ -226,14 +257,17 @@ export default function AdminDashboard() {
                     <td className="py-3 pr-4 text-sm">{order.amount.toLocaleString()}원</td>
                     <td className="py-3">
                       <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
-                        order.status === 'deployed' ? 'bg-green-100 text-green-700' :
-                        order.status === 'paid' ? 'bg-blue-100 text-blue-700' :
-                        order.status === 'expired' ? 'bg-gray-100 text-gray-700' :
-                        'bg-red-100 text-red-700'
+                        order.status === 'published' || order.status === 'delivered' ? 'bg-green-100 text-green-700' :
+                        order.status === 'in_production' || order.status === 'design_review' ? 'bg-blue-100 text-blue-700' :
+                        order.status === 'form_completed' ? 'bg-amber-100 text-amber-700' :
+                        'bg-gray-100 text-gray-700'
                       }`}>
-                        {order.status === 'deployed' ? '배포중' :
-                         order.status === 'paid' ? '결제완료' :
-                         order.status === 'expired' ? '만료됨' : '환불'}
+                        {order.status === 'registered' ? '고객 등록' :
+                         order.status === 'form_sent' ? '폼 발송' :
+                         order.status === 'form_completed' ? '폼 작성완료' :
+                         order.status === 'in_production' ? '제작중' :
+                         order.status === 'design_review' ? '디자인 피드백중' :
+                         order.status === 'published' ? '발행완료' : '전달완료'}
                       </span>
                     </td>
                   </tr>

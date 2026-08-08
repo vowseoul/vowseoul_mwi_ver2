@@ -7,7 +7,8 @@ import { Footer } from '@/components/footer'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { sampleThemes, Theme } from '@/lib/store'
-import { supabase } from '@/lib/supabase'
+import { supabase, logSupabaseError } from '@/lib/supabase'
+import { resolveThemeSwatch } from '@/lib/theme-template'
 import { Eye, FileText, Loader2 } from 'lucide-react'
 
 export default function TemplatesPage() {
@@ -17,7 +18,8 @@ export default function TemplatesPage() {
 
   useEffect(() => {
     const fetchThemes = async () => {
-      const { data } = await supabase.from('themes').select('*')
+      const { data, error } = await supabase.from('themes').select('*')
+      logSupabaseError('fetchThemes (templates page)', error)
       if (data && data.length > 0) {
         setThemes(data as any)
       } else {
@@ -56,9 +58,7 @@ export default function TemplatesPage() {
             ) : (
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {themes.map((theme) => {
-                  const defaultBg = theme.colorSets?.[0]?.colors?.[0] || theme.styles?.backgroundColor || '#FFF8F0';
-                  const defaultText = theme.colorSets?.[0]?.colors?.[2] || theme.styles?.textColor || '#3A3A3A';
-                  const defaultPrimary = theme.colorSets?.[0]?.colors?.[1] || theme.styles?.primaryColor || '#E8A87C';
+                  const { bg: defaultBg, text: defaultText, primary: defaultPrimary } = resolveThemeSwatch(theme);
 
                   return (
                     <div
@@ -103,19 +103,19 @@ export default function TemplatesPage() {
                               size="sm"
                               asChild
                             >
-                              <Link href={`/preview/template/${theme.id}`}>
+                              <Link href={`/preview/theme/${theme.id}`}>
                                 <Eye className="mr-1.5 h-4 w-4" />
                                 샘플 미리보기
                               </Link>
                             </Button>
-                            <Button 
+                            <Button
                               size="sm"
                               asChild
                             >
-                              <Link href={`/editor/new?theme=${theme.id}`}>
+                              <a href="https://mkt.shopping.naver.com/link/6a20207aa4d80c5688e963db" target="_blank" rel="noopener noreferrer">
                                 <FileText className="mr-1.5 h-4 w-4" />
-                                청첩장 만들기
-                              </Link>
+                                이 템플릿으로 구매하기
+                              </a>
                             </Button>
                           </div>
                         </div>
@@ -147,10 +147,12 @@ export default function TemplatesPage() {
               원하는 템플릿을 찾지 못하셨나요?
             </h2>
             <p className="mt-3 text-muted-foreground">
-              직접 디자인하기 기능으로 처음부터 나만의 청첩장을 만들어보세요.
+              스토어에서 상담을 통해 나만의 청첩장을 만들어보세요.
             </p>
             <Button size="lg" className="mt-6" asChild>
-              <Link href="/editor/new">직접 디자인하기</Link>
+              <a href="https://mkt.shopping.naver.com/link/6a20207aa4d80c5688e963db" target="_blank" rel="noopener noreferrer">
+                스토어 바로가기
+              </a>
             </Button>
           </div>
         </section>

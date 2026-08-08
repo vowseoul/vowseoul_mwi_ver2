@@ -126,13 +126,15 @@ export function HeroSection() {
           >
             <Link href="/templates">디자인 템플릿</Link>
           </Button>
-          <Button 
-            size="lg" 
-            variant="outline" 
+          <Button
+            size="lg"
+            variant="outline"
             className="min-w-[180px] border-white text-white bg-transparent hover:bg-white/10"
             asChild
           >
-            <Link href="/editor/new">직접 디자인하기</Link>
+            <a href="https://mkt.shopping.naver.com/link/6a20207aa4d80c5688e963db" target="_blank" rel="noopener noreferrer">
+              스토어에서 구매하기
+            </a>
           </Button>
         </div>
       </div>

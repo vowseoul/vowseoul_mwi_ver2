@@ -50,8 +50,6 @@ export default function AdminLoginPage() {
         }
 
         setAuth(true, true)
-        // Write cookie for middleware to see
-        document.cookie = `sb-vowseoul-auth-token=${data.session?.access_token || 'true'}; path=/; max-age=604800; SameSite=Lax`
         router.push('/admin')
       }
     } catch (err: any) {

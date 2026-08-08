@@ -1,49 +1,18 @@
 import { Metadata } from 'next'
-import { supabase } from '@/lib/supabase'
 
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const invitationId = params.id
-
-  try {
-    // 1. invitations 테이블에서 기본 정보(신랑 신부명 등) 조회
-    const { data: invite } = await supabase
-      .from('invitations')
-      .select('groomName, brideName')
-      .eq('id', invitationId)
-      .single()
-
-    // 2. orders 테이블에서 고객명(customerName) 조회
-    const { data: order } = await supabase
-      .from('orders')
-      .select('customerName')
-      .eq('invitationId', invitationId)
-      .single()
-
-    const customerName = order?.customerName || `${invite?.groomName || '신랑'} & ${invite?.brideName || '신부'}`
-    const title = `${customerName}님의 청첩장 관리 대시보드`
-    const description = `${invite?.groomName || '신랑'} ♡ ${invite?.brideName || '신부'}의 예식 하객 RSVP 및 방명록 관리 대시보드입니다.`
-
-    return {
-      title,
-      description,
-      openGraph: {
-        title,
-        description,
-        type: 'website',
-      },
-      twitter: {
-        card: 'summary',
-        title,
-        description,
-      }
-    }
-  } catch (err) {
-    console.error('Error generating metadata for dashboard:', err)
-    return {
-      title: '청첩장 관리 대시보드',
-      description: 'VOW SEOUL 모바일 청첩장 하객 RSVP 및 방명록 관리 대시보',
-    }
-  }
+/**
+ * 이 라우트는 비밀번호로 보호되는 신랑신부 전용 대시보드다.
+ *
+ * 이전 구현은 여기서 `invitations.groomName` / `orders.customerName` 을 조회해
+ * 제목에 실명을 넣으려 했는데, 두 컬럼 모두 존재하지 않아(예식 정보는
+ * content_data 안에 있고 orders 는 재설계됐다) 항상 catch 로 떨어져 폴백
+ * 제목만 나왔다. 게다가 메타데이터는 인증 전에 생성되므로 UUID 만 아는
+ * 사람에게 커플 실명이 노출된다 — 고정 제목으로 두는 편이 맞다.
+ */
+export const metadata: Metadata = {
+  title: '청첩장 관리 대시보드',
+  description: 'VOW SEOUL 모바일 청첩장 하객 RSVP 및 방명록 관리 대시보드입니다.',
+  robots: { index: false, follow: false },
 }
 
 export default function DashboardLayout({

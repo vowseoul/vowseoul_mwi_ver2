@@ -9,13 +9,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Menu, ChevronLeft } from 'lucide-react'
-import { useAppStore } from '@/lib/store'
 import { usePathname, useRouter } from 'next/navigation'
 
 import { Logo } from '@/components/logo'
 
 export function Header() {
-  const { isAuthenticated, setAuth } = useAppStore()
   const pathname = usePathname()
   const router = useRouter()
   const isHome = pathname === '/'
@@ -56,31 +54,6 @@ export function Header() {
         </nav>
 
         <div className="flex items-center gap-4">
-          {isAuthenticated ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm">
-                  마이페이지
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem asChild>
-                  <Link href="/mypage">내 청첩장</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/mypage/orders">주문 내역</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setAuth(false, false)}>
-                  로그아웃
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/login">로그인</Link>
-            </Button>
-          )}
-
           {/* Mobile Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild className="md:hidden">

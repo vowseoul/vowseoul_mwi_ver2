@@ -2,7 +2,6 @@
 
 import React, { useState, use, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -23,33 +22,27 @@ function DashboardVerifyContent({ slug }: { slug: string }) {
     setError('')
 
     try {
-      // Lookup the invitation by public_slug
-      const { data, error: queryError } = await supabase
-        .from('invitations')
-        .select('id, dashboard_password, customer:customer_id(groom_name, bride_name)')
-        .eq('public_slug', slug)
-        .single()
+      // 비밀번호 비교는 전적으로 서버에서 이뤄진다 — 예전처럼 dashboard_password 를
+      // 브라우저로 내려받지 않는다. 성공하면 서명된 httpOnly 쿠키가 심어지고,
+      // 대시보드 Server Component 가 그 쿠키를 검증한다.
+      const res = await fetch('/api/dashboard-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug, password }),
+      })
+      const result = await res.json().catch(() => ({}))
 
-      if (queryError || !data) {
-        setError('일치하는 청첩장 대시보드를 찾을 수 없습니다.')
-        toast.error('대시보드 조회 실패')
+      if (!res.ok) {
+        const message = result?.error || '인증에 실패했습니다.'
+        setError(message)
+        toast.error(message)
         setIsVerifying(false)
         return
       }
 
-      // Verify passcode (usually last 4 digits of the phone number)
-      if (password === data.dashboard_password) {
-        toast.success('인증에 성공했습니다. 대시보드로 진입합니다.')
-        // Store session token in localStorage for client-side reference
-        localStorage.setItem(`vow_seoul_dashboard_authorized_${data.id}`, 'true')
-        
-        // Redirect to the actual dashboard
-        router.push(`/invitation/${data.id}/dashboard`)
-      } else {
-        setError('비밀번호가 올바르지 않습니다. (기본값: 연락처 뒷 4자리)')
-        toast.error('비밀번호가 일치하지 않습니다.')
-      }
-    } catch (err: any) {
+      toast.success('인증에 성공했습니다. 대시보드로 진입합니다.')
+      router.push(`/invitation/${result.invitationId}/dashboard`)
+    } catch (err) {
       console.error(err)
       setError('인증 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
     } finally {
@@ -58,7 +51,7 @@ function DashboardVerifyContent({ slug }: { slug: string }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans px-4">
+    <div className="min-h-screen bg-muted flex items-center justify-center font-sans px-4">
       <Card className="w-full max-w-md shadow-lg border-border">
         <CardHeader className="text-center pb-2">
           <div className="mx-auto mb-4 flex justify-center">
@@ -112,7 +105,7 @@ export default function DashboardVerifyPage({ params }: { params: Promise<{ slug
   const { slug } = use(params)
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-screen bg-muted flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     }>

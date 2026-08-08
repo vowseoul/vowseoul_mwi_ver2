@@ -1,0 +1,518 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Noto+Serif+KR:wght@200;300;400;500;600&display=swap');
+
+/* 기본 토큰값 — :root 는 InvitationFrame 이 실제 값을 인라인 스타일로 주입하는 대상과
+   동일한 요소이므로, 여기 선언은 토큰이 없을 때만 쓰이는 폴백으로 항상 정상 override 된다.
+   (.ms-container 안에서 재선언하면 자기참조 순환이 되어 항상 무효화되므로 여기서 선언한다) */
+:root {
+  --bg: #FFF8F0;
+  --accent: #E8A87C;
+  --accent-light: rgba(232, 168, 124, 0.1);
+  --ink: #3A3A3A;
+  --ink-2: #8A8A8A;
+  --font-kr: 'Noto Serif KR', serif;
+  --font-en: 'Cormorant Garamond', serif;
+}
+
+.ms-container {
+  max-w: 480px;
+  margin: 0 auto;
+  background-color: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-kr);
+  line-height: 1.6;
+  position: relative;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
+  min-height: 100vh;
+  overflow-x: hidden;
+  letter-spacing: -0.02em;
+}
+
+/* Sections alternating background styling */
+.ms-section {
+  padding: var(--section-py, 64px) var(--section-px, 32px);
+  text-align: center;
+  position: relative;
+}
+
+.ms-section:nth-of-type(even) {
+  background-color: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.ms-section:nth-of-type(odd) {
+  background-color: rgba(58, 58, 58, 0.03);
+}
+
+/* Base Card Style */
+.ms-card {
+  background-color: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(232, 168, 124, 0.15);
+  border-radius: var(--radius, 8px);
+  padding: 1.5rem;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.02);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  color: inherit;
+}
+
+.ms-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(232, 168, 124, 0.08);
+}
+
+/* Headings */
+.ms-section__header {
+  margin-bottom: 2.5rem;
+}
+
+.ms-section__subtitle {
+  font-family: var(--font-en);
+  font-size: var(--text-label, 13.6px);
+  letter-spacing: 0.3em;
+  color: var(--accent);
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.ms-section__title {
+  font-size: var(--text-title, 21.6px);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+/* Divider */
+.ms-divider {
+  color: var(--accent);
+  font-size: 0.75rem;
+  margin: 1.5rem auto;
+  opacity: 0.6;
+  text-align: center;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 50%;
+}
+
+.ms-divider::before,
+.ms-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background-color: var(--accent);
+  opacity: 0.2;
+}
+
+.ms-divider::before {
+  margin-right: 12px;
+}
+
+.ms-divider::after {
+  margin-left: 12px;
+}
+
+/* Button styles */
+.ms-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background-color: var(--accent);
+  color: #fff !important;
+  border: none;
+  border-radius: 6px;
+  padding: 0.6rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease, opacity 0.2s ease;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.ms-button:hover {
+  opacity: 0.9;
+  background-color: #df996e;
+}
+
+.ms-button--copy {
+  background-color: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent) !important;
+  margin-top: 1rem;
+}
+
+.ms-button--copy:hover {
+  background-color: var(--accent-light);
+}
+
+.ms-button__icon {
+  flex-shrink: 0;
+}
+
+/* Hero Section */
+.ms-hero {
+  position: relative;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2rem;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.ms-hero__bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.ms-hero__bg-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.22;
+}
+
+.ms-hero__overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, var(--bg), transparent 60%, var(--bg) 100%);
+}
+
+.ms-hero__content {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-w: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+.ms-hero__sub {
+  font-family: var(--font-en);
+  font-size: var(--text-label, 14.4px);
+  letter-spacing: 0.4em;
+  opacity: 0.6;
+}
+
+.ms-hero__names {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.ms-hero__name-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.ms-hero__relation {
+  font-size: 0.75rem;
+  opacity: 0.6;
+  letter-spacing: 0.1em;
+}
+
+.ms-hero__name {
+  font-size: var(--text-display, 32px);
+  font-weight: 300;
+  letter-spacing: 0.1em;
+}
+
+.ms-hero__connector {
+  font-family: var(--font-en);
+  font-size: 1.5rem;
+  font-style: italic;
+  color: var(--accent);
+  opacity: 0.7;
+}
+
+.ms-hero__details {
+  border-top: 1px solid rgba(58, 58, 58, 0.1);
+  padding-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+
+.ms-hero__date {
+  font-weight: 500;
+}
+
+.ms-hero__venue {
+  font-weight: 500;
+}
+
+.ms-hero__scroll {
+  position: absolute;
+  bottom: 2rem;
+  animation: ms-float 2s infinite ease-in-out;
+  color: var(--accent);
+  opacity: 0.7;
+  z-index: 1;
+}
+
+@keyframes ms-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(8px); }
+}
+
+/* Greeting Section */
+.ms-greeting__message {
+  font-size: var(--text-body, 15.2px);
+  line-height: 2.1;
+  letter-spacing: 0.02em;
+  white-space: pre-line;
+  max-width: 320px;
+  margin: 0 auto 3rem auto;
+}
+
+.ms-greeting__image {
+  max-width: 320px;
+  margin: -2rem auto 3rem auto;
+}
+
+.ms-greeting__image img {
+  width: 100%;
+  height: auto;
+}
+
+.ms-parents {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--content-gap, 32px);
+  max-width: 340px;
+  margin: 0 auto;
+}
+
+.ms-parents__col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ms-parents__role {
+  font-size: 0.75rem;
+  opacity: 0.55;
+  margin-bottom: 0.2rem;
+}
+
+.ms-parents__child {
+  font-size: 1.25rem;
+  font-weight: 500;
+  margin-bottom: 0.6rem;
+}
+
+.ms-parents__divider {
+  width: 20px;
+  height: 1px;
+  background-color: var(--accent);
+  opacity: 0.4;
+  margin-bottom: 0.8rem;
+}
+
+.ms-parents__info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.ms-parents__parent {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.ms-parents__label {
+  opacity: 0.5;
+}
+
+/* Sequence Section */
+.ms-timeline {
+  position: relative;
+  max-width: 300px;
+  margin: 0 auto;
+  padding-left: 2rem;
+  text-align: left;
+}
+
+.ms-timeline__line {
+  position: absolute;
+  left: 3px;
+  top: 0.5rem;
+  bottom: 0.5rem;
+  width: 1px;
+  background-color: var(--accent);
+  opacity: 0.2;
+}
+
+.ms-timeline__item {
+  position: relative;
+  padding-bottom: 2rem;
+}
+
+.ms-timeline__item:last-child {
+  padding-bottom: 0;
+}
+
+.ms-timeline__dot {
+  position: absolute;
+  left: -2rem;
+  top: 0.4rem;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--accent);
+  border: 2px solid var(--bg);
+  box-shadow: 0 0 0 1px rgba(232, 168, 124, 0.4);
+}
+
+.ms-timeline__time {
+  font-family: var(--font-en);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 0.2rem;
+}
+
+.ms-timeline__event {
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+/* Calendar Section */
+.ms-dday {
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  margin-bottom: 1.2rem;
+}
+
+.ms-calendar__card {
+  max-width: 320px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem;
+}
+
+.ms-calendar__header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-bottom: 1.5rem;
+}
+
+.ms-calendar__month {
+  font-family: var(--font-en);
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  color: var(--accent);
+}
+
+.ms-calendar__year {
+  font-size: 0.75rem;
+  opacity: 0.45;
+}
+
+.ms-calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.5rem 0.25rem;
+  text-align: center;
+}
+
+.ms-calendar__day-name {
+  font-size: 0.7rem;
+  font-weight: 600;
+  opacity: 0.5;
+  padding-bottom: 0.5rem;
+}
+
+.ms-calendar__day {
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.8rem;
+  width: 1.8rem;
+  margin: 0 auto;
+}
+
+.ms-calendar__day--empty {
+  pointer-events: none;
+}
+
+.ms-calendar__day--active {
+  background-color: var(--accent);
+  color: #fff;
+  border-radius: 50%;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(232, 168, 124, 0.3);
+}
+
+/* Location Section */
+.ms-location__info-card {
+  max-width: 340px;
+  margin: 0 auto 1.5rem auto;
+  text-align: left;
+}
+
+.ms-location__venue {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+}
+
+.ms-location__hall {
+  color: var(--accent);
+  font-size: 0.95rem;
+  font-weight: 500;
+  margin-bottom: 0.6rem;
+}
+
+.ms-location__address {
+  font-size: var(--text-caption, 13.6px);
+  color: var(--ink-2);
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+.ms-location__guides {
+  max-width: 340px;
+  margin: 1.5rem auto 0 auto;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+  border-top: 1px solid rgba(58, 58, 58, 0.08);
+  padding-top: 1.5rem;
+}
+
+.ms-location__guide-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 0.25rem;
+}
+
+.ms-location__guide-desc {
+  font-size: var(--text-caption, 13.6px);
+  color: var(--ink-2);
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+/* Platform Slots Default styles override */
+.ms-slot {
+  width: 100%;
+}

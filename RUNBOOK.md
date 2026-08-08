@@ -18,7 +18,20 @@ pnpm dev # 또는 npm run dev
 ```
 * 로컬 서버 주소: http://localhost:3000 (또는 포트 충돌 시 3001 등)
 
-### 1.2 배포 빌드 및 실행 (Production Build)
+### 1.2 환경변수 (.env.local / 배포 환경 동일하게 설정)
+
+| 변수 | 노출 | 설명 |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | 공개 | Supabase 프로젝트 URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 공개 | 브라우저용 anon 키 |
+| `DASHBOARD_SESSION_SECRET` | **비공개** | 신랑신부 대시보드 접근 쿠키 HMAC 서명 키. 미설정 시 개발 환경에서만 고정 폴백이 쓰이고 프로덕션에서는 부팅이 실패한다. |
+| `SUPABASE_SERVICE_ROLE_KEY` | **비공개** | RLS 를 우회하는 서버 전용 키. 발행 청첩장 렌더·방문 로그·신랑신부 대시보드가 익명 사용자를 대신해 읽을 때 쓴다. Supabase 대시보드 > Project Settings > API 에서 발급. |
+
+> `SUPABASE_SERVICE_ROLE_KEY` 가 없으면 `lib/supabase-admin.ts` 가 anon 키로 폴백하며 경고를 남긴다.
+> RLS 강화 마이그레이션(`20260728000000_tighten_rls.sql`)을 적용한 뒤에는 이 폴백으로 동작하지 않으므로,
+> **마이그레이션 적용 전에 반드시 키를 먼저 설정**할 것. 두 비공개 키 모두 `NEXT_PUBLIC_` 접두사를 붙이면 안 된다.
+
+### 1.3 배포 빌드 및 실행 (Production Build)
 ```bash
 # Next.js 최적화 배포 빌드 생성
 pnpm build # 또는 npm run build
@@ -52,14 +65,16 @@ pnpm start # 또는 npm run start
 ### 3.1 DB 쿼리 오류 (HTTP 404 / 406 Not Acceptable 등)
 * **상황**: 특정 페이지 진입 시 `.single()` 쿼리로 인해 0개의 행 반환 시 406 에러가 떨어지거나, 존재하지 않는 테이블(예: faqs, bgms 등) 조회 시 404가 발생할 때.
 * **조치**:
-  1. 테이블이 누락된 경우, `supabase_schema.sql` 스크립트를 Supabase SQL Editor를 통해 한 번 더 실행해 해당 테이블을 복구합니다.
+  1. 테이블이 누락된 경우, `supabase/migrations/` 하위 마이그레이션 파일들을 Supabase SQL Editor에서 순서대로(파일명 타임스탬프 순) 실행해 복구합니다.
+     단 `faqs`/`bgms`/`orders`/`notices`/`inquiries` 는 애초에 어떤 마이그레이션에도 정의되어 있지 않았던 테이블이라
+     기존 파일을 재실행해도 복구되지 않습니다 — WORKPLAN.md §1-B 스키마로 신규 마이그레이션을 작성해야 합니다.
   2. 조회 결과가 null일 수 있는 쿼리에는 JS Supabase Client에서 `.single()` 대신 반드시 `.maybeSingle()`을 사용하여 빈 결과가 에러로 터지지 않도록 예외 처리합니다.
 
 ### 3.2 갤러리 이미지 원본 고화질 다운로드 실패
 * **상황**: 고객 응답 상세 페이지에서 첨부한 고화질 원본 이미지 다운로드 시 CORS 혹은 네트워크 끊김 현상 발생.
 * **조치**:
   1. 스토리지 버킷의 보안 정책(RLS Policy)이 `public` 읽기/쓰기가 가능한 상태인지 Supabase Storage 메뉴에서 검사합니다.
-  2. 스토리지 권한이 꼬인 경우, `create_storage_bucket.sql` 내 스크립트를 이용해 버킷과 정책을 다시 선언하십시오.
+  2. 스토리지 권한이 꼬인 경우, `supabase/migrations/20260709000000_storage_bucket.sql` 을 이용해 버킷과 정책을 다시 선언하십시오.
   3. 클라이언트 브라우저가 직접 URL 다운로드에 실패하는 경우 헬퍼 함수가 새 탭 열기(`window.open(imgUrl, '_blank')`)로 대체 동작하여 유실을 방지합니다.
 
 ### 3.3 고객의 폼 데이터 유실 혹은 모바일 오류 문의

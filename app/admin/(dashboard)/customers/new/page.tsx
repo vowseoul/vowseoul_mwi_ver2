@@ -16,6 +16,7 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { useCreateCustomerMutation, useProfilesQuery } from '@/hooks/queries/useCustomers'
+import { usePaperTypesQuery, DEFAULT_PAPER_TYPES, NO_PAPER_OPTION } from '@/hooks/queries/usePaperTypes'
 import { ArrowLeft, Save, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -23,13 +24,15 @@ export default function NewCustomerPage() {
   const router = useRouter()
   const createMutation = useCreateCustomerMutation()
   const { data: profiles, isLoading: isLoadingProfiles } = useProfilesQuery()
+  const { data: paperTypes } = usePaperTypesQuery()
 
   // Form State
   const [orderer, setOrderer] = useState('')
   const [ordererType, setOrdererType] = useState<'groom' | 'bride'>('groom')
   const [phone, setPhone] = useState('')
   const [assignedTo, setAssignedTo] = useState('none')
-  const [paperType, setPaperType] = useState('클래식 화이트')
+  // 초기값은 아래에서 실제 라인업의 첫 항목으로 해석한다 (setState-in-effect 회피)
+  const [paperType, setPaperType] = useState('')
   const [mobileYn, setMobileYn] = useState('O')
   const [memo, setMemo] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -51,7 +54,9 @@ export default function NewCustomerPage() {
       const weddingDateString = dummyDate.toISOString().slice(0, 10)
 
       const isGroom = ordererType === 'groom'
-      const formattedMemo = `[주문자: ${orderer} (${isGroom ? '신랑' : '신부'}) | 연락처: ${phone} | 지류: ${paperType} | 모바일: ${mobileYn}]${memo ? ` / 메모: ${memo}` : ''}`
+      // Select 가 미선택 상태면 화면에 보이는 첫 항목이 곧 선택값이다
+      const resolvedPaperType = paperType || (paperTypes ?? DEFAULT_PAPER_TYPES)[0]
+      const formattedMemo = `[주문자: ${orderer} (${isGroom ? '신랑' : '신부'}) | 연락처: ${phone} | 지류: ${resolvedPaperType} | 모바일: ${mobileYn}]${memo ? ` / 메모: ${memo}` : ''}`
 
       await createMutation.mutateAsync({
         groom_name: isGroom ? orderer.trim() : '미지정',
@@ -158,16 +163,19 @@ export default function NewCustomerPage() {
 
                 <Field>
                   <FieldLabel htmlFor="paperType">지류 청첩장</FieldLabel>
-                  <Select value={paperType} onValueChange={setPaperType}>
+                  <Select
+                    value={paperType || (paperTypes ?? DEFAULT_PAPER_TYPES)[0]}
+                    onValueChange={setPaperType}
+                  >
                     <SelectTrigger id="paperType">
                       <SelectValue placeholder="지류 종류 선택" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="클래식 화이트">클래식 화이트</SelectItem>
-                      <SelectItem value="시그니처 레더">시그니처 레더</SelectItem>
-                      <SelectItem value="럭스 골드">럭스 골드</SelectItem>
-                      <SelectItem value="오가닉 린넨">오가닉 린넨</SelectItem>
-                      <SelectItem value="선택 안 함 (지류 없음)">선택 안 함 (지류 없음)</SelectItem>
+                      {/* 라인업은 시스템 설정 > 일반 에서 관리한다 (settings.paper_types) */}
+                      {(paperTypes ?? DEFAULT_PAPER_TYPES).map((type) => (
+                        <SelectItem key={type} value={type}>{type}</SelectItem>
+                      ))}
+                      <SelectItem value={NO_PAPER_OPTION}>{NO_PAPER_OPTION}</SelectItem>
                     </SelectContent>
                   </Select>
                 </Field>

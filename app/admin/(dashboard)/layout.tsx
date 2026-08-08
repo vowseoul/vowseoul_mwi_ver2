@@ -25,8 +25,7 @@ import {
   FileText,
   Sparkles,
   LogOut,
-  HelpCircle,
-  Megaphone
+  HelpCircle
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -38,6 +37,7 @@ const navItems = [
   { href: '/admin/orders', label: '주문 관리', icon: ShoppingCart },
   { href: '/admin/assets', label: '에셋 관리', icon: Palette },
   { href: '/admin/statistics', label: '통계', icon: BarChart3 },
+  { href: '/admin/inquiries', label: '문의 관리', icon: HelpCircle },
   { href: '/admin/settings', label: '시스템 설정', icon: Settings },
 ]
 
@@ -75,7 +75,6 @@ export default function AdminLayout({
           console.error('Not authorized as admin:', profileError)
           // Attempt sign out since they are not an admin
           await supabase.auth.signOut()
-          document.cookie = 'sb-vowseoul-auth-token=; path=/; max-age=0; SameSite=Lax'
           window.location.href = '/admin/login'
           return
         }
@@ -94,7 +93,6 @@ export default function AdminLayout({
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    document.cookie = 'sb-vowseoul-auth-token=; path=/; max-age=0; SameSite=Lax'
     setAuth(false, false)
     window.location.href = '/admin/login'
   }

@@ -1,0 +1,22 @@
+[
+  "main_image",
+  "groom_name",
+  "bride_name",
+  "groom_relationship",
+  "bride_relationship",
+  "wedding_date_display",
+  "wedding_time",
+  "venue_name",
+  "venue_hall",
+  "venue_address",
+  "greeting_message",
+  "groom_father_name",
+  "groom_mother_name",
+  "bride_father_name",
+  "bride_mother_name",
+  "wedding_dday",
+  "traffic_info",
+  "parking_info",
+  "shuttle_info",
+  "greeting_image"
+]

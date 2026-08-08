@@ -16,3 +16,6 @@ Thumbs.db
 .next/
 node_modules/
 .env*.local
+
+# TypeScript 증분 빌드 캐시
+tsconfig.tsbuildinfo

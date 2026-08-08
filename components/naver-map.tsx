@@ -28,9 +28,16 @@ export function NaverMap({ address, venueName }: NaverMapProps) {
       return;
     }
 
+    const clientId = process.env.NEXT_PUBLIC_NCP_MAP_CLIENT_ID;
+    if (!clientId) {
+      console.error('NEXT_PUBLIC_NCP_MAP_CLIENT_ID 환경변수가 설정되지 않았습니다.');
+      setMapError(true);
+      return;
+    }
+
     const script = document.createElement('script');
     script.id = 'naver-maps-script';
-    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=od370yq3ix`;
+    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${clientId}`;
     script.async = true;
     script.onload = () => setScriptLoaded(true);
     document.head.appendChild(script);

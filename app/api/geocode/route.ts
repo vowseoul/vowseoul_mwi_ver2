@@ -9,6 +9,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Query is required' }, { status: 400 });
   }
 
+  const apiKeyId = process.env.NCP_MAPS_API_KEY_ID;
+  const apiKey = process.env.NCP_MAPS_API_KEY;
+  if (!apiKeyId || !apiKey) {
+    console.error('NCP_MAPS_API_KEY_ID / NCP_MAPS_API_KEY 환경변수가 설정되지 않았습니다.');
+    return NextResponse.json({ error: 'Geocoding service not configured' }, { status: 500 });
+  }
+
   return new Promise<Response>((resolve) => {
     const encodedQuery = encodeURIComponent(query);
     const options = {
@@ -17,8 +24,8 @@ export async function GET(request: Request) {
       method: 'GET',
       headers: {
         // NCP Maps Geocoding API가 요구하는 정확한 대문자 헤더를 전송합니다.
-        'X-NCP-APIGW-API-KEY-ID': 'od370yq3ix',
-        'X-NCP-APIGW-API-KEY': 'PjdSYiZq4qw7CWQVGtIuitUJJezKhkhFOU5SzizE',
+        'X-NCP-APIGW-API-KEY-ID': apiKeyId,
+        'X-NCP-APIGW-API-KEY': apiKey,
         'Accept': 'application/json'
       }
     };
