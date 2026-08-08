@@ -36,6 +36,11 @@ export const metadata: Metadata = {
     ],
     apple: '/apple-icon.png',
   },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'VOW SEOUL',
+  },
 }
 
 export const viewport: Viewport = {
@@ -64,10 +69,7 @@ export default function RootLayout({
         </QueryProvider>
         <Toaster position="top-center" richColors />
         {process.env.NODE_ENV === 'production' && <Analytics />}
-      {/* impeccable-live-start */}
-<script src="http://localhost:8400/live.js"></script>
-{/* impeccable-live-end */}
-</body>
+      </body>
     </html>
   )
 }
