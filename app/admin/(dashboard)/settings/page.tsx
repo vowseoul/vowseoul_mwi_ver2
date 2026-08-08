@@ -1091,61 +1091,89 @@ export default function AdminSettingsPage() {
               </Dialog>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left border-collapse">
-                  <thead>
-                    <tr className="bg-muted/30 border-b border-border text-muted-foreground font-medium">
-                      <th className="p-3.5">이름</th>
-                      <th className="p-3.5">연락처</th>
-                      <th className="p-3.5">이메일</th>
-                      <th className="p-3.5">권한</th>
-                      <th className="p-3.5 text-right w-16">관리</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {isLoadingProfiles ? (
-                      <tr>
-                        <td colSpan={5} className="p-8 text-center text-muted-foreground">
-                          <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-primary" />
-                          직원 목록을 불러오는 중입니다...
-                        </td>
-                      </tr>
-                    ) : profiles?.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="p-8 text-center text-muted-foreground">
-                          등록된 직원 계정이 없습니다.
-                        </td>
-                      </tr>
-                    ) : (
-                      profiles?.map((profile: any) => {
-                        const [namePart, phonePart] = (profile.name || "").split("|").map((s: string) => s.trim())
-                        return (
-                          <tr key={profile.id} className="border-b border-border hover:bg-muted/10 transition-colors">
-                            <td className="p-3.5 font-medium">{namePart || "이름 없음"}</td>
-                            <td className="p-3.5 text-muted-foreground">{phonePart || "-"}</td>
-                            <td className="p-3.5 font-mono">{profile.email}</td>
-                            <td className="p-3.5">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${profile.role === 'ADMIN' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-950/30 dark:text-blue-300'}`}>
+              {isLoadingProfiles ? (
+                <div className="p-8 text-center text-xs text-muted-foreground">
+                  <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-primary" />
+                  직원 목록을 불러오는 중입니다...
+                </div>
+              ) : profiles?.length === 0 ? (
+                <div className="p-8 text-center text-xs text-muted-foreground">
+                  등록된 직원 계정이 없습니다.
+                </div>
+              ) : (
+                <>
+                  {/* 모바일 카드 리스트 — sm 미만에서는 5열 테이블 대신 카드로 보여준다 */}
+                  <div className="sm:hidden divide-y divide-border">
+                    {profiles?.map((profile: any) => {
+                      const [namePart, phonePart] = (profile.name || "").split("|").map((s: string) => s.trim())
+                      return (
+                        <div key={profile.id} className="flex items-start justify-between gap-3 p-3.5">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium">{namePart || "이름 없음"}</span>
+                              <span className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-bold ${profile.role === 'ADMIN' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-950/30 dark:text-blue-300'}`}>
                                 {profile.role === 'ADMIN' ? '운영자' : '디자이너'}
                               </span>
-                            </td>
-                            <td className="p-3.5 text-right">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-destructive hover:bg-destructive/10"
-                                onClick={() => handleDeleteStaff(profile.id, profile.email)}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
-                            </td>
-                          </tr>
-                        )
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                            </div>
+                            <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">{profile.email}</p>
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">{phonePart || "-"}</p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0 text-destructive hover:bg-destructive/10"
+                            onClick={() => handleDeleteStaff(profile.id, profile.email)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* 데스크톱/태블릿 테이블 — sm 이상에서만 보인다 */}
+                  <div className="hidden sm:block overflow-x-auto">
+                    <table className="w-full text-xs text-left border-collapse">
+                      <thead>
+                        <tr className="bg-muted/30 border-b border-border text-muted-foreground font-medium">
+                          <th className="p-3.5">이름</th>
+                          <th className="p-3.5">연락처</th>
+                          <th className="p-3.5">이메일</th>
+                          <th className="p-3.5">권한</th>
+                          <th className="p-3.5 text-right w-16">관리</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {profiles?.map((profile: any) => {
+                          const [namePart, phonePart] = (profile.name || "").split("|").map((s: string) => s.trim())
+                          return (
+                            <tr key={profile.id} className="border-b border-border hover:bg-muted/10 transition-colors">
+                              <td className="p-3.5 font-medium">{namePart || "이름 없음"}</td>
+                              <td className="p-3.5 text-muted-foreground">{phonePart || "-"}</td>
+                              <td className="p-3.5 font-mono">{profile.email}</td>
+                              <td className="p-3.5">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${profile.role === 'ADMIN' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-950/30 dark:text-blue-300'}`}>
+                                  {profile.role === 'ADMIN' ? '운영자' : '디자이너'}
+                                </span>
+                              </td>
+                              <td className="p-3.5 text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                                  onClick={() => handleDeleteStaff(profile.id, profile.email)}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

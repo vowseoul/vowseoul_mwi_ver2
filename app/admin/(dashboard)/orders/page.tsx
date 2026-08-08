@@ -463,7 +463,119 @@ export default function OrdersPage() {
           <CardTitle className="text-lg">주문 목록 ({sortedOrders.length}건)</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          {/* 모바일 카드 리스트 — sm 미만에서는 8열 테이블 대신 카드로 보여준다 (가로 스크롤 없이 스캔 가능) */}
+          <div className="sm:hidden divide-y divide-border">
+            {sortedOrders.map((order) => {
+              const actualThemeId = invitationThemes[order.invitationId]
+              const matchedTheme = actualThemeId ? (themes.find(t => t.id === actualThemeId) || sampleThemes.find(t => t.id === actualThemeId)) : null
+              const themeName = matchedTheme ? matchedTheme.name : order.theme
+              return (
+                <div key={order.id} className="py-4 first:pt-0 last:pb-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{order.groomName} & {order.brideName}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{order.id} · {order.createdAt}</p>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="icon" className="h-8 w-8 shrink-0">
+                          {isActionLoading === order.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Settings className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-[200px]">
+                        <DropdownMenuItem asChild>
+                          <Link href={`/admin/orders/${order.id}`} className="cursor-pointer flex items-center gap-2 w-full">
+                            <Pencil className="h-4 w-4" />
+                            <span>청첩장 수정하기</span>
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleCopyLink(order.invitationId)}
+                          className="cursor-pointer flex items-center gap-2 w-full"
+                        >
+                          <Link2 className="h-4 w-4" />
+                          <span>링크 복사하기</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleCopyDashboardLink(order.invitationId)}
+                          className="cursor-pointer flex items-center gap-2 w-full"
+                        >
+                          <Copy className="h-4 w-4" />
+                          <span>대시보드 링크 복사</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleOpenEditDialog(order)}
+                          className="cursor-pointer flex items-center gap-2 w-full"
+                        >
+                          <Settings className="h-4 w-4" />
+                          <span>주문 내역 수정</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleDuplicateOrder(order)}
+                          className="cursor-pointer flex items-center gap-2 w-full"
+                        >
+                          <Copy className="h-4 w-4" />
+                          <span>청첩장 복사하기</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => handleDeleteOrder(order.id, order.invitationId)}
+                          className="cursor-pointer text-destructive focus:bg-destructive/10 dark:focus:bg-destructive/20 focus:text-destructive flex items-center gap-2 w-full"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          <span>청첩장 삭제하기</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2.5 text-sm">
+                    <div>
+                      <span className="block text-xs text-muted-foreground">예식일</span>
+                      {order.weddingDate}
+                    </div>
+                    <div>
+                      <span className="block text-xs text-muted-foreground">테마</span>
+                      {themeName}
+                    </div>
+                    <div>
+                      <span className="block text-xs text-muted-foreground">금액</span>
+                      {order.amount.toLocaleString()}원
+                    </div>
+                    <div>
+                      <span className="mb-1 block text-xs text-muted-foreground">상태</span>
+                      <Select
+                        value={order.status}
+                        onValueChange={(value: Order['status']) => handleStatusChange(order.id, value)}
+                      >
+                        <SelectTrigger className="h-8 w-full text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="registered">고객 등록</SelectItem>
+                          <SelectItem value="form_sent">폼 발송</SelectItem>
+                          <SelectItem value="form_completed">폼 작성완료</SelectItem>
+                          <SelectItem value="in_production">제작중</SelectItem>
+                          <SelectItem value="design_review">디자인 피드백중</SelectItem>
+                          <SelectItem value="published">발행완료</SelectItem>
+                          <SelectItem value="delivered">전달완료</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+            {filteredOrders.length === 0 && (
+              <p className="py-8 text-center text-sm text-muted-foreground">조건에 맞는 주문이 없습니다.</p>
+            )}
+          </div>
+
+          {/* 데스크톱/태블릿 테이블 — sm 이상에서만 보인다 */}
+          <div className="hidden sm:block overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border text-left text-sm text-muted-foreground select-none">

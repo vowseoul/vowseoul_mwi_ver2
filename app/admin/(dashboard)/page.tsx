@@ -206,7 +206,34 @@ export default function AdminDashboard() {
           </Button>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          {/* 모바일 카드 리스트 — sm 미만에서는 6열 테이블 대신 카드로 보여준다 */}
+          <div className="sm:hidden divide-y divide-border">
+            {orders.slice(0, 5).map((order) => (
+              <div key={order.id} className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{order.groomName} & {order.brideName}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{order.createdAt} · {order.weddingDate}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{order.theme} · {order.amount.toLocaleString()}원</p>
+                </div>
+                <span className={`inline-flex shrink-0 rounded-full px-2 py-1 text-xs font-medium ${
+                  order.status === 'published' || order.status === 'delivered' ? 'bg-green-100 text-green-700' :
+                  order.status === 'in_production' || order.status === 'design_review' ? 'bg-blue-100 text-blue-700' :
+                  order.status === 'form_completed' ? 'bg-amber-100 text-amber-700' :
+                  'bg-gray-100 text-gray-700'
+                }`}>
+                  {order.status === 'registered' ? '고객 등록' :
+                   order.status === 'form_sent' ? '폼 발송' :
+                   order.status === 'form_completed' ? '폼 작성완료' :
+                   order.status === 'in_production' ? '제작중' :
+                   order.status === 'design_review' ? '디자인 피드백중' :
+                   order.status === 'published' ? '발행완료' : '전달완료'}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* 데스크톱/태블릿 테이블 — sm 이상에서만 보인다 */}
+          <div className="hidden sm:block overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border text-left text-sm text-muted-foreground">

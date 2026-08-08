@@ -26,7 +26,9 @@ function TabsList({
     <TabsPrimitive.List
       data-slot="tabs-list"
       className={cn(
-        'bg-muted text-muted-foreground inline-flex h-9 w-fit items-center justify-center rounded-lg p-[3px]',
+        // 탭 개수가 많아 뷰포트보다 넓어지면(주로 모바일) 페이지 전체가 밀리는 대신
+        // 탭 목록만 가로 스크롤되도록 한다 — max-w-full로 부모 너비를 넘지 않게 막는다.
+        'bg-muted text-muted-foreground inline-flex h-9 w-fit max-w-full items-center justify-center gap-0.5 overflow-x-auto rounded-lg p-[3px]',
         className,
       )}
       {...props}

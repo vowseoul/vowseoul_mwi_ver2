@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useParams } from "next/navigation"
 import { supabase, logSupabaseError } from "@/lib/supabase"
 import { InvitationFrame, type ThemeTemplate, type TokenMap } from "@/components/invitation/invitation-frame"
+import { ScaledPreview } from "@/components/ui/scaled-preview"
 import { buildSlots } from "@/components/invitation/slot-registry"
 import { buildFieldData } from "@/lib/invitation-data"
 import { SAMPLE_RAW } from "@/lib/sample-invitation"
@@ -333,10 +334,15 @@ export default function TemplateThemeEditor() {
           그 아래 좁은 화면에서는 편집 폼 위에 쌓여 보인다(order-1) */}
       <div className="order-1 xl:order-2 xl:h-full xl:overflow-hidden">
         <div className="mb-2.5 text-xs text-muted-foreground">실시간 미리보기</div>
-        <div className="flex justify-center overflow-x-auto rounded-2xl bg-muted/40 py-5">
+        {/* 좁은 화면(패널 폭이 380px 미만인 태블릿·모바일)에서는 가로 스크롤 대신 비율을 유지한 채 축소한다 */}
+        <div className="rounded-2xl bg-muted/40 py-5 px-3">
           {applied.html
-            ? <InvitationFrame template={previewTemplate} data={previewData} tokens={tokens} slots={previewSlots} width={380} height={680} />
-            : <div className="p-10 text-sm text-muted-foreground">HTML을 입력하고 &lsquo;미리보기 적용&rsquo;을 누르세요.</div>}
+            ? (
+              <ScaledPreview width={380} height={680}>
+                <InvitationFrame template={previewTemplate} data={previewData} tokens={tokens} slots={previewSlots} width={380} height={680} />
+              </ScaledPreview>
+            )
+            : <div className="p-10 text-center text-sm text-muted-foreground">HTML을 입력하고 &lsquo;미리보기 적용&rsquo;을 누르세요.</div>}
         </div>
       </div>
     </div>

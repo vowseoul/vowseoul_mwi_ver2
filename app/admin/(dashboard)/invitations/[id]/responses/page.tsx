@@ -99,40 +99,70 @@ export default async function InvitationResponsesPage({
           {rsvpRows.length === 0 ? (
             <EmptyRow message="접수된 RSVP 응답이 없습니다." />
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-28">응답일</TableHead>
-                    <TableHead className="w-20">구분</TableHead>
-                    <TableHead className="w-24">이름</TableHead>
-                    <TableHead className="w-32">연락처</TableHead>
-                    <TableHead className="w-20 text-center">참석</TableHead>
-                    <TableHead className="w-20 text-center">인원</TableHead>
-                    <TableHead>식사</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rsvpRows.map((r) => (
-                    <TableRow key={r.id} className="text-sm">
-                      <TableCell className="text-muted-foreground">{formatDate(r.created_at)}</TableCell>
-                      <TableCell>
-                        {r.side === "groom" ? "신랑측" : r.side === "bride" ? "신부측" : "-"}
-                      </TableCell>
-                      <TableCell className="font-medium">{r.guest_name}</TableCell>
-                      <TableCell className="text-muted-foreground">{r.phone || "-"}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant={r.is_attending ? "default" : "secondary"}>
-                          {r.is_attending ? "참석" : "불참"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">{r.is_attending ? `${r.party_size ?? 1}명` : "-"}</TableCell>
-                      <TableCell className="text-muted-foreground">{r.meal_choice || "-"}</TableCell>
+            <>
+              {/* 모바일 카드 리스트 — sm 미만에서는 7열 테이블 대신 카드로 보여준다 */}
+              <div className="sm:hidden divide-y divide-border">
+                {rsvpRows.map((r) => (
+                  <div key={r.id} className="flex items-start justify-between gap-3 px-4 py-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 text-sm">
+                        <span className="font-medium">{r.guest_name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          ({r.side === "groom" ? "신랑측" : r.side === "bride" ? "신부측" : "-"})
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {formatDate(r.created_at)} · {r.phone || "연락처 없음"}
+                      </p>
+                      {r.is_attending && (
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {r.party_size ?? 1}명 · {r.meal_choice || "식사 미응답"}
+                        </p>
+                      )}
+                    </div>
+                    <Badge variant={r.is_attending ? "default" : "secondary"} className="shrink-0">
+                      {r.is_attending ? "참석" : "불참"}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+
+              {/* 데스크톱/태블릿 테이블 — sm 이상에서만 보인다 */}
+              <div className="hidden sm:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-28">응답일</TableHead>
+                      <TableHead className="w-20">구분</TableHead>
+                      <TableHead className="w-24">이름</TableHead>
+                      <TableHead className="w-32">연락처</TableHead>
+                      <TableHead className="w-20 text-center">참석</TableHead>
+                      <TableHead className="w-20 text-center">인원</TableHead>
+                      <TableHead>식사</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {rsvpRows.map((r) => (
+                      <TableRow key={r.id} className="text-sm">
+                        <TableCell className="text-muted-foreground">{formatDate(r.created_at)}</TableCell>
+                        <TableCell>
+                          {r.side === "groom" ? "신랑측" : r.side === "bride" ? "신부측" : "-"}
+                        </TableCell>
+                        <TableCell className="font-medium">{r.guest_name}</TableCell>
+                        <TableCell className="text-muted-foreground">{r.phone || "-"}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant={r.is_attending ? "default" : "secondary"}>
+                            {r.is_attending ? "참석" : "불참"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center">{r.is_attending ? `${r.party_size ?? 1}명` : "-"}</TableCell>
+                        <TableCell className="text-muted-foreground">{r.meal_choice || "-"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -146,32 +176,53 @@ export default async function InvitationResponsesPage({
           {guestbookRows.length === 0 ? (
             <EmptyRow message="작성된 방명록이 없습니다." />
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-28">작성일</TableHead>
-                    <TableHead className="w-28">작성자</TableHead>
-                    <TableHead>내용</TableHead>
-                    <TableHead className="w-20 text-center">노출</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {guestbookRows.map((g) => (
-                    <TableRow key={g.id} className="text-sm">
-                      <TableCell className="text-muted-foreground">{formatDate(g.created_at)}</TableCell>
-                      <TableCell className="font-medium">{g.author_name}</TableCell>
-                      <TableCell className="whitespace-pre-line leading-relaxed">{g.message}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant={g.is_visible !== false ? "outline" : "secondary"}>
-                          {g.is_visible !== false ? "공개" : "숨김"}
-                        </Badge>
-                      </TableCell>
+            <>
+              {/* 모바일 카드 리스트 — sm 미만에서는 4열 테이블 대신 카드로 보여준다 */}
+              <div className="sm:hidden divide-y divide-border">
+                {guestbookRows.map((g) => (
+                  <div key={g.id} className="px-4 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <span className="text-sm font-medium">{g.author_name}</span>
+                        <span className="ml-1.5 text-xs text-muted-foreground">{formatDate(g.created_at)}</span>
+                      </div>
+                      <Badge variant={g.is_visible !== false ? "outline" : "secondary"} className="shrink-0">
+                        {g.is_visible !== false ? "공개" : "숨김"}
+                      </Badge>
+                    </div>
+                    <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{g.message}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* 데스크톱/태블릿 테이블 — sm 이상에서만 보인다 */}
+              <div className="hidden sm:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-28">작성일</TableHead>
+                      <TableHead className="w-28">작성자</TableHead>
+                      <TableHead>내용</TableHead>
+                      <TableHead className="w-20 text-center">노출</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {guestbookRows.map((g) => (
+                      <TableRow key={g.id} className="text-sm">
+                        <TableCell className="text-muted-foreground">{formatDate(g.created_at)}</TableCell>
+                        <TableCell className="font-medium">{g.author_name}</TableCell>
+                        <TableCell className="whitespace-pre-line leading-relaxed">{g.message}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant={g.is_visible !== false ? "outline" : "secondary"}>
+                            {g.is_visible !== false ? "공개" : "숨김"}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

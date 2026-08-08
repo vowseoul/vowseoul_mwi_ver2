@@ -973,7 +973,108 @@ export default function FormTemplatesPage() {
       {/* Templates List */}
       <Card>
         <CardContent className="p-0">
-          <div className="max-h-[calc(100vh-280px)] overflow-y-auto relative">
+          {/* 모바일 카드 리스트 — sm 미만에서는 6열 테이블 대신 카드로 보여준다 */}
+          <div className="sm:hidden max-h-[calc(100vh-280px)] overflow-y-auto divide-y divide-border">
+            {isLoading ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">폼 템플릿을 불러오는 중입니다...</p>
+            ) : error ? (
+              <p className="py-8 text-center text-sm text-destructive">템플릿 로딩 중 오류가 발생했습니다.</p>
+            ) : filteredTemplates?.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">등록된 폼 템플릿이 없습니다.</p>
+            ) : (
+              filteredTemplates?.map((template) => (
+                <div key={template.id} className="space-y-3 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-2 text-sm font-medium">
+                        {template.name}
+                        {template.description?.includes('[모바일포함]') ? (
+                          <Badge className="h-4 scale-90 border-blue-200 bg-blue-50 px-1.5 py-0 text-[10px] text-blue-600 hover:bg-blue-50">
+                            모바일 포함
+                          </Badge>
+                        ) : (
+                          <Badge className="h-4 scale-90 border-border bg-muted px-1.5 py-0 text-[10px] text-muted-foreground hover:bg-muted">
+                            지류 단독
+                          </Badge>
+                        )}
+                      </p>
+                      {template.description && (
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {template.description.replace('[모바일포함]', '').trim()}
+                        </p>
+                      )}
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {template.category} · v{template.current_version} · {new Date(template.created_at).toLocaleDateString('ko-KR')}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Switch
+                        checked={template.is_active}
+                        onCheckedChange={() => handleToggleActive(template.id, template.is_active)}
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        {template.is_active ? '활성' : '비활성'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setPreviewTemplateId(template.id)
+                        setPreviewStep(0)
+                        setPreviewValues({})
+                        setIsPreviewOpen(true)
+                      }}
+                      className="h-8 gap-1 px-2.5 text-xs"
+                    >
+                      <Eye className="w-3.5 h-3.5" /> 미리보기
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleOpenEdit(template)}
+                      className="h-8 gap-1 px-2.5 text-xs"
+                    >
+                      <Edit className="w-3.5 h-3.5" /> 수정
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isCopying === template.id}
+                      onClick={() => handleCopyTemplate(template)}
+                      className="h-8 gap-1 px-2.5 text-xs"
+                    >
+                      {isCopying === template.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
+                      복사
+                    </Button>
+                    <Button variant="default" size="sm" asChild className="h-8 px-2.5 text-xs">
+                      <Link href={`/admin/forms/builder/${template.id}`} className="flex items-center gap-1">
+                        <Edit2 className="w-3.5 h-3.5" /> 폼 빌더
+                      </Link>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => handleDeleteTemplate(template.id)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* 데스크톱/태블릿 테이블 — sm 이상에서만 보인다 */}
+          <div className="hidden sm:block max-h-[calc(100vh-280px)] overflow-y-auto relative">
             <Table>
               <TableHeader className="sticky top-0 bg-background z-10 shadow-xs">
                 <TableRow>

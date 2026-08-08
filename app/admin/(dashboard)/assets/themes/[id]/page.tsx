@@ -21,6 +21,7 @@ import { DEFAULT_BLOCK_ORDER } from '@/lib/constants'
 import { cn, getLegibleColor } from '@/lib/utils'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { InvitationFrame, type ThemeTemplate, type TokenMap } from '@/components/invitation/invitation-frame'
+import { ScaledPreview } from '@/components/ui/scaled-preview'
 import { buildSlots } from '@/components/invitation/slot-registry'
 import { buildFieldData } from '@/lib/invitation-data'
 import { SAMPLE_RAW } from '@/lib/sample-invitation'
@@ -1166,6 +1167,9 @@ export default function ThemeEditorPage() {
       {/* Right Panel: Mobile Preview */}
       <div className="w-full md:w-[400px] flex-shrink-0 bg-muted/20 border rounded-lg p-6 flex flex-col items-center justify-center shadow-inner overflow-hidden">
         <h3 className="mb-4 text-sm font-medium text-muted-foreground">실시간 모바일 미리보기</h3>
+        {/* 우측 패널 폭이 목업(테두리 포함 336px)보다 좁아지면(모바일 등) 잘리는 대신
+            비율을 유지한 채 축소한다 */}
+        <ScaledPreview width={336} height={666}>
         {isTemplateEngine && previewTemplate ? (
           <div className="w-[320px] rounded-[2.5rem] overflow-hidden border-8 border-gray-900 shadow-xl">
             <InvitationFrame
@@ -1614,6 +1618,7 @@ export default function ThemeEditorPage() {
           </div>
         </div>
         )}
+        </ScaledPreview>
       </div>
 
       {/* Visual Section Style Customizer Dialog */}

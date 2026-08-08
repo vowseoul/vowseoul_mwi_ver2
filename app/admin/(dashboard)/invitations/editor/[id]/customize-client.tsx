@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { uploadImage } from "@/lib/image-upload"
 import { InvitationFrame, type TokenMap } from "@/components/invitation/invitation-frame"
+import { ScaledPreview } from "@/components/ui/scaled-preview"
 import { buildSlots } from "@/components/invitation/slot-registry"
 import { buildFieldData, mergeInvitationRaw } from "@/lib/invitation-data"
 import {
@@ -1425,20 +1426,23 @@ export default function CustomizeClient({
           그 아래 좁은 화면에서는 편집 영역 위에 쌓여 보인다(order-1) */}
       <div className="order-1 xl:order-2 xl:h-full xl:overflow-hidden">
         <div className="mb-2.5 text-xs text-muted-foreground">실시간 미리보기 (실제 데이터)</div>
-        <div className="flex justify-center overflow-x-auto rounded-2xl bg-muted/40 py-5">
-          <InvitationFrame
-            template={template}
-            data={data}
-            tokens={tokens}
-            slots={previewSlots}
-            fontFaces={fontFaces}
-            blockOverrides={blockOverrides}
-            hiddenBlocks={hiddenBlocks}
-            sectionImages={sectionImages}
-            focusBlock={focusBlock}
-            width={380}
-            height={680}
-          />
+        {/* 좁은 화면(패널 폭이 380px 미만인 태블릿·모바일)에서는 가로 스크롤 대신 비율을 유지한 채 축소한다 */}
+        <div className="rounded-2xl bg-muted/40 py-5 px-3">
+          <ScaledPreview width={380} height={680}>
+            <InvitationFrame
+              template={template}
+              data={data}
+              tokens={tokens}
+              slots={previewSlots}
+              fontFaces={fontFaces}
+              blockOverrides={blockOverrides}
+              hiddenBlocks={hiddenBlocks}
+              sectionImages={sectionImages}
+              focusBlock={focusBlock}
+              width={380}
+              height={680}
+            />
+          </ScaledPreview>
         </div>
       </div>
     </div>

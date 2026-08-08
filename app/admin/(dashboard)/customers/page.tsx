@@ -227,6 +227,66 @@ export default function CustomersPage() {
       {/* Customer Table */}
       <Card>
         <CardContent className="p-0">
+          {/* 모바일 카드 리스트 — sm 미만에서는 7열 테이블 대신 카드로 보여준다 */}
+          <div className="sm:hidden divide-y divide-border">
+            {isLoading ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">고객 데이터를 불러오는 중입니다...</p>
+            ) : error ? (
+              <p className="py-8 text-center text-sm text-destructive">데이터를 불러오는 동안 오류가 발생했습니다.</p>
+            ) : customersList.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">등록된 고객이 없습니다.</p>
+            ) : (
+              customersList.map((customer) => (
+                <div key={customer.id} className="flex items-start justify-between gap-3 p-4">
+                  <div className="min-w-0">
+                    <Link href={`/admin/customers/${customer.id}`} className="text-sm font-semibold text-primary hover:underline">
+                      {customer.groom_name !== '미지정' && customer.bride_name && customer.bride_name !== '미지정' ? (
+                        `${customer.groom_name} & ${customer.bride_name}`
+                      ) : customer.groom_name !== '미지정' ? (
+                        <span>{customer.groom_name} (주문자)</span>
+                      ) : (
+                        <span>{customer.bride_name} (주문자)</span>
+                      )}
+                    </Link>
+                    <p className="mt-1 text-xs text-muted-foreground">{customer.phone || '연락처 없음'}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {customer.wedding_date || '예식일 미정'}{customer.venue_name ? ` · ${customer.venue_name}` : ''}
+                    </p>
+                    <div className="mt-1.5 flex items-center gap-2">
+                      {getStatusBadge(customer.status)}
+                      <span className="text-[11px] text-muted-foreground">
+                        {new Date(customer.created_at).toLocaleDateString('ko-KR')} 등록
+                      </span>
+                    </div>
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                        <MoreHorizontal className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem asChild>
+                        <Link href={`/admin/customers/${customer.id}`}>
+                          <Eye className="w-4 h-4 mr-2" /> 상세보기 / 수정
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => handleDelete(customer.id)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" /> 삭제
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* 데스크톱/태블릿 테이블 — sm 이상에서만 보인다 */}
+          <div className="hidden sm:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -309,6 +369,7 @@ export default function CustomersPage() {
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 

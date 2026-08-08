@@ -293,6 +293,131 @@ export default function InvitationsListPage() {
       {/* Invitations List */}
       <Card>
         <CardContent className="p-0">
+          {/* 모바일 카드 리스트 — sm 미만에서는 6열 테이블 대신 카드로 보여준다 */}
+          <div className="sm:hidden divide-y divide-border">
+            {isLoading ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">청첩장 목록을 로딩 중입니다...</p>
+            ) : error ? (
+              <p className="py-8 text-center text-sm text-destructive">목록 조회 중 오류가 발생했습니다.</p>
+            ) : filteredInvitations?.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">제작중인 청첩장이 없습니다.</p>
+            ) : (
+              filteredInvitations?.map((inv) => (
+                <div key={inv.id} className="space-y-3 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold">
+                        {inv.customer?.groom_name} & {inv.customer?.bride_name}
+                      </div>
+                      <div className="mt-1 flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
+                        <span className="truncate">/w/{inv.public_slug}</span>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="h-6 w-6 shrink-0"
+                          title="링크 주소 수정"
+                          onClick={() => openSlugEditor(
+                            inv.id,
+                            inv.public_slug,
+                            `${inv.customer?.groom_name || '신랑'} & ${inv.customer?.bride_name || '신부'}`
+                          )}
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
+                    <Badge
+                      variant={
+                        inv.status === 'published'
+                          ? 'default'
+                          : inv.status === 'draft'
+                          ? 'secondary'
+                          : 'destructive'
+                      }
+                      className="shrink-0"
+                    >
+                      {inv.status === 'published'
+                        ? '공개중'
+                        : inv.status === 'draft'
+                        ? '초안작성'
+                        : inv.status === 'paused'
+                        ? '정지'
+                        : '만료'}
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5" />
+                      {inv.customer?.wedding_date || '-'}
+                    </div>
+                    <label className="flex w-fit cursor-pointer items-center gap-1.5">
+                      <Checkbox
+                        checked={inv.is_sample === true}
+                        onCheckedChange={(checked) => handleSampleToggle(inv.id, checked === true)}
+                      />
+                      SAMPLE
+                    </label>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-[11px]"
+                      onClick={() => handleCopyLink(inv.public_slug, inv.id)}
+                    >
+                      {copiedId === inv.id ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Link2 className="w-3.5 h-3.5" />}
+                      <span className="ml-1">복사</span>
+                    </Button>
+                    <Button variant="outline" size="sm" asChild className="h-8 text-[11px] gap-1">
+                      <Link href={`/admin/invitations/editor/${inv.id}`}>
+                        <Edit3 className="w-3.5 h-3.5" /> 편집
+                      </Link>
+                    </Button>
+                    <Button variant="outline" size="sm" asChild className="h-8 text-[11px] gap-1">
+                      <Link href={`/admin/invitations/${inv.id}/responses`}>
+                        <ClipboardList className="w-3.5 h-3.5" /> 응답
+                      </Link>
+                    </Button>
+                    {inv.status === 'published' ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-[11px] text-amber-600 hover:text-amber-700"
+                        onClick={() => handleStatusChange(inv.id, 'paused')}
+                      >
+                        <Pause className="w-3.5 h-3.5" /> 정지
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        className="h-8 text-[11px]"
+                        onClick={() => handleStatusChange(inv.id, 'published')}
+                      >
+                        <Play className="w-3.5 h-3.5" /> 공개
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-[11px] text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                      onClick={() => setDeleteTarget({
+                        id: inv.id,
+                        name: `${inv.customer?.groom_name || '신랑'} & ${inv.customer?.bride_name || '신부'}`
+                      })}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> 삭제
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* 데스크톱/태블릿 테이블 — sm 이상에서만 보인다 */}
+          <div className="hidden sm:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -444,6 +569,7 @@ export default function InvitationsListPage() {
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 
