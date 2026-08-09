@@ -92,7 +92,11 @@ function buildSrcDoc(template: ThemeTemplate): string {
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400&family=Cormorant+Garamond:ital,wght@0,400..600;1,400&family=Gowun+Batang:wght@400;700&family=Noto+Serif+KR:wght@300;400;600&family=Nanum+Myeongjo:wght@400;700&display=swap');
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; }
-    body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; background: var(--bg, #fff); color: var(--ink, #222); }
+    /* body 기본 폰트를 --font-kr로 잡아둔다. 테마 template_css가 자체적으로 body(또는 더 구체적인
+       선택자)에 font-family를 지정하면 그 규칙이 우선하므로 안전하지만, 그런 지정이 전혀 없는
+       테마에서는 이 기본값이 없으면 --font-kr을 아무리 바꿔도 본문(이름·인사말 등)에 반영되지
+       않고 브라우저 기본 글꼴만 보이는 문제가 있었다. */
+    body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; background: var(--bg, #fff); color: var(--ink, #222); font-family: var(--font-kr, inherit); }
     img { max-width: 100%; display: block; }
     /* [data-slot] 아일랜드(계좌·연락처·식순·방명록·RSVP·공유 등)는 React portal로 마운트되어
        테마 CSS의 개별 클래스 지정 없이 조상 요소의 font-family를 그대로 상속한다. 대부분의

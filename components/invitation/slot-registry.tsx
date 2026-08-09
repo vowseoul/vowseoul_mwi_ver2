@@ -38,6 +38,18 @@ const soft = (pct: number) => `color-mix(in srgb, currentColor ${pct}%, transpar
  * 자동재생을 시도하고, 브라우저 정책으로 막히면 첫 클릭/터치에 재생한다.
  * iframe 내부에 렌더되므로 이벤트는 iframe 문서에도 함께 등록한다.
  * ------------------------------------------------------------------ */
+/** 모든 BgmIsland 인스턴스가 공유하는 "현재 재생 중인 오디오" 싱글턴.
+ * 테마 전환 시 iframe이 다시 write()되며 포탈 대상이 바뀌는 타이밍에 따라 이전 인스턴스의
+ * cleanup이 새 인스턴스의 재생 시작보다 늦게(또는 아예 누락되어) 실행되는 경우가 있어,
+ * 인스턴스별 ref만으로는 두 음원이 겹쳐 재생되거나 화면에서 사라진 이전 음원을 끌 방법이
+ * 없어지는 문제가 있었다. 새 오디오를 재생하기 전 항상 이 싱글턴부터 정지시켜 "동시에
+ * 최대 한 개만 재생된다"를 인스턴스 생명주기와 무관하게 구조적으로 보장한다. */
+let currentBgmAudio: HTMLAudioElement | null = null
+function stopCurrentBgm() {
+  currentBgmAudio?.pause()
+  currentBgmAudio = null
+}
+
 function BgmIsland({ accent, data, raw }: SlotProps) {
   const bgmUrl = (typeof raw?.bgm_url === "string" ? raw.bgm_url : undefined) || data.bgm_url || ""
   const [isPlaying, setIsPlaying] = useState(true)
@@ -53,14 +65,12 @@ function BgmIsland({ accent, data, raw }: SlotProps) {
     if (typeof document !== "undefined" && own !== document) docs.push(document)
 
     if (bgmUrl && isPlaying) {
-      if (!audioRef.current) {
-        audioRef.current = new Audio(bgmUrl)
-        audioRef.current.loop = true
-      } else if (audioRef.current.src !== bgmUrl) {
-        audioRef.current.pause()
+      if (!audioRef.current || audioRef.current.src !== bgmUrl) {
+        stopCurrentBgm()
         audioRef.current = new Audio(bgmUrl)
         audioRef.current.loop = true
       }
+      currentBgmAudio = audioRef.current
 
       audioRef.current.play().catch(() => {
         // 자동재생 차단 → 첫 사용자 상호작용에 재생
@@ -81,10 +91,12 @@ function BgmIsland({ accent, data, raw }: SlotProps) {
       })
     } else if (audioRef.current) {
       audioRef.current.pause()
+      if (currentBgmAudio === audioRef.current) currentBgmAudio = null
     }
 
     return () => {
       audioRef.current?.pause()
+      if (currentBgmAudio === audioRef.current) currentBgmAudio = null
       if (playOnInteraction) {
         docs.forEach((d) => {
           d.removeEventListener("click", playOnInteraction!)

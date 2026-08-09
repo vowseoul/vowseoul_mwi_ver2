@@ -445,11 +445,15 @@ export default function CustomizeClient({
     const css = activeThemeRow.template_css || ""
     return SIZE_TOKEN_FIELDS.filter((t) => typeof css === "string" && css.includes(`var(${t.name}`))
   }, [activeThemeRow])
-  /** 색/폰트 토큰도 사이즈 토큰과 동일한 규칙으로 걸러낸다 — 테마 CSS가 참조하지 않는 토큰의
-   * 피커를 보여주면 바꿔도 아무 효과가 없다 */
+  /** 색 토큰은 사이즈 토큰과 동일한 규칙으로 걸러낸다 — 테마 CSS가 참조하지 않는 토큰의
+   * 피커를 보여주면 바꿔도 아무 효과가 없다. 폰트 토큰(--font-kr/--font-en)은 예외다 —
+   * InvitationFrame의 기본 리셋 스타일시트(테마 template_css가 아님)가 body 기본 폰트로
+   * --font-kr을 항상 참조하므로, 테마 CSS 안에 이 토큰이 없어도 항상 실제 효과가 있다. */
   const visibleTokenFields = useMemo(() => {
     const css = activeThemeRow.template_css || ""
-    return TOKEN_FIELDS.filter((t) => typeof css === "string" && css.includes(`var(${t.name}`))
+    return TOKEN_FIELDS.filter(
+      (t) => t.type === "font" || (typeof css === "string" && css.includes(`var(${t.name}`))
+    )
   }, [activeThemeRow])
   const typographySizeTokens = useMemo(() => visibleSizeTokens.filter((t) => t.group === "typography"), [visibleSizeTokens])
   const layoutSizeTokens = useMemo(() => visibleSizeTokens.filter((t) => t.group === "layout"), [visibleSizeTokens])
@@ -1070,20 +1074,25 @@ export default function CustomizeClient({
               <CardContent>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   {visibleTokenFields.filter((t) => t.type === "color").map((t) => {
-                    const value = typeof overrides[t.name] === "string" ? (overrides[t.name] as string) : ""
-                    const placeholder = themeTokens[t.name] || "테마 기본값"
+                    const hasOverride = typeof overrides[t.name] === "string"
+                    const overrideValue = hasOverride ? (overrides[t.name] as string) : ""
+                    const themeDefault = themeTokens[t.name] || ""
+                    // 오버라이드가 없으면(=테마 기본값을 그대로 쓰는 중) 입력칸을 비워두지 않고
+                    // 현재 실제로 적용 중인 테마 기본 색을 그대로 채워 보여준다 — 빈 칸은 "색이
+                    // 없다"처럼 보이지만 실제로는 테마 기본색이 적용되어 있는 상태였다.
+                    const displayValue = overrideValue || themeDefault
                     return (
                       <Field key={t.name}>
                         <FieldLabel>{t.label}</FieldLabel>
                         <div className="flex items-start gap-2">
                           <input
                             type="color"
-                            value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : (/^#[0-9a-fA-F]{6}$/.test(placeholder) ? placeholder : "#ffffff")}
+                            value={/^#[0-9a-fA-F]{6}$/.test(displayValue) ? displayValue : "#ffffff"}
                             onChange={(e) => setOverride(t.name, e.target.value)}
                             className="h-9 w-10 shrink-0 cursor-pointer rounded-md border border-input bg-transparent p-1"
                           />
-                          <Input value={value} onChange={(e) => setOverride(t.name, e.target.value)} placeholder={placeholder} className="min-w-0 flex-1" />
-                          {value && (
+                          <Input value={displayValue} onChange={(e) => setOverride(t.name, e.target.value)} placeholder="테마 기본값" className="min-w-0 flex-1" />
+                          {overrideValue && (
                             <Button type="button" variant="ghost" size="icon-sm" title="테마 기본값으로" onClick={() => clearOverride(t.name)}>
                               <X className="h-3.5 w-3.5" />
                             </Button>
