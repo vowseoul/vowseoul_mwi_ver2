@@ -27,6 +27,8 @@ import {
 import { buildFontStack, fetchRegisteredFonts, fontPreviewStyle, resolveFontFaces, type RegisteredFont } from "@/lib/fonts"
 import { useInjectFontFaces } from "@/lib/use-font-faces"
 import { useInvitationRevisionsQuery, useResolveRevisionMutation } from "@/hooks/queries/useInvitationRevisions"
+import { useAuditLogsQuery } from "@/hooks/queries/useAuditLogs"
+import { logAuditEvent } from "@/lib/audit-log"
 import { cn } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
@@ -589,6 +591,14 @@ export default function CustomizeClient({
       toast.error(`저장 실패: ${error.message}`)
     } else {
       toast.success("저장되었습니다.")
+      const { data: userData } = await supabase.auth.getUser()
+      logAuditEvent(supabase, {
+        invitationId,
+        actorType: "admin",
+        actorLabel: userData.user?.email ?? null,
+        action: "invitation.save",
+        summary: "청첩장 내용/디자인을 저장했습니다.",
+      })
     }
   }
 
@@ -626,6 +636,7 @@ export default function CustomizeClient({
   const [sendingReview, setSendingReview] = useState(false)
   const revisionsQuery = useInvitationRevisionsQuery(invitationId)
   const resolveRevision = useResolveRevisionMutation(invitationId)
+  const auditLogsQuery = useAuditLogsQuery(invitationId)
 
   // "검수 요청 보내기" — 알림톡 자동발송은 아직 없어서(§FEATURE_ROADMAP.md §9, 별도 비용 발생)
   // 이번 라운드에는 링크+비밀번호를 클립보드에 복사해 관리자가 직접 전달하는 방식으로 시작한다.
@@ -652,6 +663,14 @@ export default function CustomizeClient({
           ? `검수 링크가 복사되었습니다. (비밀번호: ${password}) 고객에게 전달해주세요.`
           : "검수 링크가 클립보드에 복사되었습니다. 고객에게 전달해주세요."
       )
+      const { data: userData } = await supabase.auth.getUser()
+      logAuditEvent(supabase, {
+        invitationId,
+        actorType: "admin",
+        actorLabel: userData.user?.email ?? null,
+        action: "review.requested",
+        summary: `검수 요청을 보냈습니다 (${nextRound}차).`,
+      })
     } catch {
       toast.error("검수 요청 처리에 실패했습니다.")
     } finally {
@@ -689,7 +708,7 @@ export default function CustomizeClient({
         </div>
 
         <Tabs defaultValue="content" className="gap-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="content">내용</TabsTrigger>
             <TabsTrigger value="design">디자인</TabsTrigger>
             <TabsTrigger value="review" className="gap-1.5">
@@ -700,6 +719,7 @@ export default function CustomizeClient({
                 </span>
               )}
             </TabsTrigger>
+            <TabsTrigger value="history">이력</TabsTrigger>
           </TabsList>
 
           <TabsContent value="content" className="space-y-6">
@@ -1543,6 +1563,48 @@ export default function CustomizeClient({
                         )
                       })}
                   </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="history" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-medium">변경 이력</CardTitle>
+                <CardDescription>이 청첩장에 대한 관리자·신랑신부의 변경 기록입니다.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {auditLogsQuery.isLoading ? (
+                  <p className="text-sm text-muted-foreground">불러오는 중…</p>
+                ) : !auditLogsQuery.data || auditLogsQuery.data.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">아직 기록된 변경 이력이 없습니다.</p>
+                ) : (
+                  <ol className="space-y-3">
+                    {auditLogsQuery.data.map((log) => (
+                      <li key={log.id} className="flex gap-3 border-l-2 border-muted pl-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span
+                              className={cn(
+                                "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                                log.actor_type === "admin" && "bg-primary/10 text-primary",
+                                log.actor_type === "customer" && "bg-amber-500/10 text-amber-600",
+                                log.actor_type === "system" && "bg-muted text-muted-foreground"
+                              )}
+                            >
+                              {log.actor_type === "admin" ? "관리자" : log.actor_type === "customer" ? "신랑신부" : "시스템"}
+                            </span>
+                            {log.actor_label && <span className="text-xs text-muted-foreground">{log.actor_label}</span>}
+                            <span className="text-[11px] text-muted-foreground/70">
+                              {new Date(log.created_at).toLocaleString("ko-KR")}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 text-sm text-foreground">{log.summary}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
                 )}
               </CardContent>
             </Card>

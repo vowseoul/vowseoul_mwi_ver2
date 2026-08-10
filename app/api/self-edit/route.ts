@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { dashboardCookieName, verifyDashboardToken } from "@/lib/dashboard-session"
 import { SELF_EDIT_SETTINGS_KEY, SELF_EDIT_FIELD_KEYS, parseSelfEditSettings } from "@/lib/self-edit"
+import { logAuditEvent } from "@/lib/audit-log"
 
 /**
  * 셀프 편집 저장. 신랑신부는 Supabase 계정이 없는 익명 사용자라 대시보드/검수와
@@ -88,6 +89,17 @@ export async function POST(request: Request) {
     console.error("self-edit update failed:", updateError.message)
     return NextResponse.json({ error: "저장하지 못했습니다." }, { status: 500 })
   }
+
+  const changedCount = Object.keys(nextFields).length
+  const galleryChanged = Array.isArray(galleryImages)
+  // 서버리스 함수는 응답을 보낸 뒤 곧바로 얼어붙을 수 있어 await 없이 던지면 로그가
+  // 유실될 수 있다 — 응답 지연이 미미하므로(단건 insert) 기다렸다가 응답한다.
+  await logAuditEvent(supabase, {
+    invitationId,
+    actorType: "customer",
+    action: "self_edit.saved",
+    summary: `신랑신부가 정보를 직접 수정했습니다 (${changedCount}개 항목${galleryChanged ? " + 갤러리 사진" : ""}).`,
+  })
 
   return NextResponse.json({ ok: true })
 }

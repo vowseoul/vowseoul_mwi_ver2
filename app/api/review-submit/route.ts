@@ -2,6 +2,7 @@ import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { dashboardCookieName, verifyDashboardToken } from "@/lib/dashboard-session"
+import { logAuditEvent } from "@/lib/audit-log"
 
 /**
  * 시안 검수 화면(/invitation/[id]/review)의 수정 요청 제출 · 확정.
@@ -72,6 +73,13 @@ export async function POST(request: Request) {
       .eq("id", invitationId)
     if (updateError) console.error("review-submit status update failed:", updateError.message)
 
+    await logAuditEvent(supabase, {
+      invitationId,
+      actorType: "customer",
+      action: "revision.requested",
+      summary: `신랑신부가 수정 요청을 남겼습니다: "${note.slice(0, 60)}${note.length > 60 ? "…" : ""}"`,
+    })
+
     return NextResponse.json({ ok: true, revision })
   }
 
@@ -84,6 +92,14 @@ export async function POST(request: Request) {
       console.error("review-submit approve failed:", error.message)
       return NextResponse.json({ error: "처리하지 못했습니다." }, { status: 500 })
     }
+
+    await logAuditEvent(supabase, {
+      invitationId,
+      actorType: "customer",
+      action: "review.approved",
+      summary: "신랑신부가 시안을 확정했습니다.",
+    })
+
     return NextResponse.json({ ok: true })
   }
 

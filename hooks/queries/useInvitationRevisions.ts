@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { logAuditEvent } from '@/lib/audit-log'
 
 export interface InvitationRevision {
   id: string
@@ -39,6 +40,13 @@ export function useResolveRevisionMutation(invitationId: string) {
         .update({ status: 'resolved', resolved_at: new Date().toISOString(), resolved_by: userData.user?.id ?? null })
         .eq('id', id)
       if (error) throw error
+      logAuditEvent(supabase, {
+        invitationId,
+        actorType: 'admin',
+        actorLabel: userData.user?.email ?? null,
+        action: 'revision.resolved',
+        summary: '고객의 수정 요청을 처리 완료로 표시했습니다.',
+      })
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['invitation-revisions', invitationId] }),
   })

@@ -422,6 +422,27 @@ export interface Database {
         }
         Update: Partial<Database['public']['Tables']['invitation_revisions']['Insert']>
       }
+      audit_logs: {
+        Row: {
+          id: string
+          invitation_id: string
+          actor_type: 'admin' | 'customer' | 'system'
+          actor_label: string | null
+          action: string
+          summary: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          invitation_id: string
+          actor_type: 'admin' | 'customer' | 'system'
+          actor_label?: string | null
+          action: string
+          summary: string
+          created_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['audit_logs']['Insert']>
+      }
       invitation_blocks: {
         Row: {
           id: string
