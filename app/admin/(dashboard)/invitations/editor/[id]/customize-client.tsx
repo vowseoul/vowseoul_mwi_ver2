@@ -611,7 +611,11 @@ export default function CustomizeClient({
       : `${window.location.origin}/dashboard/${publicSlug}`
     try {
       await navigator.clipboard.writeText(text)
-      toast.success("고객용 대시보드 링크가 클립보드에 복사되었습니다.")
+      toast.success(
+        password
+          ? `고객용 대시보드 링크가 복사되었습니다. (비밀번호: ${password})`
+          : "고객용 대시보드 링크가 클립보드에 복사되었습니다."
+      )
     } catch {
       toast.error("링크 복사에 실패했습니다.")
     }
@@ -643,7 +647,11 @@ export default function CustomizeClient({
         ? `${window.location.origin}/review/${publicSlug}\n비밀번호: ${password}`
         : `${window.location.origin}/review/${publicSlug}`
       await navigator.clipboard.writeText(text)
-      toast.success("검수 링크가 클립보드에 복사되었습니다. 고객에게 전달해주세요.")
+      toast.success(
+        password
+          ? `검수 링크가 복사되었습니다. (비밀번호: ${password}) 고객에게 전달해주세요.`
+          : "검수 링크가 클립보드에 복사되었습니다. 고객에게 전달해주세요."
+      )
     } catch {
       toast.error("검수 요청 처리에 실패했습니다.")
     } finally {
@@ -1357,13 +1365,29 @@ export default function CustomizeClient({
                               </>
                             )}
                             {b.key === "calendar" && (
-                              <div className="flex items-center justify-between border-t pt-4">
-                                <span className="text-sm">D-day 카운트다운 표시</span>
-                                <Switch
-                                  checked={override?.ddayEnabled !== false}
-                                  onCheckedChange={(c) => setBlockOverride(b.key, { ddayEnabled: c })}
-                                />
-                              </div>
+                              <>
+                                <div className="flex items-center justify-between border-t pt-4">
+                                  <span className="text-sm">D-day 카운트다운 표시</span>
+                                  <Switch
+                                    checked={override?.ddayEnabled !== false}
+                                    onCheckedChange={(c) => setBlockOverride(b.key, { ddayEnabled: c })}
+                                  />
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm">&ldquo;캘린더 앱에 추가&rdquo; 버튼</span>
+                                  <Switch
+                                    checked={override?.icsButtonEnabled !== false}
+                                    onCheckedChange={(c) => setBlockOverride(b.key, { icsButtonEnabled: c })}
+                                  />
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm">&ldquo;구글 캘린더&rdquo; 버튼</span>
+                                  <Switch
+                                    checked={override?.googleCalendarButtonEnabled !== false}
+                                    onCheckedChange={(c) => setBlockOverride(b.key, { googleCalendarButtonEnabled: c })}
+                                  />
+                                </div>
+                              </>
                             )}
                           </AccordionContent>
                         </AccordionItem>

@@ -316,13 +316,16 @@ function CalendarIsland({ accent, data, raw, blockOverrides }: SlotProps) {
         </div>
       </div>
 
-      {/* 캘린더 앱에 일정 추가 — iOS/macOS는 .ics 다운로드, 그 외엔 구글 캘린더 링크가 UX가 더 낫다 */}
+      {/* 캘린더 앱에 일정 추가 — iOS/macOS는 .ics 다운로드, 그 외엔 구글 캘린더 링크가 UX가 더 낫다.
+          관리자가 편집기 "블럭" 카드에서 둘을 각각 켜고 끌 수 있다(§customize-client.tsx) — 미설정 시 둘 다 노출. */}
       {(() => {
         const title = [data.groom_name, data.bride_name].filter(Boolean).join(" ♥ ") + " 결혼식"
         const location = [data.venue_name, data.venue_address].filter(Boolean).join(" ")
-        const icsHref = buildIcsHref({ title, location, dateStr, timeStr })
-        const googleHref = buildGoogleCalendarHref({ title, location, dateStr, timeStr })
-        if (!icsHref || !googleHref) return null
+        const icsEnabled = blockOverrides?.calendar?.icsButtonEnabled !== false
+        const googleEnabled = blockOverrides?.calendar?.googleCalendarButtonEnabled !== false
+        const icsHref = icsEnabled ? buildIcsHref({ title, location, dateStr, timeStr }) : null
+        const googleHref = googleEnabled ? buildGoogleCalendarHref({ title, location, dateStr, timeStr }) : null
+        if (!icsHref && !googleHref) return null
         const btnStyle: React.CSSProperties = {
           flex: 1, padding: "9px 0", borderRadius: 6, cursor: "pointer", textAlign: "center",
           border: `1px solid ${soft(60)}`, background: "transparent", color: "inherit", fontSize: 12,
@@ -330,8 +333,8 @@ function CalendarIsland({ accent, data, raw, blockOverrides }: SlotProps) {
         }
         return (
           <div style={{ display: "flex", gap: 6, marginTop: 10, maxWidth: 320, margin: "10px auto 0" }}>
-            <a href={icsHref} download="wedding.ics" style={btnStyle}>캘린더 앱에 추가</a>
-            <a href={googleHref} target="_blank" rel="noopener noreferrer" style={btnStyle}>구글 캘린더</a>
+            {icsHref && <a href={icsHref} download="wedding.ics" style={btnStyle}>캘린더 앱에 추가</a>}
+            {googleHref && <a href={googleHref} target="_blank" rel="noopener noreferrer" style={btnStyle}>구글 캘린더</a>}
           </div>
         )
       })()}

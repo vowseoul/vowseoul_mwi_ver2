@@ -164,6 +164,10 @@ export interface BlockOverride {
   rsvpDeadline?: string
   /** calendar 블럭 전용: false 면 D-day 카운트다운을 숨긴다 (미설정 시 노출) */
   ddayEnabled?: boolean
+  /** calendar 블럭 전용: false 면 ".ics 캘린더 앱에 추가" 버튼을 숨긴다 (미설정 시 노출) */
+  icsButtonEnabled?: boolean
+  /** calendar 블럭 전용: false 면 "구글 캘린더" 버튼을 숨긴다 (미설정 시 노출) */
+  googleCalendarButtonEnabled?: boolean
 }
 
 /**
@@ -186,6 +190,8 @@ export function extractBlockOverrides(overrides: unknown): Record<string, BlockO
     if (typeof r.shuttleEnabled === "boolean") entry.shuttleEnabled = r.shuttleEnabled
     if (typeof r.rsvpDeadline === "string" && r.rsvpDeadline) entry.rsvpDeadline = r.rsvpDeadline
     if (typeof r.ddayEnabled === "boolean") entry.ddayEnabled = r.ddayEnabled
+    if (typeof r.icsButtonEnabled === "boolean") entry.icsButtonEnabled = r.icsButtonEnabled
+    if (typeof r.googleCalendarButtonEnabled === "boolean") entry.googleCalendarButtonEnabled = r.googleCalendarButtonEnabled
     if (Object.keys(entry).length > 0) out[key] = entry
   }
   return out

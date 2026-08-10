@@ -42,6 +42,8 @@ export interface BlockOverride {
   rsvpDeadline?: string
   /** calendar 블럭 전용 서브옵션 (§slot-registry.tsx CalendarIsland) */
   ddayEnabled?: boolean
+  icsButtonEnabled?: boolean
+  googleCalendarButtonEnabled?: boolean
 }
 export type BlockOverrideMap = Record<string, BlockOverride>
 /** 섹션(블럭) 사이에 끼워 넣는 이미지. lib/theme-template.ts 의 SectionImage 와 동일한 형태 */
@@ -260,21 +262,27 @@ export function InvitationFrame({
     applyAltClasses(doc, hiddenBlocks)
   }, [doc, hiddenBlocks])
 
-  // 블럭 타이틀/영문 소제목 바인딩 — 빈 값이면 템플릿 기본 텍스트를 그대로 둔다 ([data-field]와 동일 규칙)
+  // 블럭 타이틀/영문 소제목 바인딩 — 빈 값이면 템플릿 기본 텍스트로 되돌아간다. 공백만 입력한
+  // 경우는 truthy라 그대로 빈칸처럼 보이는 값이 적용된다(의도적으로 구분되는 상태 — 완전히
+  // 비워야만 "기본값 사용"으로 취급한다). 각 요소의 원래 기본 텍스트는 최초 진입 시 딱 한 번
+  // dataset에 캐시해둔다 — 그래야 "커스텀 → 다시 빈칸"으로 되돌렸을 때 무엇으로 복원해야 할지
+  // 알 수 있다(문서를 새로 write()한 직후엔 항상 새 DOM이라 다시 그 시점의 기본값으로 캐시된다).
   useEffect(() => {
     if (!doc) return
     doc.querySelectorAll<HTMLElement>("[data-block]").forEach((section) => {
       const key = section.getAttribute("data-block")
       if (!key) return
       const override = blockOverrides[key]
-      if (!override) return
-      if (override.title) {
-        const titleEl = section.querySelector<HTMLElement>("[data-block-title]")
-        if (titleEl) titleEl.textContent = override.title
+
+      const titleEl = section.querySelector<HTMLElement>("[data-block-title]")
+      if (titleEl) {
+        if (titleEl.dataset.vsDefaultText === undefined) titleEl.dataset.vsDefaultText = titleEl.textContent ?? ""
+        titleEl.textContent = override?.title || titleEl.dataset.vsDefaultText
       }
-      if (override.label) {
-        const labelEl = section.querySelector<HTMLElement>("[data-block-label]")
-        if (labelEl) labelEl.textContent = override.label
+      const labelEl = section.querySelector<HTMLElement>("[data-block-label]")
+      if (labelEl) {
+        if (labelEl.dataset.vsDefaultText === undefined) labelEl.dataset.vsDefaultText = labelEl.textContent ?? ""
+        labelEl.textContent = override?.label || labelEl.dataset.vsDefaultText
       }
     })
   }, [doc, blockOverrides])
