@@ -45,8 +45,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "조회에 실패했습니다." }, { status: 500 })
   }
 
+  const EXPIRY_WARNING_DAYS = 3
   const now = new Date()
   const purgedIds: string[] = []
+  const soonToExpire: { id: string; daysLeft: number; label: string }[] = []
 
   for (const inv of invitations ?? []) {
     const customer = Array.isArray(inv.customers) ? inv.customers[0] : inv.customers
@@ -55,9 +57,18 @@ export async function GET(request: Request) {
     if (!weddingDate) continue // 예식일 미입력 상태면 만료 판단 불가 — 건드리지 않는다
 
     const expiry = computeExpiryDate(weddingDate, daysAfterWedding)
-    if (Number.isNaN(expiry.getTime()) || expiry >= now) continue
+    if (Number.isNaN(expiry.getTime())) continue
 
-    purgedIds.push(inv.id as string)
+    if (expiry < now) {
+      purgedIds.push(inv.id as string)
+      continue
+    }
+
+    const daysLeft = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    if (daysLeft <= EXPIRY_WARNING_DAYS) {
+      const label = [raw.groom_name, raw.bride_name].filter(Boolean).join(" ♥ ") || "청첩장"
+      soonToExpire.push({ id: inv.id as string, daysLeft, label })
+    }
   }
 
   if (purgedIds.length > 0) {
@@ -71,5 +82,35 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, checked: invitations?.length ?? 0, purged: purgedIds.length, purgedIds })
+  // 만료 임박 알림 — 한 청첩장당 딱 한 번만 보낸다. 크론이 매일 도는데 dedup이 없으면
+  // 3일 내내 같은 알림이 반복 삽입된다. 이미 이 청첩장으로 보낸 적이 있는지는
+  // link_to 값으로 판별한다(청첩장 하나가 만료 경고 대상이 되는 건 보관정책상 일생에 한 번뿐).
+  if (soonToExpire.length > 0) {
+    const { data: existingWarnings } = await admin
+      .from("notifications")
+      .select("link_to")
+      .eq("type", "link_expiring")
+    const alreadyWarned = new Set((existingWarnings ?? []).map((w) => w.link_to))
+
+    const toNotify = soonToExpire.filter((s) => !alreadyWarned.has(`/admin/invitations/editor/${s.id}`))
+    if (toNotify.length > 0) {
+      const { error: notifyError } = await admin.from("notifications").insert(
+        toNotify.map((s) => ({
+          type: "link_expiring",
+          title: "청첩장 만료 임박",
+          message: `${s.label} — ${s.daysLeft}일 후 보관 정책에 따라 자동 삭제됩니다.`,
+          link_to: `/admin/invitations/editor/${s.id}`,
+        }))
+      )
+      if (notifyError) console.error("purge-expired-invitations: 만료 임박 알림 삽입 실패:", notifyError.message)
+    }
+  }
+
+  return NextResponse.json({
+    ok: true,
+    checked: invitations?.length ?? 0,
+    purged: purgedIds.length,
+    purgedIds,
+    warned: soonToExpire.length,
+  })
 }

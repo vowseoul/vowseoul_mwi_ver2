@@ -218,8 +218,56 @@ function getCalendarDays(dateStr: string) {
   return { year, month, targetDay, days, date }
 }
 
+/** RFC5545 텍스트 이스케이프 (콤마/세미콜론/개행) */
+function escapeIcsText(text: string): string {
+  return text.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n")
+}
+
+/** "YYYY-MM-DD" + "HH:MM"(없으면 낮 12시로 폴백)을 캘린더 링크에 쓸 날짜/시각 부품으로 분해 */
+function parseWeddingDateTime(dateStr: string, timeStr?: string) {
+  const dateMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (!dateMatch) return null
+  const timeMatch = (timeStr || "").match(/^(\d{2}):(\d{2})/)
+  return {
+    y: Number(dateMatch[1]), mo: Number(dateMatch[2]), d: Number(dateMatch[3]),
+    h: timeMatch ? Number(timeMatch[1]) : 12, mi: timeMatch ? Number(timeMatch[2]) : 0,
+  }
+}
+
+/** iOS/macOS 캘린더 앱이 여는 .ics 데이터 URI. 예식 소요시간은 관례상 2시간으로 고정한다
+ * (실제 종료 시각을 입력받는 필드가 없다 — 굳이 새 필드를 만들 만큼 중요하지 않다). */
+function buildIcsHref(opts: { title: string; location: string; dateStr: string; timeStr?: string }): string | null {
+  const t = parseWeddingDateTime(opts.dateStr, opts.timeStr)
+  if (!t) return null
+  const pad = (n: number) => String(n).padStart(2, "0")
+  const stamp = (h: number) => `${t.y}${pad(t.mo)}${pad(t.d)}T${pad(h)}${pad(t.mi)}00`
+  const ics = [
+    "BEGIN:VCALENDAR", "VERSION:2.0", "BEGIN:VEVENT",
+    `DTSTART;TZID=Asia/Seoul:${stamp(t.h)}`,
+    `DTEND;TZID=Asia/Seoul:${stamp((t.h + 2) % 24)}`,
+    `SUMMARY:${escapeIcsText(opts.title)}`,
+    `LOCATION:${escapeIcsText(opts.location)}`,
+    "END:VEVENT", "END:VCALENDAR",
+  ].join("\r\n")
+  return `data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`
+}
+
+/** 구글 캘린더 "일정 추가" 템플릿 링크 (안드로이드/데스크톱에서 .ics보다 UX가 매끄럽다) */
+function buildGoogleCalendarHref(opts: { title: string; location: string; dateStr: string; timeStr?: string }): string | null {
+  const t = parseWeddingDateTime(opts.dateStr, opts.timeStr)
+  if (!t) return null
+  const pad = (n: number) => String(n).padStart(2, "0")
+  const stamp = (h: number) => `${t.y}${pad(t.mo)}${pad(t.d)}T${pad(h)}${pad(t.mi)}00`
+  const params = new URLSearchParams({
+    action: "TEMPLATE", text: opts.title, dates: `${stamp(t.h)}/${stamp((t.h + 2) % 24)}`,
+    location: opts.location, ctz: "Asia/Seoul",
+  })
+  return `https://calendar.google.com/calendar/render?${params.toString()}`
+}
+
 function CalendarIsland({ accent, data, raw, blockOverrides }: SlotProps) {
   const dateStr = (typeof raw?.wedding_date === "string" ? raw.wedding_date : data.wedding_date) || ""
+  const timeStr = (typeof raw?.wedding_time === "string" ? raw.wedding_time : data.wedding_time) || ""
   const ddayEnabled = blockOverrides?.calendar?.ddayEnabled !== false
   const [now, setNow] = useState(() => new Date())
 
@@ -267,6 +315,26 @@ function CalendarIsland({ accent, data, raw, blockOverrides }: SlotProps) {
           })}
         </div>
       </div>
+
+      {/* 캘린더 앱에 일정 추가 — iOS/macOS는 .ics 다운로드, 그 외엔 구글 캘린더 링크가 UX가 더 낫다 */}
+      {(() => {
+        const title = [data.groom_name, data.bride_name].filter(Boolean).join(" ♥ ") + " 결혼식"
+        const location = [data.venue_name, data.venue_address].filter(Boolean).join(" ")
+        const icsHref = buildIcsHref({ title, location, dateStr, timeStr })
+        const googleHref = buildGoogleCalendarHref({ title, location, dateStr, timeStr })
+        if (!icsHref || !googleHref) return null
+        const btnStyle: React.CSSProperties = {
+          flex: 1, padding: "9px 0", borderRadius: 6, cursor: "pointer", textAlign: "center",
+          border: `1px solid ${soft(60)}`, background: "transparent", color: "inherit", fontSize: 12,
+          textDecoration: "none", display: "block",
+        }
+        return (
+          <div style={{ display: "flex", gap: 6, marginTop: 10, maxWidth: 320, margin: "10px auto 0" }}>
+            <a href={icsHref} download="wedding.ics" style={btnStyle}>캘린더 앱에 추가</a>
+            <a href={googleHref} target="_blank" rel="noopener noreferrer" style={btnStyle}>구글 캘린더</a>
+          </div>
+        )
+      })()}
 
       {/* D-day 카운트다운 */}
       {ddayEnabled && (
@@ -412,12 +480,19 @@ function AccountRow({ label, value, accent }: { label: string; value: string; ac
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
   }
-  // 계좌번호만 복사해두고 카카오페이 앱을 열어준다 — 카카오페이는 공식 이체 API 없이도
-  // 이 딥링크(kakaotalk://kakaopay/home)로 열리므로, 사용자가 그 안에서 붙여넣기만 하면 된다.
-  // 데스크톱처럼 카카오톡이 없는 환경에서는 딥링크가 그냥 무시되고 복사만 남는다.
+  // 계좌번호만 복사해두고 카카오페이/토스 앱을 열어준다 — 은행마다 다른 공식 송금 API 없이도
+  // 이 딥링크들로 앱이 열리므로, 사용자가 그 안에서 붙여넣기만 하면 된다. 계좌번호+금액을
+  // 앱에 바로 채워 넣는 방식(예: supertoss://send?bank=..&accountNo=..)은 은행명을 각 앱의
+  // 비공식 은행 코드로 정확히 매핑해야 해서 은행별로 조용히 틀린 화면이 열릴 위험이 있다 —
+  // "복사 + 앱 열기"가 덜 매끄럽지만 모든 은행에서 항상 정확하게 동작한다.
+  // 데스크톱처럼 해당 앱이 없는 환경에서는 딥링크가 그냥 무시되고 복사만 남는다(항상 안전한 폴백).
   const sendViaKakaoPay = () => {
     navigator.clipboard?.writeText(numericValue)
     window.location.href = "kakaotalk://kakaopay/home"
+  }
+  const sendViaToss = () => {
+    navigator.clipboard?.writeText(numericValue)
+    window.location.href = "supertoss://send"
   }
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${soft(25)}`, gap: 8 }}>
@@ -431,6 +506,12 @@ function AccountRow({ label, value, accent }: { label: string; value: string; ac
           border: "1px solid #FFE300", background: "#FFE300", color: "#3C1E1E", fontSize: 11.5, fontWeight: 600,
         }}>
           카카오페이
+        </button>
+        <button onClick={sendViaToss} style={{
+          padding: "6px 10px", borderRadius: 7, cursor: "pointer", whiteSpace: "nowrap",
+          border: "1px solid #0064FF", background: "#0064FF", color: "#fff", fontSize: 11.5, fontWeight: 600,
+        }}>
+          토스
         </button>
         <button onClick={copy} style={{
           padding: "6px 12px", borderRadius: 7, cursor: "pointer", whiteSpace: "nowrap",
@@ -738,16 +819,20 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
     if (invitationId) {
       const isAttending = attending === "yes"
       const wantsMeal = isAttending && mealEnabled && mealChoice !== MEAL_NONE
-      const { error: err } = await supabase.from("rsvp_responses").insert({
-        invitation_id: invitationId,
-        guest_name: name.trim(),
-        phone: phone.trim(),
-        side,
-        is_attending: isAttending,
-        party_size: isAttending ? partySize : 0,
-        meal_required: wantsMeal,
-        meal_choice: wantsMeal ? mealChoice : null,
-        shuttle_required: isAttending && shuttleEnabled ? shuttleUsed : false,
+      // 같은 사람이 여러 번 제출하면(재확인, 답 변경 등) 새 행을 쌓지 않고 기존 응답을
+      // 덮어쓴다 — invitation_id + 전화번호 조합으로 판별한다(§DB의 upsert_rsvp_response,
+      // rsvp_responses_invitation_phone_key 유니크 인덱스). rsvp_responses는 RLS상 anon이
+      // INSERT만 가능해 클라이언트가 직접 "이미 있으면 UPDATE"를 판단할 수 없으므로 RPC로 위임한다.
+      const { error: err } = await supabase.rpc("upsert_rsvp_response", {
+        p_invitation_id: invitationId,
+        p_guest_name: name.trim(),
+        p_phone: phone.trim(),
+        p_side: side,
+        p_is_attending: isAttending,
+        p_party_size: isAttending ? partySize : 0,
+        p_meal_required: wantsMeal,
+        p_meal_choice: wantsMeal ? mealChoice : null,
+        p_shuttle_required: isAttending && shuttleEnabled ? shuttleUsed : false,
       })
       if (err) { setSaving(false); setError("전송에 실패했습니다. 잠시 후 다시 시도해주세요."); return }
     }

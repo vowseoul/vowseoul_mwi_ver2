@@ -699,7 +699,22 @@ export interface Database {
       }
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      upsert_rsvp_response: {
+        Args: {
+          p_invitation_id: string
+          p_guest_name: string
+          p_phone: string
+          p_side: string
+          p_is_attending: boolean
+          p_party_size: number
+          p_meal_required: boolean
+          p_meal_choice: string | null
+          p_shuttle_required: boolean
+        }
+        Returns: Database['public']['Tables']['rsvp_responses']['Row']
+      }
+    }
     Enums: Record<string, never>
     CompositeTypes: Record<string, never>
   }
