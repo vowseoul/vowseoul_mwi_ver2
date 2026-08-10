@@ -6,6 +6,7 @@ import type { RawInvitationData } from "@/lib/invitation-data"
 import { supabase } from "@/lib/supabase"
 import { ConsentNotice } from "./consent-notice"
 import { CONSENT_VERSION, RSVP_CONSENT_COPY, GUESTBOOK_CONSENT_COPY } from "@/lib/privacy-consent"
+import { hashPassword } from "@/lib/dashboard-password"
 
 /**
  * 슬롯 레지스트리 — "기능 조합"의 핵심.
@@ -810,6 +811,14 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
   const [shuttleUsed, setShuttleUsed] = useState(false)
   const [consentAgreed, setConsentAgreed] = useState(false)
 
+  // 응답 취소(삭제) — 개인정보 보호법 제36조 대응. cancelPhone은 전용 입력칸이지만
+  // done 화면에서는 방금 제출한 phone을 그대로 재사용해 다시 입력할 필요가 없게 한다.
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelPhone, setCancelPhone] = useState("")
+  const [cancelBusy, setCancelBusy] = useState(false)
+  const [cancelError, setCancelError] = useState<string | null>(null)
+  const [cancelDone, setCancelDone] = useState(false)
+
   // rsvp_responses.meal_choice/shuttle_required 컬럼은 이미 있었지만 이 폼이 값을
   // 채운 적이 없어 신랑신부 대시보드의 식사·셔틀 집계가 항상 비어 있었다 — 여기서 채운다.
   // 관리자가 편집기 "블럭" 카드에서 청첩장별로 끌 수 있다(§customize-client.tsx) — 미설정 시 노출.
@@ -853,10 +862,50 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
     setSaving(false); setDone(true); setOpen(false)
   }
 
+  // 응답 취소 — invitation_id + 전화번호로 본인 응답을 찾아 삭제한다(§app/api/rsvp-cancel/route.ts).
+  const cancelRsvp = async (targetPhone: string) => {
+    if (!targetPhone.trim()) { setCancelError("연락처를 입력해주세요."); return }
+    if (!invitationId) return
+    setCancelBusy(true); setCancelError(null)
+    try {
+      const res = await fetch("/api/rsvp-cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invitationId, phone: targetPhone.trim() }),
+      })
+      if (res.ok) {
+        setCancelDone(true)
+        setCancelOpen(false)
+      } else {
+        setCancelError("해당 연락처로 제출된 참석 응답을 찾을 수 없습니다.")
+      }
+    } catch {
+      setCancelError("취소 처리 중 오류가 발생했습니다.")
+    } finally {
+      setCancelBusy(false)
+    }
+  }
+
   if (done) {
     return (
-      <div style={{ maxWidth: 320, margin: "0 auto", padding: "14px 0", fontSize: 14, lineHeight: 1.7, color: accent }}>
-        {name || "하객"}님, 참석 의사가 전달되었습니다. 감사합니다 ♥
+      <div style={{ maxWidth: 320, margin: "0 auto", padding: "14px 0", fontSize: 14, lineHeight: 1.7, color: accent, textAlign: "center" }}>
+        {cancelDone ? (
+          <>참석 응답이 취소되었습니다.</>
+        ) : (
+          <>
+            {name || "하객"}님, 참석 의사가 전달되었습니다. 감사합니다 ♥
+            <div style={{ marginTop: 10 }}>
+              <button
+                onClick={() => cancelRsvp(phone)}
+                disabled={cancelBusy}
+                style={{ background: "none", border: "none", cursor: cancelBusy ? "wait" : "pointer", fontSize: 12, color: "#9ca3af", textDecoration: "underline", padding: 0 }}
+              >
+                {cancelBusy ? "취소 처리 중…" : "응답 취소하기"}
+              </button>
+              {cancelError && <p style={{ fontSize: 11.5, color: "#dc2626", marginTop: 6 }}>{cancelError}</p>}
+            </div>
+          </>
+        )}
       </div>
     )
   }
@@ -881,6 +930,39 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
         <p style={{ marginTop: 8, textAlign: "center", fontSize: 11.5, color: daysUntilDeadline !== null && daysUntilDeadline <= 3 ? "#dc2626" : "inherit", opacity: daysUntilDeadline !== null && daysUntilDeadline <= 3 ? 1 : 0.6 }}>
           {deadlineLabel}까지 회신 부탁드립니다{daysUntilDeadline !== null && daysUntilDeadline <= 3 ? ` (마감 ${daysUntilDeadline}일 전)` : ""}
         </p>
+      )}
+
+      {invitationId && !cancelDone && (
+        <div style={{ marginTop: 10, textAlign: "center" }}>
+          <button
+            onClick={() => { setCancelOpen((v) => !v); setCancelError(null) }}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11.5, color: "#9ca3af", textDecoration: "underline", padding: 0 }}
+          >
+            이미 제출한 참석 응답을 취소할래요
+          </button>
+          {cancelOpen && (
+            <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
+              <input
+                value={cancelPhone}
+                onChange={(e) => setCancelPhone(e.target.value)}
+                placeholder="제출 시 입력한 연락처"
+                disabled={cancelBusy}
+                style={{ ...rsvpInput, flex: 1, fontSize: 13, padding: "8px 10px" }}
+              />
+              <button
+                onClick={() => cancelRsvp(cancelPhone)}
+                disabled={cancelBusy}
+                style={{ flexShrink: 0, padding: "0 14px", borderRadius: 8, border: "none", cursor: cancelBusy ? "wait" : "pointer", background: "#dc2626", color: "#fff", fontSize: 13, opacity: cancelBusy ? 0.7 : 1 }}
+              >
+                {cancelBusy ? "확인 중…" : "취소"}
+              </button>
+            </div>
+          )}
+          {cancelError && <p style={{ fontSize: 11.5, color: "#dc2626", marginTop: 6 }}>{cancelError}</p>}
+        </div>
+      )}
+      {cancelDone && (
+        <p style={{ marginTop: 10, textAlign: "center", fontSize: 12.5, color: accent }}>참석 응답이 취소되었습니다.</p>
       )}
 
       {open && (
@@ -1024,9 +1106,16 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
   const [loading, setLoading] = useState(!!invitationId)
   const [name, setName] = useState("")
   const [msg, setMsg] = useState("")
+  const [composePassword, setComposePassword] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [consentAgreed, setConsentAgreed] = useState(false)
+
+  // 본인 삭제 — 어떤 글의 삭제 비밀번호 입력창이 열려 있는지 id로 추적한다.
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deletePassword, setDeletePassword] = useState("")
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
 
   useEffect(() => {
     if (!invitationId) { setLoading(false); return }
@@ -1050,24 +1139,26 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
 
   const add = async () => {
     if (!name.trim() || !msg.trim()) return
+    if (!composePassword.trim()) { setError("나중에 글을 지울 때 필요한 비밀번호를 입력해주세요."); return }
     if (!consentAgreed) { setError("개인정보 수집·이용에 동의해주세요."); return }
     setError(null)
 
     if (!invitationId) {
       // 미리보기 모드: 저장 없이 화면에만 반영
       setEntries((e) => [{ id: "preview-" + Date.now(), name, msg }, ...e])
-      setName(""); setMsg("")
+      setName(""); setMsg(""); setComposePassword("")
       return
     }
 
     setSaving(true)
+    const passwordHash = await hashPassword(composePassword.trim())
     const { data, error: err } = await supabase
       .from("guestbook_entries")
       .insert({
         invitation_id: invitationId,
         author_name: name.trim(),
         message: msg.trim(),
-        password_hash: "",
+        password_hash: passwordHash,
         consent_agreed_at: new Date().toISOString(),
         consent_version: CONSENT_VERSION,
       })
@@ -1080,7 +1171,31 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
       return
     }
     setEntries((e) => [{ id: data.id, name: data.author_name, msg: data.message }, ...e])
-    setName(""); setMsg("")
+    setName(""); setMsg(""); setComposePassword("")
+  }
+
+  const confirmDelete = async (id: string) => {
+    if (!deletePassword.trim()) { setDeleteError("비밀번호를 입력해주세요."); return }
+    setDeleteBusy(true)
+    setDeleteError(null)
+    try {
+      const res = await fetch("/api/guestbook-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entryId: id, password: deletePassword.trim() }),
+      })
+      if (res.ok) {
+        setEntries((es) => es.filter((e) => e.id !== id))
+        setDeletingId(null)
+        setDeletePassword("")
+      } else {
+        setDeleteError("비밀번호가 일치하지 않습니다.")
+      }
+    } catch {
+      setDeleteError("삭제 중 오류가 발생했습니다.")
+    } finally {
+      setDeleteBusy(false)
+    }
   }
 
   return (
@@ -1090,6 +1205,11 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="이름"
           disabled={saving}
           style={{ width: 80, flexShrink: 0, padding: "8px 10px", border: "1px solid #e2ddd6", borderRadius: 8, outline: "none", fontSize: 13 }} />
+        <input value={composePassword} onChange={(e) => setComposePassword(e.target.value)} placeholder="삭제용 비밀번호" type="password"
+          disabled={saving}
+          style={{ width: 96, flexShrink: 0, padding: "8px 10px", border: "1px solid #e2ddd6", borderRadius: 8, outline: "none", fontSize: 13 }} />
+      </div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
         <input value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="축하 메시지"
           disabled={saving}
           style={{ flex: 1, minWidth: 0, padding: "8px 10px", border: "1px solid #e2ddd6", borderRadius: 8, outline: "none", fontSize: 13 }} />
@@ -1106,8 +1226,42 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
         ) : (
           entries.map((e) => (
             <div key={e.id} style={{ padding: "10px 12px", background: "rgba(255,255,255,.5)", borderRadius: 8 }}>
-              <span style={{ color: accent, marginRight: 8 }}>{e.name}</span>
-              <span>{e.msg}</span>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                <div>
+                  <span style={{ color: accent, marginRight: 8 }}>{e.name}</span>
+                  <span>{e.msg}</span>
+                </div>
+                {invitationId && (
+                  <button
+                    onClick={() => { setDeletingId(deletingId === e.id ? null : e.id); setDeletePassword(""); setDeleteError(null) }}
+                    style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", fontSize: 11, color: "#9ca3af", padding: 0 }}
+                  >
+                    삭제
+                  </button>
+                )}
+              </div>
+              {deletingId === e.id && (
+                <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(0,0,0,.08)", display: "flex", gap: 6 }}>
+                  <input
+                    type="password"
+                    value={deletePassword}
+                    onChange={(ev) => setDeletePassword(ev.target.value)}
+                    placeholder="작성 시 입력한 비밀번호"
+                    disabled={deleteBusy}
+                    style={{ flex: 1, minWidth: 0, padding: "7px 10px", border: "1px solid #e2ddd6", borderRadius: 8, outline: "none", fontSize: 12 }}
+                  />
+                  <button
+                    onClick={() => confirmDelete(e.id)}
+                    disabled={deleteBusy}
+                    style={{ flexShrink: 0, padding: "0 12px", borderRadius: 8, border: "none", cursor: deleteBusy ? "wait" : "pointer", background: "#dc2626", color: "#fff", fontSize: 12, opacity: deleteBusy ? 0.7 : 1 }}
+                  >
+                    {deleteBusy ? "삭제 중…" : "삭제"}
+                  </button>
+                </div>
+              )}
+              {deletingId === e.id && deleteError && (
+                <p style={{ fontSize: 11, color: "#dc2626", margin: "6px 0 0" }}>{deleteError}</p>
+              )}
             </div>
           ))
         )}

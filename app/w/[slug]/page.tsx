@@ -6,7 +6,7 @@ import { fetchRegisteredFonts, resolveFontFaces } from "@/lib/fonts"
 import { Metadata, Viewport } from "next"
 import { after } from "next/server"
 import { headers } from "next/headers"
-import { createHash } from "crypto"
+import { hashVisitorIp } from "@/lib/visit-hash"
 
 // 하객이 실수로 확대/축소하지 않도록 앱처럼 고정한다 (핀치줌·더블탭 확대 차단).
 // JS 레벨 보강은 InvitationFrame 의 preventZoom 옵션(§template-invitation-client.tsx)이 담당한다.
@@ -171,7 +171,7 @@ export default async function Page({ params }: PageProps) {
   const forwardedFor = h.get("x-forwarded-for")
   const ip = (forwardedFor ? forwardedFor.split(",")[0].trim() : null) || h.get("x-real-ip") || "unknown"
   const visitMeta = {
-    ipHash: createHash("sha256").update(ip).digest("hex"),
+    ipHash: hashVisitorIp(ip),
     userAgent: h.get("user-agent"),
     referrer: h.get("referer"),
   }

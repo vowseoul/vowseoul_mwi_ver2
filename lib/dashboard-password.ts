@@ -72,3 +72,11 @@ export async function verifyDashboardPassword(input: string, stored: string): Pr
 export function isHashedDashboardPassword(value: string): boolean {
   return /^\d+:[0-9a-f]{32}:[0-9a-f]+$/.test(value)
 }
+
+/**
+ * 범용 별칭 — 알고리즘 자체는 dashboard_password 전용이 아니라서, 짧은 비밀번호를
+ * 해시해야 하는 다른 곳(§app/api/guestbook-delete/route.ts의 방명록 본인삭제 비밀번호)도
+ * 새 파일을 만들지 않고 그대로 재사용한다.
+ */
+export const hashPassword = hashDashboardPassword
+export const verifyPassword = verifyDashboardPassword

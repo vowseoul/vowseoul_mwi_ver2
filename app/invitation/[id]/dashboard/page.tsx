@@ -7,6 +7,7 @@ import { dashboardCookieName, verifyDashboardToken } from '@/lib/dashboard-sessi
 import { mergeInvitationRaw } from '@/lib/invitation-data'
 import { SELF_EDIT_SETTINGS_KEY, parseSelfEditSettings } from '@/lib/self-edit'
 import { GUEST_DATA_PURGE_DAYS } from '@/lib/data-retention'
+import { purgeGuestData } from '@/lib/guest-data-purge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Calendar, ShieldAlert } from 'lucide-react'
@@ -161,19 +162,13 @@ function daysSince(weddingDate: unknown): number | null {
 }
 
 /**
- * 예식일 14일 경과 시 수집 데이터 영구 삭제.
- *
- * `after()` 콜백 안에서는 `cookies()` 를 호출할 수 없다(Next.js 제약) — 따라서
- * 쿠키 세션에 의존하는 createSupabaseServerClient() 대신 세션이 필요 없는
- * 순수 anon 클라이언트를 여기서 직접 만든다.
+ * 예식일 14일 경과 시 수집 데이터 영구 삭제 — 매일 도는 크론
+ * (§app/api/cron/purge-expired-invitations)이 주력이고, 이건 신랑신부가 크론보다
+ * 먼저 대시보드에 들어오는 경우를 위한 안전망이다.
  */
 async function purgeCollectedData(invitationId: string) {
   try {
-    const supabase = createSupabaseAdminClient()
-    for (const table of ['rsvp_responses', 'guestbook_entries', 'visit_logs'] as const) {
-      const { error } = await supabase.from(table).delete().eq('invitation_id', invitationId)
-      if (error) console.error(`purge ${table} failed:`, error.message)
-    }
+    await purgeGuestData(createSupabaseAdminClient(), invitationId)
   } catch (err) {
     console.error('purgeCollectedData failed:', err)
   }
