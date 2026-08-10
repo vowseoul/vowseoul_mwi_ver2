@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { dashboardCookieName, verifyDashboardToken } from '@/lib/dashboard-session'
 import { mergeInvitationRaw } from '@/lib/invitation-data'
+import { SELF_EDIT_SETTINGS_KEY, parseSelfEditSettings } from '@/lib/self-edit'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Calendar, ShieldAlert } from 'lucide-react'
@@ -90,12 +91,14 @@ export default async function CustomerDashboardPage({ params }: { params: Promis
   // aggregate-visit-stats)이 미리 집계해둔 visit_daily_stats(청첩장당 최대 며칠치
   // 행)를 쓰고, 아직 집계되지 않은 "오늘" 하루치만 count 쿼리로 센다.
   const todayStr = new Date().toISOString().slice(0, 10)
-  const [{ data: rsvps }, { data: guestbook }, { data: dailyStats }, { count: todayVisitCount }] = await Promise.all([
+  const [{ data: rsvps }, { data: guestbook }, { data: dailyStats }, { count: todayVisitCount }, { data: selfEditSetting }] = await Promise.all([
     supabase.from('rsvp_responses').select('*').eq('invitation_id', id).order('created_at', { ascending: false }),
     supabase.from('guestbook_entries').select('*').eq('invitation_id', id).order('created_at', { ascending: false }),
     supabase.from('visit_daily_stats').select('visit_date, total_visits').eq('invitation_id', id),
     supabase.from('visit_logs').select('id', { count: 'exact', head: true }).eq('invitation_id', id).gte('visited_at', `${todayStr}T00:00:00.000Z`),
+    supabase.from('settings').select('value').eq('key', SELF_EDIT_SETTINGS_KEY).maybeSingle(),
   ])
+  const selfEditEnabled = parseSelfEditSettings(selfEditSetting?.value).enabled
 
   const totalVisits = (dailyStats ?? []).reduce((sum, d) => sum + (d.total_visits || 0), 0) + (todayVisitCount ?? 0)
 
@@ -112,6 +115,7 @@ export default async function CustomerDashboardPage({ params }: { params: Promis
   return (
     <CustomerDashboardClient
       invitationId={id}
+      selfEditEnabled={selfEditEnabled}
       header={{
         groomName: String(raw.groom_name ?? '신랑'),
         brideName: String(raw.bride_name ?? '신부'),

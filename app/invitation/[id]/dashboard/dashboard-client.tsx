@@ -27,7 +27,8 @@ import {
   ShieldAlert,
   CalendarDays,
   Utensils,
-  Bus
+  Bus,
+  Pencil
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -102,6 +103,7 @@ export default function CustomerDashboardClient({
   initialGuestbook,
   totalVisits,
   dailyVisitStats,
+  selfEditEnabled,
 }: {
   invitationId: string
   header: DashboardHeaderInfo
@@ -109,6 +111,7 @@ export default function CustomerDashboardClient({
   initialGuestbook: GuestbookMessage[]
   totalVisits: number
   dailyVisitStats: DailyVisitStat[]
+  selfEditEnabled: boolean
 }) {
   const [rsvps, setRsvps] = useState<RSVP[]>(initialRsvps)
   const [guestbook, setGuestbook] = useState<GuestbookMessage[]>(initialGuestbook)
@@ -289,11 +292,20 @@ export default function CustomerDashboardClient({
               모바일 청첩장 대시보드
             </span>
           </div>
-          <Link href={header.publicSlug ? `/w/${header.publicSlug}` : "#"}>
-            <Button variant="ghost" size="sm" className="text-xs gap-1.5 hover:bg-muted">
-              <ArrowLeft className="w-3.5 h-3.5" /> 청첩장 확인
-            </Button>
-          </Link>
+          <div className="flex items-center gap-1.5">
+            {selfEditEnabled && (
+              <Link href={`/invitation/${invitationId}/edit`}>
+                <Button variant="ghost" size="sm" className="text-xs gap-1.5 hover:bg-muted">
+                  <Pencil className="w-3.5 h-3.5" /> 정보 수정
+                </Button>
+              </Link>
+            )}
+            <Link href={header.publicSlug ? `/w/${header.publicSlug}` : "#"}>
+              <Button variant="ghost" size="sm" className="text-xs gap-1.5 hover:bg-muted">
+                <ArrowLeft className="w-3.5 h-3.5" /> 청첩장 확인
+              </Button>
+            </Link>
+          </div>
         </div>
       </header>
 

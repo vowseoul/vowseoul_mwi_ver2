@@ -21,6 +21,7 @@ import { Save, Globe, Mail, CreditCard, Bell, Shield, Image as ImageIcon, Upload
 import { supabase } from "@/lib/supabase"
 import { createClient } from "@supabase/supabase-js"
 import { DATA_RETENTION_SETTINGS_KEY, DEFAULT_RETENTION_DAYS, parseRetentionSettings } from "@/lib/data-retention"
+import { SELF_EDIT_SETTINGS_KEY, parseSelfEditSettings } from "@/lib/self-edit"
 import { useProfilesQuery } from "@/hooks/queries/useCustomers"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -160,6 +161,10 @@ export default function AdminSettingsPage() {
   const [retentionDays, setRetentionDays] = useState<number>(DEFAULT_RETENTION_DAYS)
   const [isSavingRetention, setIsSavingRetention] = useState(false)
 
+  // 신랑신부 셀프 편집 기능 on/off (§lib/self-edit.ts)
+  const [selfEditEnabled, setSelfEditEnabled] = useState(false)
+  const [isSavingSelfEdit, setIsSavingSelfEdit] = useState(false)
+
   useEffect(() => {
     fetchCurrentSetting()
     fetchImages()
@@ -214,6 +219,30 @@ export default function AdminSettingsPage() {
       .maybeSingle()
 
     setRetentionDays(parseRetentionSettings(retentionData?.value).daysAfterWedding)
+
+    const { data: selfEditData } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', SELF_EDIT_SETTINGS_KEY)
+      .maybeSingle()
+
+    setSelfEditEnabled(parseSelfEditSettings(selfEditData?.value).enabled)
+  }
+
+  const handleSaveSelfEdit = async (nextEnabled: boolean) => {
+    setSelfEditEnabled(nextEnabled)
+    setIsSavingSelfEdit(true)
+    const { error } = await supabase.from('settings').upsert({
+      key: SELF_EDIT_SETTINGS_KEY,
+      value: { enabled: nextEnabled },
+    })
+    setIsSavingSelfEdit(false)
+    if (error) {
+      setSelfEditEnabled(!nextEnabled)
+      toast.error('셀프 편집 설정 저장에 실패했습니다.')
+    } else {
+      toast.success(nextEnabled ? '고객 셀프 편집이 활성화되었습니다.' : '고객 셀프 편집이 비활성화되었습니다.')
+    }
   }
 
   const handleSaveRetention = async () => {
@@ -525,6 +554,32 @@ export default function AdminSettingsPage() {
                   <Save className="w-4 h-4 mr-2" />
                   {isSavingRetention ? "저장 중..." : "저장"}
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                고객 셀프 편집
+              </CardTitle>
+              <CardDescription>
+                신랑신부가 관리자 대시보드를 거치지 않고 이름·연락처·인사말·계좌·갤러리 사진을
+                직접 수정할 수 있게 합니다. 디자인(색상·폰트)과 테마, 블록 순서는 이 기능으로
+                수정할 수 없습니다 — 항상 관리자 편집기에서만 변경됩니다.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">셀프 편집 허용</p>
+                  <p className="text-xs text-muted-foreground">
+                    끄면 신랑신부 대시보드에서 편집 화면 진입 버튼이 사라지고, 편집 링크로 직접
+                    접속해도 안내 화면만 표시됩니다.
+                  </p>
+                </div>
+                <Switch checked={selfEditEnabled} onCheckedChange={handleSaveSelfEdit} disabled={isSavingSelfEdit} />
               </div>
             </CardContent>
           </Card>
