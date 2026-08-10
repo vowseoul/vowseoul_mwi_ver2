@@ -160,6 +160,8 @@ export interface BlockOverride {
   mealEnabled?: boolean
   /** rsvp 블럭 전용: false 면 셔틀버스 이용 질문을 숨긴다 (미설정 시 노출) */
   shuttleEnabled?: boolean
+  /** rsvp 블럭 전용: 응답 마감일("YYYY-MM-DD"). 없으면 마감 없이 상시 접수 */
+  rsvpDeadline?: string
   /** calendar 블럭 전용: false 면 D-day 카운트다운을 숨긴다 (미설정 시 노출) */
   ddayEnabled?: boolean
 }
@@ -182,6 +184,7 @@ export function extractBlockOverrides(overrides: unknown): Record<string, BlockO
     if (typeof r.label === "string") entry.label = r.label
     if (typeof r.mealEnabled === "boolean") entry.mealEnabled = r.mealEnabled
     if (typeof r.shuttleEnabled === "boolean") entry.shuttleEnabled = r.shuttleEnabled
+    if (typeof r.rsvpDeadline === "string" && r.rsvpDeadline) entry.rsvpDeadline = r.rsvpDeadline
     if (typeof r.ddayEnabled === "boolean") entry.ddayEnabled = r.ddayEnabled
     if (Object.keys(entry).length > 0) out[key] = entry
   }

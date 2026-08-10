@@ -83,11 +83,31 @@ export default async function CustomerDashboardPage({ params }: { params: Promis
   }
 
   // 하객 데이터는 anon 키로 읽을 수 없으므로(RLS) 브라우저가 아니라 여기서 읽어 넘긴다.
-  const [{ data: rsvps }, { data: guestbook }, { data: visits }] = await Promise.all([
+  //
+  // 방문 통계는 visit_logs 원본을 통째로 읽지 않는다 — 인기 청첩장은 며칠 사이에도
+  // 수천 행이 쌓일 수 있어, 매 요청마다 그걸 전부 내려받아 클라이언트에서 날짜별로
+  // 세는 방식은 방문이 쌓일수록 점점 느려진다. 대신 하루 1회 크론(§app/api/cron/
+  // aggregate-visit-stats)이 미리 집계해둔 visit_daily_stats(청첩장당 최대 며칠치
+  // 행)를 쓰고, 아직 집계되지 않은 "오늘" 하루치만 count 쿼리로 센다.
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const [{ data: rsvps }, { data: guestbook }, { data: dailyStats }, { count: todayVisitCount }] = await Promise.all([
     supabase.from('rsvp_responses').select('*').eq('invitation_id', id).order('created_at', { ascending: false }),
     supabase.from('guestbook_entries').select('*').eq('invitation_id', id).order('created_at', { ascending: false }),
-    supabase.from('visit_logs').select('id, visited_at').eq('invitation_id', id).order('visited_at', { ascending: false }),
+    supabase.from('visit_daily_stats').select('visit_date, total_visits').eq('invitation_id', id),
+    supabase.from('visit_logs').select('id', { count: 'exact', head: true }).eq('invitation_id', id).gte('visited_at', `${todayStr}T00:00:00.000Z`),
   ])
+
+  const totalVisits = (dailyStats ?? []).reduce((sum, d) => sum + (d.total_visits || 0), 0) + (todayVisitCount ?? 0)
+
+  const dailyVisitStats = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date()
+    d.setDate(d.getDate() - (6 - i))
+    const dateStr = d.toISOString().slice(0, 10)
+    const count = dateStr === todayStr
+      ? (todayVisitCount ?? 0)
+      : (dailyStats ?? []).find((s) => s.visit_date === dateStr)?.total_visits ?? 0
+    return { date: dateStr, count }
+  })
 
   return (
     <CustomerDashboardClient
@@ -118,11 +138,8 @@ export default async function CustomerDashboardPage({ params }: { params: Promis
         is_visible: g.is_visible !== false,
         createdAt: String(g.created_at ?? ''),
       }))}
-      initialVisits={(visits ?? []).map((v) => ({
-        id: String(v.id),
-        visitedDate: String(v.visited_at ?? '').split('T')[0],
-        visitedAt: String(v.visited_at ?? ''),
-      }))}
+      totalVisits={totalVisits}
+      dailyVisitStats={dailyVisitStats}
     />
   )
 }

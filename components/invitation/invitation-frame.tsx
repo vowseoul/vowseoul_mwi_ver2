@@ -39,6 +39,7 @@ export interface BlockOverride {
   /** rsvp 블럭 전용 서브옵션 (§slot-registry.tsx RsvpIsland) */
   mealEnabled?: boolean
   shuttleEnabled?: boolean
+  rsvpDeadline?: string
   /** calendar 블럭 전용 서브옵션 (§slot-registry.tsx CalendarIsland) */
   ddayEnabled?: boolean
 }

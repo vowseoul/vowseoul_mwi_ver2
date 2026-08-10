@@ -811,6 +811,12 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
   const mealEnabled = rsvpOverride?.mealEnabled !== false
   const shuttleEnabled = rsvpOverride?.shuttleEnabled !== false
 
+  // 마감일은 "그날 자정까지"로 취급한다 — 하객이 마감일 당일에도 자정 전까지는 응답할 수 있어야 한다.
+  const deadline = rsvpOverride?.rsvpDeadline ? new Date(`${rsvpOverride.rsvpDeadline}T23:59:59`) : null
+  const isPastDeadline = !!deadline && deadline.getTime() < Date.now()
+  const daysUntilDeadline = deadline ? Math.ceil((deadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null
+  const deadlineLabel = deadline ? `${deadline.getMonth() + 1}월 ${deadline.getDate()}일` : null
+
   const submit = async () => {
     if (!name.trim()) { setError("성함을 입력해주세요."); return }
     if (!phone.trim()) { setError("연락처를 입력해주세요."); return }
@@ -847,6 +853,14 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
     )
   }
 
+  if (isPastDeadline) {
+    return (
+      <div style={{ maxWidth: 320, margin: "0 auto", padding: "14px 0", fontSize: 13.5, lineHeight: 1.6, color: "#9ca3af", textAlign: "center" }}>
+        참석 의사 접수가 마감되었습니다.
+      </div>
+    )
+  }
+
   return (
     <div style={{ maxWidth: 320, margin: "0 auto" }}>
       <button onClick={() => setOpen(true)} style={{
@@ -855,6 +869,11 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
       }}>
         참석 의사 전달하기
       </button>
+      {deadlineLabel && (
+        <p style={{ marginTop: 8, textAlign: "center", fontSize: 11.5, color: daysUntilDeadline !== null && daysUntilDeadline <= 3 ? "#dc2626" : "inherit", opacity: daysUntilDeadline !== null && daysUntilDeadline <= 3 ? 1 : 0.6 }}>
+          {deadlineLabel}까지 회신 부탁드립니다{daysUntilDeadline !== null && daysUntilDeadline <= 3 ? ` (마감 ${daysUntilDeadline}일 전)` : ""}
+        </p>
+      )}
 
       {open && (
         <div
@@ -1088,12 +1107,49 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
  * OS 공유 시트(카카오톡 포함, 별도 SDK/API 키 없이도 뜬다)를 그대로 띄우고,
  * 지원하지 않는 환경(대부분의 데스크톱 브라우저)에서는 클립보드 복사로 대체한다.
  * ------------------------------------------------------------------ */
+/** 카카오 JS SDK의 Kakao.Share.sendDefault 호출부만 타입으로 선언 — 나머지는 안 쓴다 */
+interface KakaoGlobal {
+  init: (key: string) => void
+  isInitialized: () => boolean
+  Share: { sendDefault: (options: Record<string, unknown>) => void }
+}
+
+/** NEXT_PUBLIC_KAKAO_JS_KEY가 설정된 경우에만 SDK를 로드해 초기화한다 — 키가 없으면
+ * 아예 로드를 시도하지 않고 카카오 공유 버튼도 노출하지 않는다(무료 카카오 개발자
+ * 콘솔에서 JS 앱 키를 발급받아야 한다 — 비즈메시지 파트너사 계약과는 무관하다). */
+function useKakaoShare(): KakaoGlobal | null {
+  const [kakao, setKakao] = useState<KakaoGlobal | null>(null)
+  const kakaoKey = process.env.NEXT_PUBLIC_KAKAO_JS_KEY
+
+  useEffect(() => {
+    if (!kakaoKey || typeof window === "undefined") return
+    const w = window as typeof window & { Kakao?: KakaoGlobal }
+    if (w.Kakao) {
+      if (!w.Kakao.isInitialized()) w.Kakao.init(kakaoKey)
+      setKakao(w.Kakao)
+      return
+    }
+    const script = document.createElement("script")
+    script.src = "https://t1.kakaocdn.net/kakao_js_sdk/2.7.5/kakao.min.js"
+    script.async = true
+    script.onload = () => {
+      if (w.Kakao && !w.Kakao.isInitialized()) w.Kakao.init(kakaoKey)
+      if (w.Kakao) setKakao(w.Kakao)
+    }
+    document.head.appendChild(script)
+  }, [kakaoKey])
+
+  return kakao
+}
+
 function ShareIsland({ accent, data }: SlotProps) {
   const [copied, setCopied] = useState(false)
+  const kakao = useKakaoShare()
+  const title = data.kakao_share_title || [data.groom_name, data.bride_name].filter(Boolean).join(" ♥ ") || "모바일 청첩장"
+
   const handleShare = () => {
     if (typeof window === "undefined") return
     const url = window.location.href
-    const title = [data.groom_name, data.bride_name].filter(Boolean).join(" ♥ ") || "모바일 청첩장"
     const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> }
     if (nav.share) {
       nav.share({ title, url }).catch(() => { /* 사용자가 공유 시트를 취소한 경우 등 - 무시 */ })
@@ -1103,17 +1159,39 @@ function ShareIsland({ accent, data }: SlotProps) {
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
   }
+
+  const shareViaKakao = () => {
+    if (!kakao || typeof window === "undefined") return
+    const url = window.location.href
+    kakao.Share.sendDefault({
+      objectType: "feed",
+      content: {
+        title,
+        description: data.kakao_share_text || "저희 결혼식에 초대합니다",
+        imageUrl: data.kakao_share_img || data.main_image || "",
+        link: { mobileWebUrl: url, webUrl: url },
+      },
+      buttons: [{ title: "청첩장 보기", link: { mobileWebUrl: url, webUrl: url } }],
+    })
+  }
+
+  const btnStyle: React.CSSProperties = {
+    display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 22px", borderRadius: 20,
+    border: `1px solid ${soft(40)}`, background: "transparent", color: "inherit", fontSize: 12.5,
+    cursor: "pointer", opacity: 0.85,
+  }
+
   return (
-    <button
-      onClick={handleShare}
-      style={{
-        display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 22px", borderRadius: 20,
-        border: `1px solid ${soft(40)}`, background: "transparent", color: "inherit", fontSize: 12.5,
-        cursor: "pointer", opacity: 0.85,
-      }}
-    >
-      {copied ? "청첩장 주소가 복사되었습니다" : "청첩장 주소 공유하기"}
-    </button>
+    <div style={{ display: "inline-flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+      {kakao && (
+        <button onClick={shareViaKakao} style={{ ...btnStyle, border: "1px solid #FFE300", background: "#FFE300", color: "#3C1E1E", opacity: 1 }}>
+          카카오톡 공유
+        </button>
+      )}
+      <button onClick={handleShare} style={btnStyle}>
+        {copied ? "청첩장 주소가 복사되었습니다" : "청첩장 주소 공유하기"}
+      </button>
+    </div>
   )
 }
 

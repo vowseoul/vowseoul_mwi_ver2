@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/purge-expired-invitations",
       "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/cron/aggregate-visit-stats",
+      "schedule": "5 18 * * *"
     }
   ]
 }

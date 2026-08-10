@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Switch } from '@/components/ui/switch'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import {
   Pagination,
@@ -52,10 +53,10 @@ export interface GuestbookMessage {
   createdAt: string
 }
 
-export interface VisitorLog {
-  id: string
-  visitedDate: string
-  visitedAt: string
+/** 서버가 visit_daily_stats(+오늘 하루치 실시간 카운트)로 미리 집계해 넘겨주는 일별 방문수 */
+export interface DailyVisitStat {
+  date: string
+  count: number
 }
 
 /** 서버 컴포넌트가 미리 해석해 넘겨주는 표시용 정보 */
@@ -99,27 +100,38 @@ export default function CustomerDashboardClient({
   header,
   initialRsvps,
   initialGuestbook,
-  initialVisits,
+  totalVisits,
+  dailyVisitStats,
 }: {
   invitationId: string
   header: DashboardHeaderInfo
   initialRsvps: RSVP[]
   initialGuestbook: GuestbookMessage[]
-  initialVisits: VisitorLog[]
+  totalVisits: number
+  dailyVisitStats: DailyVisitStat[]
 }) {
   const [rsvps, setRsvps] = useState<RSVP[]>(initialRsvps)
   const [guestbook, setGuestbook] = useState<GuestbookMessage[]>(initialGuestbook)
-  const visitorLogs = initialVisits
 
   // 방명록이 수백 건 쌓이면 표 전체를 한 번에 렌더링하는 게 무거워져 5개씩 페이지네이션한다
   const GUESTBOOK_PAGE_SIZE = 5
   const [guestbookPage, setGuestbookPage] = useState(1)
+  const [selectedGuestbookIds, setSelectedGuestbookIds] = useState<Set<string>>(new Set())
   const guestbookTotalPages = Math.max(1, Math.ceil(guestbook.length / GUESTBOOK_PAGE_SIZE))
   const safeGuestbookPage = Math.min(guestbookPage, guestbookTotalPages)
   const pagedGuestbook = guestbook.slice(
     (safeGuestbookPage - 1) * GUESTBOOK_PAGE_SIZE,
     safeGuestbookPage * GUESTBOOK_PAGE_SIZE
   )
+  const allPagedSelected = pagedGuestbook.length > 0 && pagedGuestbook.every(m => selectedGuestbookIds.has(m.id))
+  const toggleSelectAllOnPage = () => {
+    setSelectedGuestbookIds(prev => {
+      const next = new Set(prev)
+      if (allPagedSelected) pagedGuestbook.forEach(m => next.delete(m.id))
+      else pagedGuestbook.forEach(m => next.add(m.id))
+      return next
+    })
+  }
 
   // 방명록 노출 여부 전환
   const handleToggleVisibility = async (id: string, currentVal: boolean) => {
@@ -145,6 +157,44 @@ export default function CustomerDashboardClient({
       setGuestbook(prev => prev.filter(g => g.id !== id))
       toast.success('방명록 축하 한마디가 삭제되었습니다.')
     }
+  }
+
+  // 방명록 일괄 숨김/삭제 — 방명록이 많이 쌓이면 하나씩 숨기는 게 번거로워 여러 건을 한 번에 처리한다.
+  // 별도 서버 라우트를 새로 만들지 않고 기존 단일 액션(/api/dashboard-data)을 선택 건수만큼 병렬 호출한다.
+  const toggleGuestbookSelection = (id: string) => {
+    setSelectedGuestbookIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const handleBulkHide = async () => {
+    const ids = Array.from(selectedGuestbookIds)
+    const results = await Promise.all(
+      ids.map(id => postDashboardAction({ action: 'toggleGuestbook', invitationId, id, isVisible: false }))
+    )
+    const succeeded = new Set(ids.filter((_, i) => results[i]))
+    if (succeeded.size > 0) {
+      setGuestbook(prev => prev.map(m => succeeded.has(m.id) ? { ...m, is_visible: false } : m))
+      toast.success(`${succeeded.size}건 숨김 처리했습니다.`)
+    }
+    setSelectedGuestbookIds(new Set())
+  }
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedGuestbookIds)
+    if (!confirm(`선택한 방명록 ${ids.length}건을 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return
+    const results = await Promise.all(
+      ids.map(id => postDashboardAction({ action: 'delete', invitationId, id, target: 'guestbook' }))
+    )
+    const succeeded = new Set(ids.filter((_, i) => results[i]))
+    if (succeeded.size > 0) {
+      setGuestbook(prev => prev.filter(m => !succeeded.has(m.id)))
+      toast.success(`${succeeded.size}건 삭제했습니다.`)
+    }
+    setSelectedGuestbookIds(new Set())
   }
 
   const downloadCsv = (filename: string, headers: string[], rows: (string | number)[][]) => {
@@ -203,25 +253,11 @@ export default function CustomerDashboardClient({
     )
   }
 
-  // 최근 7일 방문자 추이
-  const getRecent7DaysStats = () => {
-    const stats: Record<string, number> = {}
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date()
-      d.setDate(d.getDate() - i)
-      stats[d.toISOString().split('T')[0]] = 0
-    }
-    visitorLogs.forEach(log => {
-      const dateStr = log.visitedDate ? log.visitedDate : new Date(log.visitedAt).toISOString().split('T')[0]
-      if (stats[dateStr] !== undefined) stats[dateStr]++
-    })
-    return Object.entries(stats).map(([date, count]) => {
-      const parts = date.split('-')
-      return { label: `${parts[1]}/${parts[2]}`, count }
-    })
-  }
-
-  const chartData = getRecent7DaysStats()
+  // 최근 7일 방문자 추이 — 서버가 visit_daily_stats로 미리 집계해 넘겨준 값을 그대로 쓴다
+  const chartData = dailyVisitStats.map(({ date, count }) => {
+    const parts = date.split('-')
+    return { label: `${parts[1]}/${parts[2]}`, count }
+  })
   const maxCount = Math.max(...chartData.map(d => d.count), 1)
 
   const totalAttendingRsvps = rsvps.filter(r => r.attendance === 'yes')
@@ -284,7 +320,7 @@ export default function CustomerDashboardClient({
               <Users className="w-4 h-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{visitorLogs.length}회</div>
+              <div className="text-2xl font-bold">{totalVisits}회</div>
             </CardContent>
           </Card>
           <Card className="border border-border/70 shadow-sm bg-background">
@@ -511,10 +547,27 @@ export default function CustomerDashboardClient({
                     작성된 방명록이 없습니다.
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <>
+                    {selectedGuestbookIds.size > 0 && (
+                      <div className="flex items-center justify-between gap-2 border-b border-border/30 bg-muted/20 px-4 py-2">
+                        <span className="text-xs text-muted-foreground">{selectedGuestbookIds.size}개 선택됨</span>
+                        <div className="flex gap-1.5">
+                          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleBulkHide}>
+                            선택 항목 숨기기
+                          </Button>
+                          <Button size="sm" variant="outline" className="h-7 text-xs text-destructive hover:text-destructive" onClick={handleBulkDelete}>
+                            선택 항목 삭제
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    <div className="overflow-x-auto">
                     <Table>
                       <TableHeader className="bg-muted/30">
                         <TableRow>
+                          <TableHead className="w-10">
+                            <Checkbox checked={allPagedSelected} onCheckedChange={toggleSelectAllOnPage} aria-label="이 페이지 전체 선택" />
+                          </TableHead>
                           <TableHead className="text-center w-28">응답일자</TableHead>
                           <TableHead className="text-center w-28">작성자</TableHead>
                           <TableHead className="text-left">축하 메시지 내용</TableHead>
@@ -525,6 +578,13 @@ export default function CustomerDashboardClient({
                       <TableBody>
                         {pagedGuestbook.map((msg) => (
                           <TableRow key={msg.id} className="hover:bg-muted/10 text-xs">
+                            <TableCell>
+                              <Checkbox
+                                checked={selectedGuestbookIds.has(msg.id)}
+                                onCheckedChange={() => toggleGuestbookSelection(msg.id)}
+                                aria-label="선택"
+                              />
+                            </TableCell>
                             <TableCell className="text-center text-muted-foreground font-light">
                               {msg.createdAt ? new Date(msg.createdAt).toLocaleDateString('ko-KR') : '-'}
                             </TableCell>
@@ -561,7 +621,8 @@ export default function CustomerDashboardClient({
                         ))}
                       </TableBody>
                     </Table>
-                  </div>
+                    </div>
+                  </>
                 )}
               </CardContent>
               {guestbookTotalPages > 1 && (

@@ -39,10 +39,12 @@ export default async function InvitationResponsesPage({
     ? await supabase.from("customers").select("*").eq("id", invitation.customer_id).maybeSingle()
     : { data: null }
 
-  const [{ data: rsvps }, { data: guestbook }, { data: visits }] = await Promise.all([
+  const [{ data: rsvps }, { data: guestbook }, { count: visitCount }] = await Promise.all([
     supabase.from("rsvp_responses").select("*").eq("invitation_id", id).order("created_at", { ascending: false }),
     supabase.from("guestbook_entries").select("*").eq("invitation_id", id).order("created_at", { ascending: false }),
-    supabase.from("visit_logs").select("id").eq("invitation_id", id),
+    // 방문 횟수 표시에 행 전체를 내려받을 필요가 없다 — count만 head 요청으로 받는다
+    // (인기 청첩장은 visit_logs가 수천 행까지 쌓일 수 있어 select("id") 전체 전송은 낭비다).
+    supabase.from("visit_logs").select("id", { count: "exact", head: true }).eq("invitation_id", id),
   ])
 
   const raw = mergeInvitationRaw(invitation, customer)
@@ -83,7 +85,7 @@ export default async function InvitationResponsesPage({
         <StatCard label="방명록" value={`${guestbookRows.length}개`} hint={`공개 ${guestbookRows.filter((g) => g.is_visible !== false).length}개`} icon={<MessageSquare className="h-4 w-4" />} />
         <StatCard
           label="누적 방문"
-          value={`${(visits ?? []).length}회`}
+          value={`${visitCount ?? 0}회`}
           hint="발행 페이지 조회 수"
           icon={<Users className="h-4 w-4" />}
           action={<ResetVisitsButton invitationId={id} />}

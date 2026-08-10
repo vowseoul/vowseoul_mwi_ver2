@@ -1345,6 +1345,15 @@ export default function CustomizeClient({
                                     onCheckedChange={(c) => setBlockOverride(b.key, { shuttleEnabled: c })}
                                   />
                                 </div>
+                                <Field>
+                                  <FieldLabel>응답 마감일</FieldLabel>
+                                  <Input
+                                    type="date"
+                                    value={override?.rsvpDeadline ?? ""}
+                                    onChange={(e) => setBlockOverride(b.key, { rsvpDeadline: e.target.value || undefined })}
+                                  />
+                                  <FieldDescription>비워두면 마감 없이 상시 접수됩니다.</FieldDescription>
+                                </Field>
                               </>
                             )}
                             {b.key === "calendar" && (
