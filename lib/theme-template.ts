@@ -120,6 +120,15 @@ export const BLOCK_KEYS = [
 ] as const
 export type BlockKey = (typeof BLOCK_KEYS)[number]
 
+/** BLOCK_KEYS 고정 한글 라벨 — 테마별 block_manifest에 라벨이 있으면 그쪽이 우선이고
+ * (getBlockManifest), 제목 편집이 없어 manifest에 안 실리는 블럭(rsvp/share/guestbook 등)의
+ * 폴백으로 쓴다. 시안 검수 화면(고객)과 수정요청 패널(관리자) 양쪽에서 공유한다. */
+export const BLOCK_LABEL_FALLBACK: Record<BlockKey, string> = {
+  hero: "메인", greeting: "인사말", gallery: "갤러리", sequence: "예식 순서",
+  calendar: "캘린더 · D-day", location: "오시는 길", account: "마음 전하실 곳",
+  contact: "연락처", rsvp: "참석 여부", share: "공유하기", guestbook: "방명록",
+}
+
 /** themes.block_manifest 한 항목 — "이 테마가 이 블럭에 대해 무엇을 지원하는가" 선언 */
 export interface BlockManifestEntry {
   key: string

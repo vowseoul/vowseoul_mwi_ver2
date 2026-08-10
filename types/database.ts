@@ -371,6 +371,8 @@ export interface Database {
           deleted_at: string | null
           created_at: string
           updated_at: string
+          review_status: 'none' | 'in_review' | 'changes_requested' | 'approved'
+          review_round: number
         }
         Insert: {
           id?: string
@@ -390,8 +392,35 @@ export interface Database {
           deleted_at?: string | null
           created_at?: string
           updated_at?: string
+          review_status?: 'none' | 'in_review' | 'changes_requested' | 'approved'
+          review_round?: number
         }
         Update: Partial<Database['public']['Tables']['invitations']['Insert']>
+      }
+      invitation_revisions: {
+        Row: {
+          id: string
+          invitation_id: string
+          round: number
+          block_key: string | null
+          note: string
+          status: 'open' | 'resolved'
+          resolved_by: string | null
+          created_at: string
+          resolved_at: string | null
+        }
+        Insert: {
+          id?: string
+          invitation_id: string
+          round?: number
+          block_key?: string | null
+          note: string
+          status?: 'open' | 'resolved'
+          resolved_by?: string | null
+          created_at?: string
+          resolved_at?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['invitation_revisions']['Insert']>
       }
       invitation_blocks: {
         Row: {

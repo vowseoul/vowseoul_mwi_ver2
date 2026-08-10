@@ -79,6 +79,10 @@ interface InvitationFrameProps {
   preventZoom?: boolean
   /** 섹션 사이에 끼워 넣는 이미지. afterBlock 이 가리키는 [data-block] 섹션 바로 뒤에 삽입된다 */
   sectionImages?: SectionImage[]
+  /** 값이 있으면 "코멘트 모드"로 전환 — [data-block] 클릭 시 그 블록 키를 알려주고, 그
+   * 클릭이 유발했을 원래 동작(RSVP 버튼 열기 등)은 막는다. 시안 검수 화면 전용이라
+   * 평소(발행/일반 미리보기)에는 prop을 아예 넘기지 않아 기본 동작에 영향이 없다. */
+  onBlockClick?: (blockKey: string) => void
 }
 
 function buildSrcDoc(template: ThemeTemplate): string {
@@ -158,6 +162,7 @@ export function InvitationFrame({
   height = 720,
   preventZoom = false,
   sectionImages = [],
+  onBlockClick,
 }: InvitationFrameProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [doc, setDoc] = useState<Document | null>(null)
@@ -353,6 +358,24 @@ export function InvitationFrame({
       doc.removeEventListener("touchend", handleTouchEnd)
     }
   }, [doc, preventZoom])
+
+  // 코멘트 모드(onBlockClick 전달 시에만) — [data-block] 클릭을 capture 단계에서 가로채
+  // 블록 키를 알려주고, 그 클릭이 원래 열었을 RSVP 모달 등 슬롯 아일랜드의 동작은 막는다.
+  // 평소에는 onBlockClick 자체를 안 넘기므로 리스너가 아예 붙지 않는다.
+  useEffect(() => {
+    if (!doc || !onBlockClick) return
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null
+      const block = target?.closest<HTMLElement>("[data-block]")
+      const key = block?.getAttribute("data-block")
+      if (!key) return
+      e.preventDefault()
+      e.stopPropagation()
+      onBlockClick(key)
+    }
+    doc.addEventListener("click", handleClick, true)
+    return () => doc.removeEventListener("click", handleClick, true)
+  }, [doc, onBlockClick])
 
   // 커스텀 폰트 로딩 — 에셋 관리에서 등록한 폰트를 iframe 문서 안에 주입한다.
   // (iframe은 별도 realm이라 부모 문서에 <link>/<style>을 추가해도 적용되지 않는다)

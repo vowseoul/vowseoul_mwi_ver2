@@ -9,6 +9,7 @@ import { buildSlots } from "@/components/invitation/slot-registry"
 import { buildFieldData, mergeInvitationRaw } from "@/lib/invitation-data"
 import {
   BLOCK_KEYS,
+  BLOCK_LABEL_FALLBACK,
   buildThemeTokens,
   extractBlockOverrides,
   extractDisabledSlots,
@@ -25,6 +26,7 @@ import {
 } from "@/lib/theme-template"
 import { buildFontStack, fetchRegisteredFonts, fontPreviewStyle, resolveFontFaces, type RegisteredFont } from "@/lib/fonts"
 import { useInjectFontFaces } from "@/lib/use-font-faces"
+import { useInvitationRevisionsQuery, useResolveRevisionMutation } from "@/hooks/queries/useInvitationRevisions"
 import { cn } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
@@ -53,6 +55,13 @@ import { toast } from "sonner"
 
 type FieldType = "text" | "textarea" | "tel" | "image"
 interface FieldDef { key: string; label: string; type: FieldType }
+
+const REVIEW_STATUS_LABEL: Record<string, string> = {
+  none: "검수 전",
+  in_review: "검수 요청됨",
+  changes_requested: "수정 요청 있음",
+  approved: "확정됨",
+}
 
 /** field_manifest 에 있을 때만 노출되는 필드 (테마가 실제로 쓰는 것만 보여준다) */
 const CONTENT_FIELD_DEFS: FieldDef[] = [
@@ -608,6 +617,40 @@ export default function CustomizeClient({
     }
   }
 
+  const [reviewStatus, setReviewStatus] = useState<string>(String(invitation.review_status ?? "none"))
+  const [reviewRound, setReviewRound] = useState<number>(Number(invitation.review_round ?? 0))
+  const [sendingReview, setSendingReview] = useState(false)
+  const revisionsQuery = useInvitationRevisionsQuery(invitationId)
+  const resolveRevision = useResolveRevisionMutation(invitationId)
+
+  // "검수 요청 보내기" — 알림톡 자동발송은 아직 없어서(§FEATURE_ROADMAP.md §9, 별도 비용 발생)
+  // 이번 라운드에는 링크+비밀번호를 클립보드에 복사해 관리자가 직접 전달하는 방식으로 시작한다.
+  const sendReviewRequest = async () => {
+    if (!publicSlug) return
+    setSendingReview(true)
+    try {
+      const nextRound = reviewRound + 1
+      const { error } = await supabase
+        .from("invitations")
+        .update({ review_status: "in_review", review_round: nextRound })
+        .eq("id", invitationId)
+      if (error) throw error
+      setReviewStatus("in_review")
+      setReviewRound(nextRound)
+
+      const password = String(invitation.dashboard_password ?? "")
+      const text = password
+        ? `${window.location.origin}/review/${publicSlug}\n비밀번호: ${password}`
+        : `${window.location.origin}/review/${publicSlug}`
+      await navigator.clipboard.writeText(text)
+      toast.success("검수 링크가 클립보드에 복사되었습니다. 고객에게 전달해주세요.")
+    } catch {
+      toast.error("검수 요청 처리에 실패했습니다.")
+    } finally {
+      setSendingReview(false)
+    }
+  }
+
   const groom = String(data.groom_name ?? "")
   const bride = String(data.bride_name ?? "")
 
@@ -638,9 +681,17 @@ export default function CustomizeClient({
         </div>
 
         <Tabs defaultValue="content" className="gap-6">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="content">내용</TabsTrigger>
             <TabsTrigger value="design">디자인</TabsTrigger>
+            <TabsTrigger value="review" className="gap-1.5">
+              검수
+              {revisionsQuery.data && revisionsQuery.data.filter((r) => r.status === "open").length > 0 && (
+                <span className="rounded-full bg-destructive px-1.5 text-[10px] font-medium text-destructive-foreground">
+                  {revisionsQuery.data.filter((r) => r.status === "open").length}
+                </span>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="content" className="space-y-6">
@@ -1401,6 +1452,68 @@ export default function CustomizeClient({
               </CardContent>
             </Card>
           </TabsContent>
+
+          <TabsContent value="review" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-medium">시안 검수 현황</CardTitle>
+                <CardDescription>
+                  {REVIEW_STATUS_LABEL[reviewStatus] ?? reviewStatus}
+                  {reviewRound > 0 && ` · ${reviewRound}차 검수`}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {revisionsQuery.isLoading ? (
+                  <p className="text-sm text-muted-foreground">불러오는 중…</p>
+                ) : !revisionsQuery.data || revisionsQuery.data.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    아직 고객이 남긴 수정 요청이 없습니다. 왼쪽 하단 &ldquo;검수 요청 보내기&rdquo;로 검수 링크를 전달해보세요.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {[...revisionsQuery.data]
+                      .sort((a, b) => (a.status === b.status ? 0 : a.status === "open" ? -1 : 1))
+                      .map((r) => {
+                        const label = (r.block_key && (blockManifest.find((b) => b.key === r.block_key)?.label ?? BLOCK_LABEL_FALLBACK[r.block_key as keyof typeof BLOCK_LABEL_FALLBACK])) || r.block_key || "전체"
+                        return (
+                          <div
+                            key={r.id}
+                            className={cn(
+                              "rounded-lg border p-3 text-sm",
+                              r.status === "resolved" ? "bg-muted/40 opacity-70" : "bg-background"
+                            )}
+                          >
+                            <div className="mb-1 flex items-center justify-between gap-2">
+                              <button
+                                type="button"
+                                className="text-xs font-semibold text-primary hover:underline"
+                                onClick={() => r.block_key && setFocusBlock(r.block_key)}
+                              >
+                                {label}
+                              </button>
+                              {r.status === "open" ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 gap-1 px-2 text-[11px]"
+                                  disabled={resolveRevision.isPending}
+                                  onClick={() => resolveRevision.mutate(r.id)}
+                                >
+                                  처리 완료
+                                </Button>
+                              ) : (
+                                <span className="text-[11px] text-muted-foreground">처리 완료됨</span>
+                              )}
+                            </div>
+                            <p className="whitespace-pre-wrap text-foreground">{r.note}</p>
+                          </div>
+                        )
+                      })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
 
         {/* xl 미만(1단 레이아웃)에서는 실제 스크롤이 main이 아니라 html에서 일어나(admin 레이아웃의
@@ -1426,6 +1539,12 @@ export default function CustomizeClient({
           {publicSlug && (
             <Button variant="outline" className="gap-2" onClick={copyDashboardLink}>
               <Copy className="h-3.5 w-3.5" /> 고객용 대시보드 복사하기
+            </Button>
+          )}
+          {publicSlug && (
+            <Button variant="outline" className="gap-2" onClick={sendReviewRequest} disabled={sendingReview}>
+              {sendingReview ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Copy className="h-3.5 w-3.5" />}
+              검수 요청 보내기
             </Button>
           )}
         </div>
