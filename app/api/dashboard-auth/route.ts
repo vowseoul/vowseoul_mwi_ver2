@@ -3,8 +3,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import {
   createDashboardToken,
   dashboardCookieName,
-  passwordMatches,
 } from "@/lib/dashboard-session"
+import { verifyDashboardPassword } from "@/lib/dashboard-password"
 
 /**
  * 신랑신부 대시보드 비밀번호 인증.
@@ -43,7 +43,8 @@ export async function POST(request: Request) {
 
   // 존재하지 않는 slug 와 비밀번호 불일치를 같은 응답으로 묶어 slug 존재 여부를
   // 탐색하지 못하게 한다.
-  if (!invitation || !passwordMatches(password, String(invitation.dashboard_password ?? ""))) {
+  const storedHash = String(invitation?.dashboard_password ?? "")
+  if (!invitation || !storedHash || !(await verifyDashboardPassword(password, storedHash))) {
     return NextResponse.json(
       { error: "비밀번호가 올바르지 않습니다. (기본값: 연락처 뒷 4자리)" },
       { status: 401 },

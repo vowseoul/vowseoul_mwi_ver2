@@ -950,7 +950,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
 
                   <div className="flex justify-between items-center text-xs bg-muted/50 p-2.5 rounded-lg">
                     <span className="text-muted-foreground">대시보드 패스워드:</span>
-                    <span className="font-mono font-bold tracking-wider">{invitation.dashboard_password}</span>
+                    <span className="font-medium text-right">등록된 고객 연락처 뒷 4자리</span>
                   </div>
 
                   <Button

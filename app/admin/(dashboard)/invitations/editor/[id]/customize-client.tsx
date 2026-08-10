@@ -614,18 +614,12 @@ export default function CustomizeClient({
 
   const copyDashboardLink = async () => {
     if (!publicSlug) return
-    const password = String(invitation.dashboard_password ?? "")
-    // 대시보드는 /dashboard/[slug] 가 public_slug 로 조회한다(dashboard_slug 컬럼은 쓰지 않음).
-    const text = password
-      ? `${window.location.origin}/dashboard/${publicSlug}\n비밀번호: ${password}`
-      : `${window.location.origin}/dashboard/${publicSlug}`
+    // dashboard_password는 이제 해시로 저장되어 관리자도 실제 값을 알 수 없다
+    // (§lib/dashboard-password.ts). 대신 값이 만들어지는 고정 규칙을 안내한다.
+    const text = `${window.location.origin}/dashboard/${publicSlug}\n비밀번호: 등록된 고객 연락처 뒷 4자리`
     try {
       await navigator.clipboard.writeText(text)
-      toast.success(
-        password
-          ? `고객용 대시보드 링크가 복사되었습니다. (비밀번호: ${password})`
-          : "고객용 대시보드 링크가 클립보드에 복사되었습니다."
-      )
+      toast.success("고객용 대시보드 링크가 복사되었습니다. (비밀번호는 등록된 고객 연락처 뒷 4자리입니다)")
     } catch {
       toast.error("링크 복사에 실패했습니다.")
     }
@@ -653,16 +647,9 @@ export default function CustomizeClient({
       setReviewStatus("in_review")
       setReviewRound(nextRound)
 
-      const password = String(invitation.dashboard_password ?? "")
-      const text = password
-        ? `${window.location.origin}/review/${publicSlug}\n비밀번호: ${password}`
-        : `${window.location.origin}/review/${publicSlug}`
+      const text = `${window.location.origin}/review/${publicSlug}\n비밀번호: 등록된 고객 연락처 뒷 4자리`
       await navigator.clipboard.writeText(text)
-      toast.success(
-        password
-          ? `검수 링크가 복사되었습니다. (비밀번호: ${password}) 고객에게 전달해주세요.`
-          : "검수 링크가 클립보드에 복사되었습니다. 고객에게 전달해주세요."
-      )
+      toast.success("검수 링크가 복사되었습니다. (비밀번호는 등록된 고객 연락처 뒷 4자리입니다) 고객에게 전달해주세요.")
       const { data: userData } = await supabase.auth.getUser()
       logAuditEvent(supabase, {
         invitationId,
