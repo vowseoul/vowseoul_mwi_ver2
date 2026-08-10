@@ -22,6 +22,16 @@ import { supabase } from "@/lib/supabase"
 import { createClient } from "@supabase/supabase-js"
 import { DATA_RETENTION_SETTINGS_KEY, DEFAULT_RETENTION_DAYS, parseRetentionSettings } from "@/lib/data-retention"
 import { SELF_EDIT_SETTINGS_KEY, parseSelfEditSettings } from "@/lib/self-edit"
+import {
+  BUSINESS_INFO_SETTINGS_KEY,
+  DATA_TRANSFER_SETTINGS_KEY,
+  EMPTY_BUSINESS_INFO,
+  EMPTY_DATA_TRANSFER_INFO,
+  parseBusinessInfo,
+  parseDataTransferInfo,
+  type BusinessInfo,
+  type DataTransferInfo,
+} from "@/lib/business-info"
 import { useProfilesQuery } from "@/hooks/queries/useCustomers"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -165,6 +175,12 @@ export default function AdminSettingsPage() {
   const [selfEditEnabled, setSelfEditEnabled] = useState(false)
   const [isSavingSelfEdit, setIsSavingSelfEdit] = useState(false)
 
+  // 개인정보 처리방침에 채워 넣을 사업자 정보 · CPO · 국외이전 고지 (§lib/business-info.ts)
+  const [businessInfo, setBusinessInfo] = useState<BusinessInfo>(EMPTY_BUSINESS_INFO)
+  const [isSavingBusinessInfo, setIsSavingBusinessInfo] = useState(false)
+  const [dataTransfer, setDataTransfer] = useState<DataTransferInfo>(EMPTY_DATA_TRANSFER_INFO)
+  const [isSavingDataTransfer, setIsSavingDataTransfer] = useState(false)
+
   useEffect(() => {
     fetchCurrentSetting()
     fetchImages()
@@ -227,6 +243,50 @@ export default function AdminSettingsPage() {
       .maybeSingle()
 
     setSelfEditEnabled(parseSelfEditSettings(selfEditData?.value).enabled)
+
+    const { data: businessInfoData } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', BUSINESS_INFO_SETTINGS_KEY)
+      .maybeSingle()
+
+    setBusinessInfo(parseBusinessInfo(businessInfoData?.value))
+
+    const { data: dataTransferData } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', DATA_TRANSFER_SETTINGS_KEY)
+      .maybeSingle()
+
+    setDataTransfer(parseDataTransferInfo(dataTransferData?.value))
+  }
+
+  const handleSaveBusinessInfo = async () => {
+    setIsSavingBusinessInfo(true)
+    const { error } = await supabase.from('settings').upsert({
+      key: BUSINESS_INFO_SETTINGS_KEY,
+      value: businessInfo,
+    })
+    setIsSavingBusinessInfo(false)
+    if (error) {
+      toast.error('사업자 정보 저장에 실패했습니다.')
+    } else {
+      toast.success('사업자 정보가 저장되었습니다.')
+    }
+  }
+
+  const handleSaveDataTransfer = async () => {
+    setIsSavingDataTransfer(true)
+    const { error } = await supabase.from('settings').upsert({
+      key: DATA_TRANSFER_SETTINGS_KEY,
+      value: dataTransfer,
+    })
+    setIsSavingDataTransfer(false)
+    if (error) {
+      toast.error('국외이전 정보 저장에 실패했습니다.')
+    } else {
+      toast.success('국외이전 정보가 저장되었습니다.')
+    }
   }
 
   const handleSaveSelfEdit = async (nextEnabled: boolean) => {
@@ -1041,6 +1101,170 @@ export default function AdminSettingsPage() {
                 <Button onClick={handleSave} disabled={isSaving}>
                   <Save className="w-4 h-4 mr-2" />
                   {isSaving ? "저장 중..." : "저장"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="w-5 h-5" />
+                사업자 정보 및 개인정보 보호책임자
+              </CardTitle>
+              <CardDescription>
+                개인정보 처리방침(/privacy)에 그대로 표시되는 정보입니다. 실제 값을 입력해 주세요.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium">사업자 정보</h4>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="businessName">상호명</Label>
+                    <Input
+                      id="businessName"
+                      value={businessInfo.businessName}
+                      onChange={(e) => setBusinessInfo((p) => ({ ...p, businessName: e.target.value }))}
+                      placeholder="예: 주식회사 보우서울"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="representativeName">대표자명</Label>
+                    <Input
+                      id="representativeName"
+                      value={businessInfo.representativeName}
+                      onChange={(e) => setBusinessInfo((p) => ({ ...p, representativeName: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="registrationNumber">사업자등록번호</Label>
+                    <Input
+                      id="registrationNumber"
+                      value={businessInfo.registrationNumber}
+                      onChange={(e) => setBusinessInfo((p) => ({ ...p, registrationNumber: e.target.value }))}
+                      placeholder="000-00-00000"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="supportEmail">고객센터 이메일</Label>
+                    <Input
+                      id="supportEmail"
+                      type="email"
+                      value={businessInfo.supportEmail}
+                      onChange={(e) => setBusinessInfo((p) => ({ ...p, supportEmail: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="supportPhone">고객센터 전화번호</Label>
+                    <Input
+                      id="supportPhone"
+                      value={businessInfo.supportPhone}
+                      onChange={(e) => setBusinessInfo((p) => ({ ...p, supportPhone: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="businessAddress">사업장 주소</Label>
+                    <Input
+                      id="businessAddress"
+                      value={businessInfo.address}
+                      onChange={(e) => setBusinessInfo((p) => ({ ...p, address: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              </div>
+              <Separator />
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium">개인정보 보호책임자(CPO)</h4>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="cpoName">성명</Label>
+                    <Input
+                      id="cpoName"
+                      value={businessInfo.cpoName}
+                      onChange={(e) => setBusinessInfo((p) => ({ ...p, cpoName: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="cpoTitle">직책</Label>
+                    <Input
+                      id="cpoTitle"
+                      value={businessInfo.cpoTitle}
+                      onChange={(e) => setBusinessInfo((p) => ({ ...p, cpoTitle: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="cpoPhone">연락처</Label>
+                    <Input
+                      id="cpoPhone"
+                      value={businessInfo.cpoPhone}
+                      onChange={(e) => setBusinessInfo((p) => ({ ...p, cpoPhone: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="cpoEmail">이메일</Label>
+                    <Input
+                      id="cpoEmail"
+                      type="email"
+                      value={businessInfo.cpoEmail}
+                      onChange={(e) => setBusinessInfo((p) => ({ ...p, cpoEmail: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <Button onClick={handleSaveBusinessInfo} disabled={isSavingBusinessInfo}>
+                  <Save className="w-4 h-4 mr-2" />
+                  {isSavingBusinessInfo ? "저장 중..." : "저장"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Globe className="w-5 h-5" />
+                국외이전 정보
+              </CardTitle>
+              <CardDescription>
+                Supabase(DB·Storage)·Vercel(호스팅·Analytics) 리전이 국외면 개인정보 처리방침에
+                국외이전 고지가 포함되어야 합니다. 각 서비스 대시보드의 Project Settings &gt; Region에서
+                확인할 수 있습니다.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">국외이전 고지 포함</p>
+                  <p className="text-xs text-muted-foreground">
+                    리전이 국내(서울)뿐이면 꺼두어도 됩니다.
+                  </p>
+                </div>
+                <Switch
+                  checked={dataTransfer.isOverseas}
+                  onCheckedChange={(checked) => setDataTransfer((p) => ({ ...p, isOverseas: checked }))}
+                />
+              </div>
+              {dataTransfer.isOverseas && (
+                <div className="space-y-2">
+                  <Label htmlFor="transferDetails">국외이전 상세 내용</Label>
+                  <Textarea
+                    id="transferDetails"
+                    rows={4}
+                    value={dataTransfer.details}
+                    onChange={(e) => setDataTransfer((p) => ({ ...p, details: e.target.value }))}
+                    placeholder={"이전받는 자 - Supabase Inc. / 이전국가 - 미국 / 이전 항목 - 저장된 전체 데이터\n이전 목적 - 데이터베이스·파일 저장 / 보유·이용기간 - 서비스 이용기간 동안"}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    이전받는 자, 이전국가, 이전 항목, 이전 목적, 보유·이용기간을 포함해 작성해 주세요.
+                  </p>
+                </div>
+              )}
+              <div className="flex justify-end">
+                <Button onClick={handleSaveDataTransfer} disabled={isSavingDataTransfer}>
+                  <Save className="w-4 h-4 mr-2" />
+                  {isSavingDataTransfer ? "저장 중..." : "저장"}
                 </Button>
               </div>
             </CardContent>

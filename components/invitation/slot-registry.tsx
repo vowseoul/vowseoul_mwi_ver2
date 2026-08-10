@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react"
 import type { FieldData, BlockOverrideMap } from "./invitation-frame"
 import type { RawInvitationData } from "@/lib/invitation-data"
 import { supabase } from "@/lib/supabase"
+import { ConsentNotice } from "./consent-notice"
+import { CONSENT_VERSION, RSVP_CONSENT_COPY, GUESTBOOK_CONSENT_COPY } from "@/lib/privacy-consent"
 
 /**
  * 슬롯 레지스트리 — "기능 조합"의 핵심.
@@ -806,6 +808,7 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
   const [partySize, setPartySize] = useState(1)
   const [mealChoice, setMealChoice] = useState<string>(mealMenu[0])
   const [shuttleUsed, setShuttleUsed] = useState(false)
+  const [consentAgreed, setConsentAgreed] = useState(false)
 
   // rsvp_responses.meal_choice/shuttle_required 컬럼은 이미 있었지만 이 폼이 값을
   // 채운 적이 없어 신랑신부 대시보드의 식사·셔틀 집계가 항상 비어 있었다 — 여기서 채운다.
@@ -823,6 +826,7 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
   const submit = async () => {
     if (!name.trim()) { setError("성함을 입력해주세요."); return }
     if (!phone.trim()) { setError("연락처를 입력해주세요."); return }
+    if (!consentAgreed) { setError("개인정보 수집·이용에 동의해주세요."); return }
     setError(null); setSaving(true)
 
     if (invitationId) {
@@ -842,6 +846,7 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
         p_meal_required: wantsMeal,
         p_meal_choice: wantsMeal ? mealChoice : null,
         p_shuttle_required: isAttending && shuttleEnabled ? shuttleUsed : false,
+        p_consent_version: CONSENT_VERSION,
       })
       if (err) { setSaving(false); setError("전송에 실패했습니다. 잠시 후 다시 시도해주세요."); return }
     }
@@ -952,13 +957,15 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
               </>
             )}
 
+            <ConsentNotice copy={RSVP_CONSENT_COPY} checked={consentAgreed} onChange={setConsentAgreed} accent={accent} />
+
             {error && <p style={{ fontSize: 12, color: "#dc2626", marginBottom: 10 }}>{error}</p>}
 
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
               <button onClick={() => setOpen(false)} style={{ flex: 1, padding: "11px 0", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", color: "#6b7280", cursor: "pointer", fontSize: 14 }}>
                 취소
               </button>
-              <button onClick={submit} disabled={saving} style={{ flex: 2, padding: "11px 0", borderRadius: 8, border: "none", background: accent, color: "#fff", cursor: saving ? "wait" : "pointer", fontSize: 14, opacity: saving ? 0.7 : 1 }}>
+              <button onClick={submit} disabled={saving || !consentAgreed} style={{ flex: 2, padding: "11px 0", borderRadius: 8, border: "none", background: accent, color: "#fff", cursor: saving || !consentAgreed ? "not-allowed" : "pointer", fontSize: 14, opacity: saving || !consentAgreed ? 0.5 : 1 }}>
                 {saving ? "전송 중…" : "전달하기"}
               </button>
             </div>
@@ -1019,6 +1026,7 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
   const [msg, setMsg] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [consentAgreed, setConsentAgreed] = useState(false)
 
   useEffect(() => {
     if (!invitationId) { setLoading(false); return }
@@ -1042,6 +1050,7 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
 
   const add = async () => {
     if (!name.trim() || !msg.trim()) return
+    if (!consentAgreed) { setError("개인정보 수집·이용에 동의해주세요."); return }
     setError(null)
 
     if (!invitationId) {
@@ -1059,6 +1068,8 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
         author_name: name.trim(),
         message: msg.trim(),
         password_hash: "",
+        consent_agreed_at: new Date().toISOString(),
+        consent_version: CONSENT_VERSION,
       })
       .select("id, author_name, message")
       .single()
@@ -1074,6 +1085,7 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
 
   return (
     <div style={{ textAlign: "left", maxWidth: 320, margin: "0 auto", fontSize: 13 }}>
+      <ConsentNotice copy={GUESTBOOK_CONSENT_COPY} checked={consentAgreed} onChange={setConsentAgreed} accent={accent} />
       <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="이름"
           disabled={saving}
@@ -1081,7 +1093,7 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
         <input value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="축하 메시지"
           disabled={saving}
           style={{ flex: 1, minWidth: 0, padding: "8px 10px", border: "1px solid #e2ddd6", borderRadius: 8, outline: "none", fontSize: 13 }} />
-        <button onClick={add} disabled={saving} style={{ flexShrink: 0, whiteSpace: "nowrap", padding: "0 14px", borderRadius: 8, border: "none", cursor: saving ? "wait" : "pointer", background: accent, color: "#fff", fontSize: 13, opacity: saving ? 0.7 : 1 }}>
+        <button onClick={add} disabled={saving || !consentAgreed} style={{ flexShrink: 0, whiteSpace: "nowrap", padding: "0 14px", borderRadius: 8, border: "none", cursor: saving || !consentAgreed ? "not-allowed" : "pointer", background: accent, color: "#fff", fontSize: 13, opacity: saving || !consentAgreed ? 0.5 : 1 }}>
           {saving ? "등록 중…" : "등록"}
         </button>
       </div>

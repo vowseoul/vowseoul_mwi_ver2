@@ -681,7 +681,10 @@ export default function CustomerDashboardClient({
             하객 개인정보 보호 정책: 본 관리 대시보드는 예식일(기준일)로부터 7일 경과 시 접속이 차단되며, 14일 경과 시 모든 수집 정보가 데이터베이스에서 영구 소거됩니다.
           </p>
           <p className="text-[9px] text-muted-foreground">
-            © VOW SEOUL. All rights reserved.
+            <Link href="/privacy" className="underline underline-offset-2 hover:text-foreground">
+              개인정보처리방침
+            </Link>
+            {' · '}© VOW SEOUL. All rights reserved.
           </p>
         </div>
       </main>

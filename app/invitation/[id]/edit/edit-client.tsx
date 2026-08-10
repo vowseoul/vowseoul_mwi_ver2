@@ -212,7 +212,10 @@ export default function EditClient({
           </CardContent>
         </Card>
 
-        <div className="flex justify-end pb-6">
+        <div className="flex items-center justify-between pb-6">
+          <Link href="/privacy" className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground">
+            개인정보처리방침
+          </Link>
           <Button onClick={save} disabled={saving} className="gap-2">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {saving ? "저장 중…" : "저장"}

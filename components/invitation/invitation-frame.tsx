@@ -408,6 +408,22 @@ export function InvitationFrame({
     )
   }, [doc, fontFaces])
 
+  // 개인정보처리방침 링크 — 테마 template.html을 건드리지 않고 문서 최하단에 공통 주입한다.
+  // 새 테마가 추가돼도 자동으로 붙는다(개인정보 보호법 제30조 고지 도달 경로).
+  useEffect(() => {
+    if (!doc) return
+    const linkId = "vs-privacy-link"
+    if (doc.getElementById(linkId)) return
+    const link = doc.createElement("a")
+    link.id = linkId
+    link.href = "/privacy"
+    link.target = "_top"
+    link.textContent = "개인정보처리방침"
+    link.style.cssText =
+      "display:block;text-align:center;margin:24px 0 14px;font-size:10px;opacity:.35;color:inherit;text-decoration:underline;"
+    doc.body.appendChild(link)
+  }, [doc])
+
   return (
     <iframe
       key={template.key}

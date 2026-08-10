@@ -44,6 +44,10 @@ import {
 import { toast } from 'sonner'
 import { uploadImage } from '@/lib/image-upload'
 import { Logo } from '@/components/logo'
+import { Checkbox } from '@/components/ui/checkbox'
+import { supabase } from '@/lib/supabase'
+import { DATA_RETENTION_SETTINGS_KEY, DEFAULT_RETENTION_DAYS, parseRetentionSettings } from '@/lib/data-retention'
+import { CONSENT_VERSION, getFormConsentCopy } from '@/lib/privacy-consent'
 
 const parseLocalDate = (dateStr: string) => {
   if (!dateStr) return undefined
@@ -61,6 +65,24 @@ function PublicFormContent({ slug }: { slug: string }) {
   const [password, setPassword] = useState('')
   const [isUnlocked, setIsUnlocked] = useState(false)
   const [passwordError, setPasswordError] = useState('')
+  const [verifyingPassword, setVerifyingPassword] = useState(false)
+
+  // 개인정보 수집·이용 동의 state — 비밀번호 게이트 통과 직후, 위저드 진입 전에 받는다
+  // (§lib/privacy-consent.ts). 임시저장이 이미 서버에 저장을 시작하므로 최종 확인
+  // 단계가 아니라 여기서 받아야 동의 없이 수집되는 구간이 생기지 않는다.
+  const [consentChecked, setConsentChecked] = useState(false)
+  const [consentConfirmed, setConsentConfirmed] = useState(false)
+  const [consentAgreedAt, setConsentAgreedAt] = useState<string | null>(null)
+  const [retentionDays, setRetentionDays] = useState(DEFAULT_RETENTION_DAYS)
+
+  useEffect(() => {
+    supabase
+      .from('settings')
+      .select('value')
+      .eq('key', DATA_RETENTION_SETTINGS_KEY)
+      .maybeSingle()
+      .then(({ data }) => setRetentionDays(parseRetentionSettings(data?.value).daysAfterWedding))
+  }, [])
 
   // Form Value state { field_key: value }
   const [formValues, setFormValues] = useState<Record<string, any>>({})
@@ -164,7 +186,7 @@ function PublicFormContent({ slug }: { slug: string }) {
   // Initialize password lock & form values
   useEffect(() => {
     if (instance) {
-      if (!instance.access_password) {
+      if (!instance.has_password) {
         setIsUnlocked(true)
       }
       
@@ -227,14 +249,27 @@ function PublicFormContent({ slug }: { slug: string }) {
     }
   }, [formValues, instance, currentStep])
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (instance && password === instance.access_password) {
-      setIsUnlocked(true)
-      setPasswordError('')
-    } else {
-      setPasswordError('비밀번호가 올바르지 않습니다. 다시 확인해주세요.')
-      toast.error('비밀번호 불일치')
+    if (!instance) return
+    setVerifyingPassword(true)
+    try {
+      const res = await fetch('/api/form-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug, password }),
+      })
+      if (res.ok) {
+        setIsUnlocked(true)
+        setPasswordError('')
+      } else {
+        setPasswordError('비밀번호가 올바르지 않습니다. 다시 확인해주세요.')
+        toast.error('비밀번호 불일치')
+      }
+    } catch {
+      setPasswordError('확인 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
+    } finally {
+      setVerifyingPassword(false)
     }
   }
 
@@ -328,10 +363,73 @@ function PublicFormContent({ slug }: { slug: string }) {
                 <p className="text-xs text-destructive">{passwordError}</p>
               )}
 
-              <Button type="submit" className="w-full h-10">
-                입력 페이지 열기
+              <Button type="submit" className="w-full h-10" disabled={verifyingPassword}>
+                {verifyingPassword ? '확인 중...' : '입력 페이지 열기'}
               </Button>
             </form>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // 정보 수집 동의 화면 — 비밀번호 게이트 통과 직후, 위저드 진입 전
+  if (!consentConfirmed) {
+    const consentCopy = getFormConsentCopy(retentionDays)
+    return (
+      <div className="min-h-screen bg-muted flex items-center justify-center font-sans px-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center pb-2">
+            <div className="mx-auto mb-4 flex justify-center">
+              <Logo className="h-6 w-auto" />
+            </div>
+            <CardTitle className="text-xl font-bold">정보 수집 안내</CardTitle>
+            <CardDescription className="text-xs">
+              청첩장 제작을 위해 아래 정보를 수집합니다
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-2 text-xs leading-relaxed">
+              <p>
+                <span className="font-semibold text-foreground">목적</span> {consentCopy.purpose}
+              </p>
+              <p>
+                <span className="font-semibold text-foreground">항목</span> {consentCopy.items}
+              </p>
+              <p>
+                <span className="font-semibold text-foreground">보유</span> {consentCopy.retention}
+              </p>
+            </div>
+            <p className="text-xs text-muted-foreground">{consentCopy.refusalNotice}</p>
+            <a
+              href="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block text-xs text-muted-foreground underline underline-offset-2"
+            >
+              개인정보처리방침 전문 보기 →
+            </a>
+            <div className="flex items-start gap-2 pt-1">
+              <Checkbox
+                id="form-consent"
+                checked={consentChecked}
+                onCheckedChange={(v) => setConsentChecked(v === true)}
+                className="mt-0.5"
+              />
+              <label htmlFor="form-consent" className="cursor-pointer text-sm font-medium">
+                위 내용에 동의합니다 (필수)
+              </label>
+            </div>
+            <Button
+              className="w-full h-10"
+              disabled={!consentChecked}
+              onClick={() => {
+                setConsentAgreedAt(new Date().toISOString())
+                setConsentConfirmed(true)
+              }}
+            >
+              동의하고 시작하기
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -425,6 +523,8 @@ function PublicFormContent({ slug }: { slug: string }) {
         customerId: instance.customer_id,
         data: formValues,
         isComplete: false,
+        consentAgreedAt: consentAgreedAt ?? undefined,
+        consentVersion: CONSENT_VERSION,
       })
       toast.success('입력하신 내용이 임시 저장되었습니다! (이 기기 및 서버에 안전하게 보관됨)')
     } catch (err: any) {
@@ -507,6 +607,8 @@ function PublicFormContent({ slug }: { slug: string }) {
         customerId: instance.customer_id,
         data: formValues,
         isComplete: true,
+        consentAgreedAt: consentAgreedAt ?? undefined,
+        consentVersion: CONSENT_VERSION,
       })
       setIsSubmitted(true)
     } catch (err: any) {
@@ -1499,6 +1601,12 @@ function PublicFormContent({ slug }: { slug: string }) {
             </CardContent>
           </Card>
         )}
+
+        <div className="pt-2 pb-6 text-center">
+          <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-[11px] text-muted-foreground underline underline-offset-2">
+            개인정보처리방침
+          </a>
+        </div>
       </main>
     </div>
   )

@@ -6,6 +6,7 @@ import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { dashboardCookieName, verifyDashboardToken } from '@/lib/dashboard-session'
 import { mergeInvitationRaw } from '@/lib/invitation-data'
 import { SELF_EDIT_SETTINGS_KEY, parseSelfEditSettings } from '@/lib/self-edit'
+import { GUEST_DATA_PURGE_DAYS } from '@/lib/data-retention'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Calendar, ShieldAlert } from 'lucide-react'
@@ -15,7 +16,7 @@ export const dynamic = 'force-dynamic'
 
 /** 하객 개인정보 보호 정책 (예식일 기준 경과일) */
 const DASHBOARD_EXPIRY_DAYS = 7
-const DATA_PURGE_DAYS = 14
+const DATA_PURGE_DAYS = GUEST_DATA_PURGE_DAYS
 
 /**
  * 신랑신부 대시보드 진입점.

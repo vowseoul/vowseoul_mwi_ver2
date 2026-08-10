@@ -386,10 +386,22 @@ export function useFormInstanceBySlugQuery(slug: string) {
     queryKey: ['form-instance-by-slug', slug],
     queryFn: async () => {
       if (!slug) return null
+      // access_password는 select 하지 않는다 — 실제 값을 브라우저로 보내지 않기 위함
+      // (검증은 app/api/form-auth/route.ts가 서버에서 대신한다). "설정 여부"만은
+      // 자동 잠금해제 판정에 필요해 계산된 컬럼(has_password)으로 받는다
+      // (§20260811020000_form_instance_password_security.sql).
       const { data, error } = await supabase
         .from('form_instances')
         .select(`
-          *,
+          id,
+          customer_id,
+          template_id,
+          fields_snapshot,
+          unique_url_slug,
+          status,
+          expires_at,
+          created_at,
+          has_password:form_instances_has_password,
           customer:customer_id (
             id,
             groom_name,
@@ -407,7 +419,10 @@ export function useFormInstanceBySlugQuery(slug: string) {
         .single()
 
       if (error) throw error
-      return data
+      // 명시적 컬럼 목록으로 바꾸면서 postgrest-js가 문자열만으로 타입을 추론하기
+      // 시작해 customer 임베드를 배열로 잡는다(실제로는 to-one이라 런타임엔 항상
+      // 단일 객체) — Database 제네릭 없이 쓰는 이 프로젝트 전역 관례대로 any로 둔다.
+      return data as any
     },
     enabled: !!slug,
   })
@@ -422,11 +437,16 @@ export function useSubmitFormMutation() {
       customerId,
       data,
       isComplete,
+      consentAgreedAt,
+      consentVersion,
     }: {
       instanceId: string
       customerId: string
       data: any
       isComplete: boolean
+      /** 정보 수집 동의 시각/버전 — app/form/[slug]/page.tsx의 동의 화면 통과 시에만 전달된다 */
+      consentAgreedAt?: string
+      consentVersion?: string
     }) => {
       // 1. Upsert form_submissions
       const { error: submissionError } = await supabase
@@ -436,7 +456,8 @@ export function useSubmitFormMutation() {
           customer_id: customerId,
           data: data,
           is_complete: isComplete,
-          missing_fields: []
+          missing_fields: [],
+          ...(consentAgreedAt ? { consent_agreed_at: consentAgreedAt, consent_version: consentVersion } : {}),
         }], { onConflict: 'form_instance_id' })
 
       if (submissionError) throw submissionError

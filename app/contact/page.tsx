@@ -10,9 +10,12 @@ import { Label } from '@/components/ui/label'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { Mail, Phone, MapPin } from 'lucide-react'
+import { PrivacyConsentField } from '@/components/privacy-consent-field'
+import { CONSENT_VERSION, INQUIRY_CONSENT_COPY } from '@/lib/privacy-consent'
 
 export default function ContactPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [consentAgreed, setConsentAgreed] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -22,9 +25,13 @@ export default function ContactPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!formData.name || !formData.email || !formData.subject || !formData.message) {
       toast.error('모든 항목을 입력해주세요.')
+      return
+    }
+    if (!consentAgreed) {
+      toast.error('개인정보 수집·이용에 동의해주세요.')
       return
     }
 
@@ -35,12 +42,15 @@ export default function ContactPage() {
         email: formData.email,
         subject: formData.subject,
         message: formData.message,
+        consent_agreed_at: new Date().toISOString(),
+        consent_version: CONSENT_VERSION,
       })
 
       if (error) throw error
 
       toast.success('문의가 성공적으로 접수되었습니다. 빠른 시일 내에 답변 드리겠습니다.')
       setFormData({ name: '', email: '', subject: '', message: '' })
+      setConsentAgreed(false)
     } catch (error) {
       console.error('Error submitting inquiry:', error)
       toast.error('문의 접수에 실패했습니다. 잠시 후 다시 시도해주세요.')
@@ -149,7 +159,9 @@ export default function ContactPage() {
                   />
                 </div>
 
-                <Button type="submit" className="w-full" disabled={isSubmitting}>
+                <PrivacyConsentField copy={INQUIRY_CONSENT_COPY} checked={consentAgreed} onCheckedChange={setConsentAgreed} />
+
+                <Button type="submit" className="w-full" disabled={isSubmitting || !consentAgreed}>
                   {isSubmitting ? '전송 중...' : '문의 보내기'}
                 </Button>
               </form>

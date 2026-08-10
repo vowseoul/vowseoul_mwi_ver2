@@ -9,6 +9,15 @@
 export const DEFAULT_RETENTION_DAYS = 30
 export const DATA_RETENTION_SETTINGS_KEY = "data_retention"
 
+/**
+ * 하객 RSVP·방명록·방문로그 파기 기준일 (예식일로부터 경과일). 고정값이며
+ * 관리자 설정 대상이 아니다 — 실제 파기는 app/invitation/[id]/dashboard/page.tsx가
+ * 대시보드 접속 시점에 수행한다. 개인정보처리방침(app/privacy)과 동의 문구
+ * (lib/privacy-consent.ts)가 이 값을 함께 참조해 실제 파기 주기와 문구가
+ * 어긋나지 않도록 한다.
+ */
+export const GUEST_DATA_PURGE_DAYS = 14
+
 export interface DataRetentionSettings {
   /** 예식일로부터 며칠 뒤에 자동 삭제할지 */
   daysAfterWedding: number
