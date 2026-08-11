@@ -85,7 +85,7 @@ export interface Database {
           field_key: string
           label: string
           help_text: string | null
-          field_type: 'text' | 'date' | 'time' | 'select' | 'address' | 'phone' | 'image' | 'textarea' | 'number' | 'rselect' | 'toggle' | 'images'
+          field_type: 'text' | 'date' | 'time' | 'select' | 'address' | 'phone' | 'image' | 'textarea' | 'number' | 'rselect' | 'toggle' | 'images' | 'slug'
           validation_rules: Json | null
           category: string
           is_system: boolean
@@ -96,7 +96,7 @@ export interface Database {
           field_key: string
           label: string
           help_text?: string | null
-          field_type: 'text' | 'date' | 'time' | 'select' | 'address' | 'phone' | 'image' | 'textarea' | 'number' | 'rselect' | 'toggle' | 'images'
+          field_type: 'text' | 'date' | 'time' | 'select' | 'address' | 'phone' | 'image' | 'textarea' | 'number' | 'rselect' | 'toggle' | 'images' | 'slug'
           validation_rules?: Json | null
           category: string
           is_system?: boolean

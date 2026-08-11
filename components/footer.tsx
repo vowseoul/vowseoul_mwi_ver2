@@ -1,11 +1,11 @@
 import Link from 'next/link'
 import { Logo } from '@/components/logo'
 
-export function Footer() {
+export function Footer({ minimal = false }: { minimal?: boolean }) {
   return (
     <footer className="border-t border-border bg-muted/30">
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="grid gap-8 md:grid-cols-4">
+        <div className={`grid gap-8 ${minimal ? 'md:grid-cols-3' : 'md:grid-cols-4'}`}>
           <div className="md:col-span-2">
             <Link href="/" className="flex items-center">
               <Logo className="h-5 w-auto text-foreground" />
@@ -15,21 +15,23 @@ export function Footer() {
             </p>
           </div>
 
-          <div>
-            <h4 className="text-sm font-semibold">서비스</h4>
-            <ul className="mt-4 space-y-2">
-              <li>
-                <Link href="/templates" className="text-sm text-muted-foreground hover:text-foreground">
-                  템플릿 갤러리
-                </Link>
-              </li>
-              <li>
-                <Link href="/pricing" className="text-sm text-muted-foreground hover:text-foreground">
-                  요금 안내
-                </Link>
-              </li>
-            </ul>
-          </div>
+          {!minimal && (
+            <div>
+              <h4 className="text-sm font-semibold">서비스</h4>
+              <ul className="mt-4 space-y-2">
+                <li>
+                  <Link href="/templates" className="text-sm text-muted-foreground hover:text-foreground">
+                    템플릿 갤러리
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/pricing" className="text-sm text-muted-foreground hover:text-foreground">
+                    요금 안내
+                  </Link>
+                </li>
+              </ul>
+            </div>
+          )}
 
           <div>
             <h4 className="text-sm font-semibold">고객지원</h4>
