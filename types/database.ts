@@ -425,7 +425,7 @@ export interface Database {
       audit_logs: {
         Row: {
           id: string
-          invitation_id: string
+          invitation_id: string | null
           actor_type: 'admin' | 'customer' | 'system'
           actor_label: string | null
           action: string
@@ -434,7 +434,7 @@ export interface Database {
         }
         Insert: {
           id?: string
-          invitation_id: string
+          invitation_id?: string | null
           actor_type: 'admin' | 'customer' | 'system'
           actor_label?: string | null
           action: string

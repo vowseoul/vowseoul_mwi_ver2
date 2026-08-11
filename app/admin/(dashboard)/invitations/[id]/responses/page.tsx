@@ -2,6 +2,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { mergeInvitationRaw } from "@/lib/invitation-data"
+import { logAuditEvent } from "@/lib/audit-log"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -55,6 +56,18 @@ export default async function InvitationResponsesPage({
   const headcount = attending.reduce((sum, r) => sum + (Number(r.party_size) || 1), 0)
   const groomSide = attending.filter((r) => r.side === "groom").reduce((sum, r) => sum + (Number(r.party_size) || 1), 0)
   const brideSide = attending.filter((r) => r.side === "bride").reduce((sum, r) => sum + (Number(r.party_size) || 1), 0)
+
+  // 개인정보취급자 접속기록 (고시 제8조) — 관리자가 하객 실명·연락처가 담긴
+  // 응답 목록을 열람했다는 사실 자체를 남긴다. 저장/처리를 막으면 안 되는
+  // 부가 기록이라 실패해도 페이지 렌더는 계속된다(§lib/audit-log.ts).
+  const { data: { user } } = await supabase.auth.getUser()
+  await logAuditEvent(supabase, {
+    invitationId: id,
+    actorType: "admin",
+    actorLabel: user?.email ?? null,
+    action: "guest_list.viewed",
+    summary: `하객 응답을 조회했습니다 (RSVP ${rsvpRows.length}건, 방명록 ${guestbookRows.length}건).`,
+  })
 
   return (
     <div className="space-y-6 font-sans">

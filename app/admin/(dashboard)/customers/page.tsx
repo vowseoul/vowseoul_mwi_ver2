@@ -46,6 +46,8 @@ import {
   Edit 
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { supabase } from '@/lib/supabase'
+import { logAuditEvent } from '@/lib/audit-log'
 
 export default function CustomersPage() {
   const [page, setPage] = useState(1)
@@ -97,6 +99,17 @@ export default function CustomersPage() {
     link.click()
     document.body.removeChild(link)
     toast.success('CSV 내보내기가 완료되었습니다.')
+
+    // 개인정보취급자 접속기록 (고시 제8조) — 고객 실명·연락처가 담긴 목록을
+    // 파일로 내보냈다는 사실을 남긴다. 청첩장 한 건에 묶이지 않아 invitationId 없이 기록한다.
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      logAuditEvent(supabase, {
+        actorType: 'admin',
+        actorLabel: user?.email ?? null,
+        action: 'customer_list.exported',
+        summary: `고객 목록을 CSV로 내보냈습니다 (${rows.length}건).`,
+      })
+    })
   }
 
   // Stats

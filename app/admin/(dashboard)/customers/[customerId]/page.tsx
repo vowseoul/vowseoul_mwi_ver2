@@ -35,6 +35,7 @@ import { useThemesQuery } from '@/hooks/queries/useThemes'
 import { useCreateInvitationMutation } from '@/hooks/queries/useInvitations'
 import { useFormTemplateFieldsQuery } from '@/hooks/queries/useForms'
 import { supabase } from '@/lib/supabase'
+import { logAuditEvent } from '@/lib/audit-log'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Dialog,
@@ -74,6 +75,23 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
       setOrderNotes(order.notes || '')
     }
   }, [order])
+
+  // 개인정보취급자 접속기록 (고시 제8조) — 고객 상세(이름·연락처 등)를 열람했다는
+  // 사실을 남긴다. 청첩장 한 건에 묶인 행위가 아니라 invitationId 없이 기록한다.
+  useEffect(() => {
+    if (!customer) return
+    ;(async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      const label = [customer.groom_name, customer.bride_name].filter(Boolean).join(' ♥ ')
+      logAuditEvent(supabase, {
+        actorType: 'admin',
+        actorLabel: user?.email ?? null,
+        action: 'customer_detail.viewed',
+        summary: `고객 상세 정보를 열람했습니다: ${label || customerId}`,
+      })
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerId, !!customer])
 
   const handleCreateOrder = async () => {
     try {
