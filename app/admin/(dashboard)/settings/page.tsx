@@ -452,7 +452,7 @@ export default function AdminSettingsPage() {
         <TabsList>
           <TabsTrigger value="general">일반</TabsTrigger>
           <TabsTrigger value="homepage">홈페이지</TabsTrigger>
-          <TabsTrigger value="email">이메일</TabsTrigger>
+          <TabsTrigger value="email">고객지원</TabsTrigger>
           <TabsTrigger value="payment">결제</TabsTrigger>
           <TabsTrigger value="notification">알림</TabsTrigger>
           <TabsTrigger value="security">보안</TabsTrigger>
@@ -857,51 +857,62 @@ export default function AdminSettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* Email Settings */}
+        {/* Customer Support Settings */}
         <TabsContent value="email">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Mail className="w-5 h-5" />
-                이메일 설정
+                고객지원센터 정보
               </CardTitle>
-              <CardDescription>이메일 발송 설정을 관리합니다</CardDescription>
+              <CardDescription>
+                문의하기(/contact) 페이지에 그대로 표시되는 고객지원센터 정보입니다. 실제 값을 입력해 주세요.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="smtpHost">SMTP 호스트</Label>
-                  <Input id="smtpHost" placeholder="smtp.example.com" />
+                  <Label htmlFor="supportEmail2">이메일</Label>
+                  <Input
+                    id="supportEmail2"
+                    type="email"
+                    value={businessInfo.supportEmail}
+                    onChange={(e) => setBusinessInfo((p) => ({ ...p, supportEmail: e.target.value }))}
+                    placeholder="support@vowseoul.com"
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="smtpPort">SMTP 포트</Label>
-                  <Input id="smtpPort" placeholder="587" />
+                  <Label htmlFor="supportPhone2">전화번호</Label>
+                  <Input
+                    id="supportPhone2"
+                    value={businessInfo.supportPhone}
+                    onChange={(e) => setBusinessInfo((p) => ({ ...p, supportPhone: e.target.value }))}
+                    placeholder="02-123-4567"
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="smtpUser">SMTP 사용자</Label>
-                  <Input id="smtpUser" placeholder="user@example.com" />
+                  <Label htmlFor="supportHours">운영시간</Label>
+                  <Input
+                    id="supportHours"
+                    value={businessInfo.supportHours}
+                    onChange={(e) => setBusinessInfo((p) => ({ ...p, supportHours: e.target.value }))}
+                    placeholder="평일 10:00 - 17:00"
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="smtpPassword">SMTP 비밀번호</Label>
-                  <Input id="smtpPassword" type="password" />
+                  <Label htmlFor="supportAddress">오시는 길 (주소)</Label>
+                  <Input
+                    id="supportAddress"
+                    value={businessInfo.address}
+                    onChange={(e) => setBusinessInfo((p) => ({ ...p, address: e.target.value }))}
+                    placeholder="서울특별시 강남구 테헤란로 123"
+                  />
                 </div>
               </div>
-              <Separator />
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="senderName">발신자 이름</Label>
-                  <Input id="senderName" defaultValue="VOW SEOUL" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="senderEmail">발신자 이메일</Label>
-                  <Input id="senderEmail" defaultValue="no-reply@vowseoul.com" />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline">테스트 발송</Button>
-                <Button onClick={handleSave} disabled={isSaving}>
+              <div className="flex justify-end">
+                <Button onClick={handleSaveBusinessInfo} disabled={isSavingBusinessInfo}>
                   <Save className="w-4 h-4 mr-2" />
-                  {isSaving ? "저장 중..." : "저장"}
+                  {isSavingBusinessInfo ? "저장 중..." : "저장"}
                 </Button>
               </div>
             </CardContent>
@@ -1146,32 +1157,10 @@ export default function AdminSettingsPage() {
                       placeholder="000-00-00000"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="supportEmail">고객센터 이메일</Label>
-                    <Input
-                      id="supportEmail"
-                      type="email"
-                      value={businessInfo.supportEmail}
-                      onChange={(e) => setBusinessInfo((p) => ({ ...p, supportEmail: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="supportPhone">고객센터 전화번호</Label>
-                    <Input
-                      id="supportPhone"
-                      value={businessInfo.supportPhone}
-                      onChange={(e) => setBusinessInfo((p) => ({ ...p, supportPhone: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-2 sm:col-span-2">
-                    <Label htmlFor="businessAddress">사업장 주소</Label>
-                    <Input
-                      id="businessAddress"
-                      value={businessInfo.address}
-                      onChange={(e) => setBusinessInfo((p) => ({ ...p, address: e.target.value }))}
-                    />
-                  </div>
                 </div>
+                <p className="text-[11px] text-muted-foreground">
+                  고객센터 이메일·전화번호·주소는 설정 &gt; 고객지원 탭에서 입력합니다.
+                </p>
               </div>
               <Separator />
               <div className="space-y-4">

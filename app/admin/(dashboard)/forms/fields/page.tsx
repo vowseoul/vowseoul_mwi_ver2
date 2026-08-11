@@ -24,11 +24,96 @@ import {
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { useFieldsQuery, useCreateFieldMutation, useUpdateFieldMutation, useDeleteFieldMutation } from '@/hooks/queries/useForms'
-import { Plus, Search, ArrowLeft, Shield, FileCode2, Loader2, Save, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Settings, Sparkles, Link2 } from 'lucide-react'
+import { Plus, Search, ArrowLeft, Shield, FileCode2, Loader2, Save, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Settings, Sparkles, Link2, X, ChevronsUpDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog'
 import { supabase } from '@/lib/supabase'
 import { Switch } from '@/components/ui/switch'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+
+// 소속 섹션명/페이지명: 드롭다운으로 선택하되, +로 옵션 추가 / X로 옵션 삭제가 가능한 콤보박스.
+function EditableOptionSelect({
+  value,
+  onChange,
+  options,
+  onAddOption,
+  onRemoveOption,
+  placeholder,
+}: {
+  value: string
+  onChange: (val: string) => void
+  options: string[]
+  onAddOption: (val: string) => void
+  onRemoveOption: (val: string) => void
+  placeholder: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [newOption, setNewOption] = useState('')
+
+  const handleAdd = () => {
+    const trimmed = newOption.trim()
+    if (!trimmed) return
+    if (!options.includes(trimmed)) onAddOption(trimmed)
+    onChange(trimmed)
+    setNewOption('')
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className="h-8 w-full justify-between text-xs px-2 font-normal bg-background"
+        >
+          <span className={`truncate ${value ? '' : 'text-muted-foreground'}`}>{value || placeholder}</span>
+          <ChevronsUpDown className="w-3.5 h-3.5 opacity-50 shrink-0" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-2" align="start">
+        <div className="space-y-1 max-h-48 overflow-y-auto">
+          {options.length === 0 ? (
+            <p className="text-[11px] text-muted-foreground px-1 py-2">등록된 옵션이 없습니다. 아래에서 추가해 주세요.</p>
+          ) : (
+            options.map((opt) => (
+              <div key={opt} className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => { onChange(opt); setOpen(false) }}
+                  className={`flex-1 text-left text-xs px-2 py-1.5 rounded hover:bg-muted truncate ${opt === value ? 'bg-muted font-semibold' : ''}`}
+                >
+                  {opt}
+                </button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+                  onClick={() => onRemoveOption(opt)}
+                >
+                  <X className="w-3 h-3" />
+                </Button>
+              </div>
+            ))
+          )}
+        </div>
+        <div className="flex items-center gap-1 mt-2 pt-2 border-t border-border">
+          <Input
+            value={newOption}
+            onChange={(e) => setNewOption(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAdd() } }}
+            placeholder="새 옵션 입력"
+            className="h-7 text-xs px-2"
+            maxLength={100}
+          />
+          <Button type="button" size="icon" className="h-7 w-7 shrink-0" onClick={handleAdd}>
+            <Plus className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
 
 const getDefaultFieldBlocks = () => [
   {
@@ -94,6 +179,10 @@ export default function FieldLibraryPage() {
   const [isSavingBlock, setIsSavingBlock] = useState(false)
   const [expandedLinkKey, setExpandedLinkKey] = useState<string | null>(null)
 
+  // 섹션명/페이지명 드롭다운 옵션 목록 (settings.field_block_section_page_options)
+  const [sectionOptions, setSectionOptions] = useState<string[]>([])
+  const [pageOptions, setPageOptions] = useState<string[]>([])
+
   // Track initial state for isDirty check
   const [initialBlockFields, setInitialBlockFields] = useState<any[]>([])
   const [initialBlockName, setInitialBlockName] = useState('')
@@ -155,8 +244,91 @@ export default function FieldLibraryPage() {
     }
   }
 
+  const getDefaultSectionPageOptions = () => {
+    const defaults = getDefaultFieldBlocks()
+    const sections = new Set<string>()
+    const pages = new Set<string>()
+    defaults.forEach((b) => b.fields.forEach((f) => {
+      if (f.section_title) sections.add(f.section_title)
+      if (f.page_title) pages.add(f.page_title)
+    }))
+    return { sections: Array.from(sections), pages: Array.from(pages) }
+  }
+
+  const fetchSectionPageOptions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('key', 'field_block_section_page_options')
+        .single()
+      if (error) {
+        if (error.code === 'PGRST116') {
+          const defaults = getDefaultSectionPageOptions()
+          await supabase.from('settings').insert({ key: 'field_block_section_page_options', value: defaults })
+          setSectionOptions(defaults.sections)
+          setPageOptions(defaults.pages)
+        } else {
+          console.error(error)
+        }
+      } else if (data?.value) {
+        setSectionOptions(data.value.sections || [])
+        setPageOptions(data.value.pages || [])
+      }
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const persistSectionPageOptions = async (next: { sections: string[]; pages: string[] }) => {
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .upsert({ key: 'field_block_section_page_options', value: next })
+      if (error) throw error
+    } catch (err) {
+      console.error(err)
+      toast.error('옵션 저장에 실패했습니다.')
+    }
+  }
+
+  const handleAddSectionOption = (val: string) => {
+    setSectionOptions((prev) => {
+      if (prev.includes(val)) return prev
+      const next = [...prev, val]
+      persistSectionPageOptions({ sections: next, pages: pageOptions })
+      return next
+    })
+  }
+
+  const handleRemoveSectionOption = (val: string) => {
+    setSectionOptions((prev) => {
+      const next = prev.filter((o) => o !== val)
+      persistSectionPageOptions({ sections: next, pages: pageOptions })
+      return next
+    })
+  }
+
+  const handleAddPageOption = (val: string) => {
+    setPageOptions((prev) => {
+      if (prev.includes(val)) return prev
+      const next = [...prev, val]
+      persistSectionPageOptions({ sections: sectionOptions, pages: next })
+      return next
+    })
+  }
+
+  const handleRemovePageOption = (val: string) => {
+    setPageOptions((prev) => {
+      const next = prev.filter((o) => o !== val)
+      persistSectionPageOptions({ sections: sectionOptions, pages: next })
+      return next
+    })
+  }
+
   useEffect(() => {
     fetchFieldBlocks()
+    fetchSectionPageOptions()
   }, [])
 
   // Sorting State
@@ -663,22 +835,24 @@ export default function FieldLibraryPage() {
                               </TableCell>
 
                               <TableCell className="align-middle">
-                                <Input
+                                <EditableOptionSelect
                                   value={bf.section_title || ''}
-                                  onChange={(e) => handleUpdateBlockFieldProp(index, 'section_title', e.target.value)}
-                                  placeholder="예: 신랑 정보"
-                                  className="h-8 text-xs px-2 w-full bg-background"
-                                  maxLength={100}
+                                  onChange={(val) => handleUpdateBlockFieldProp(index, 'section_title', val)}
+                                  options={sectionOptions}
+                                  onAddOption={handleAddSectionOption}
+                                  onRemoveOption={handleRemoveSectionOption}
+                                  placeholder="섹션명 선택"
                                 />
                               </TableCell>
 
                               <TableCell className="align-middle">
-                                <Input
+                                <EditableOptionSelect
                                   value={bf.page_title || ''}
-                                  onChange={(e) => handleUpdateBlockFieldProp(index, 'page_title', e.target.value)}
-                                  placeholder="예: 1단계: 신랑신부"
-                                  className="h-8 text-xs px-2 w-full bg-background"
-                                  maxLength={100}
+                                  onChange={(val) => handleUpdateBlockFieldProp(index, 'page_title', val)}
+                                  options={pageOptions}
+                                  onAddOption={handleAddPageOption}
+                                  onRemoveOption={handleRemovePageOption}
+                                  placeholder="페이지명 선택"
                                 />
                               </TableCell>
 
@@ -937,6 +1111,7 @@ export default function FieldLibraryPage() {
                           <SelectItem value="timentext">시간 & 텍스트 세트 / 식순 (timentext)</SelectItem>
                           <SelectItem value="imageselect">이미지 선택형 (imageselect)</SelectItem>
                           <SelectItem value="mselect">다중 선택형 (mselect)</SelectItem>
+                          <SelectItem value="slug">링크 주소 (slug)</SelectItem>
                         </SelectContent>
                       </Select>
                     </Field>

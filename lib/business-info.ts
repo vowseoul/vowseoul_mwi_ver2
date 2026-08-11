@@ -14,6 +14,7 @@ export interface BusinessInfo {
   address: string
   supportEmail: string
   supportPhone: string
+  supportHours: string
   cpoName: string
   cpoTitle: string
   cpoPhone: string
@@ -27,6 +28,7 @@ export const EMPTY_BUSINESS_INFO: BusinessInfo = {
   address: "",
   supportEmail: "",
   supportPhone: "",
+  supportHours: "",
   cpoName: "",
   cpoTitle: "",
   cpoPhone: "",
@@ -44,6 +46,7 @@ export function parseBusinessInfo(value: unknown): BusinessInfo {
     address: pick("address"),
     supportEmail: pick("supportEmail"),
     supportPhone: pick("supportPhone"),
+    supportHours: pick("supportHours"),
     cpoName: pick("cpoName"),
     cpoTitle: pick("cpoTitle"),
     cpoPhone: pick("cpoPhone"),

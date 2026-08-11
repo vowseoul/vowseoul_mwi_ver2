@@ -1,68 +1,30 @@
-'use client'
-
-import { useState } from 'react'
 import { Header } from '@/components/header'
 import { Footer } from '@/components/footer'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
-import { supabase } from '@/lib/supabase'
-import { toast } from 'sonner'
-import { Mail, Phone, MapPin } from 'lucide-react'
-import { PrivacyConsentField } from '@/components/privacy-consent-field'
-import { CONSENT_VERSION, INQUIRY_CONSENT_COPY } from '@/lib/privacy-consent'
+import { Mail, Phone, MapPin, Clock } from 'lucide-react'
+import { createSupabaseAdminClient } from '@/lib/supabase-admin'
+import { BUSINESS_INFO_SETTINGS_KEY, parseBusinessInfo } from '@/lib/business-info'
+import { InquiryForm } from './inquiry-form'
+import type { Metadata } from 'next'
 
-export default function ContactPage() {
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [consentAgreed, setConsentAgreed] = useState(false)
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    subject: '',
-    message: ''
-  })
+export const dynamic = 'force-dynamic'
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+export const metadata: Metadata = {
+  title: '문의하기 | VOW SEOUL',
+}
 
-    if (!formData.name || !formData.email || !formData.subject || !formData.message) {
-      toast.error('모든 항목을 입력해주세요.')
-      return
-    }
-    if (!consentAgreed) {
-      toast.error('개인정보 수집·이용에 동의해주세요.')
-      return
-    }
+async function loadSupportInfo() {
+  const supabase = createSupabaseAdminClient()
+  const { data } = await supabase.from('settings').select('value').eq('key', BUSINESS_INFO_SETTINGS_KEY).maybeSingle()
+  return parseBusinessInfo(data?.value)
+}
 
-    setIsSubmitting(true)
-    try {
-      const { error } = await supabase.from('inquiries').insert({
-        name: formData.name,
-        email: formData.email,
-        subject: formData.subject,
-        message: formData.message,
-        consent_agreed_at: new Date().toISOString(),
-        consent_version: CONSENT_VERSION,
-      })
-
-      if (error) throw error
-
-      toast.success('문의가 성공적으로 접수되었습니다. 빠른 시일 내에 답변 드리겠습니다.')
-      setFormData({ name: '', email: '', subject: '', message: '' })
-      setConsentAgreed(false)
-    } catch (error) {
-      console.error('Error submitting inquiry:', error)
-      toast.error('문의 접수에 실패했습니다. 잠시 후 다시 시도해주세요.')
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
+export default async function ContactPage() {
+  const business = await loadSupportInfo()
 
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
-      
+
       <main className="flex-1 bg-muted/30">
         <div className="container mx-auto max-w-5xl px-4 py-16 md:py-24">
           <div className="mb-12 text-center">
@@ -80,7 +42,7 @@ export default function ContactPage() {
                 궁금하신 점이 있으신가요? 아래 폼을 통해 문의를 남겨주시면,
                 담당자가 확인 후 영업일 기준 24시간 이내에 답변을 드립니다.
               </p>
-              
+
               <div className="space-y-6">
                 <div className="flex items-center gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
@@ -88,19 +50,31 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <h3 className="font-medium">이메일</h3>
-                    <p className="text-muted-foreground">support@vow.seoul</p>
+                    <p className="text-muted-foreground">{business.supportEmail || '-'}</p>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
                     <Phone className="h-6 w-6 text-primary" />
                   </div>
                   <div>
                     <h3 className="font-medium">전화번호</h3>
-                    <p className="text-muted-foreground">02-123-4567 (평일 10:00 - 17:00)</p>
+                    <p className="text-muted-foreground">{business.supportPhone || '-'}</p>
                   </div>
                 </div>
+
+                {business.supportHours && (
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                      <Clock className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-medium">운영시간</h3>
+                      <p className="text-muted-foreground">{business.supportHours}</p>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex items-center gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
@@ -108,64 +82,13 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <h3 className="font-medium">오시는 길</h3>
-                    <p className="text-muted-foreground">서울특별시 강남구 테헤란로 123, VOW 빌딩</p>
+                    <p className="text-muted-foreground">{business.address || '-'}</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Contact Form */}
-            <div className="rounded-xl border bg-background p-6 shadow-sm sm:p-8">
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="name">이름</Label>
-                  <Input 
-                    id="name" 
-                    placeholder="홍길동" 
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="email">이메일</Label>
-                  <Input 
-                    id="email" 
-                    type="email" 
-                    placeholder="example@email.com" 
-                    value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="subject">제목</Label>
-                  <Input 
-                    id="subject" 
-                    placeholder="문의하실 제목을 입력해주세요" 
-                    value={formData.subject}
-                    onChange={(e) => setFormData({...formData, subject: e.target.value})}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="message">문의 내용</Label>
-                  <Textarea 
-                    id="message" 
-                    placeholder="문의하실 내용을 상세히 적어주세요." 
-                    className="min-h-[150px]"
-                    value={formData.message}
-                    onChange={(e) => setFormData({...formData, message: e.target.value})}
-                  />
-                </div>
-
-                <PrivacyConsentField copy={INQUIRY_CONSENT_COPY} checked={consentAgreed} onCheckedChange={setConsentAgreed} />
-
-                <Button type="submit" className="w-full" disabled={isSubmitting || !consentAgreed}>
-                  {isSubmitting ? '전송 중...' : '문의 보내기'}
-                </Button>
-              </form>
-            </div>
+            <InquiryForm />
           </div>
         </div>
       </main>

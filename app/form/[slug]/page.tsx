@@ -1248,6 +1248,25 @@ function PublicFormContent({ slug }: { slug: string }) {
           </div>
         )
       }
+      case 'slug':
+        return (
+          <div className="space-y-1">
+            <Input
+              type="text"
+              value={value}
+              onChange={(e) => {
+                const sanitized = e.target.value
+                  .toLowerCase()
+                  .replace(/[^a-z0-9-]/g, '-')
+                  .replace(/-+/g, '-')
+                handleInputChange(field.field_key, sanitized)
+              }}
+              placeholder={field.help_text || '예: our-wedding-2026'}
+              required={field.is_required}
+            />
+            <p className="text-[11px] text-muted-foreground">영문 소문자, 숫자, 하이픈(-)만 입력 가능합니다.</p>
+          </div>
+        )
       default:
         return (
           <Input
