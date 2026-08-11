@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { DATA_RETENTION_SETTINGS_KEY, computeExpiryDate, parseRetentionSettings } from '@/lib/data-retention'
 import { buildContentDataFromForm, deriveOgMetaFromForm, deriveOverridesFromForm, resolveBgmUrlFromSnapshot } from '@/lib/invitation-data'
+import { hashDashboardPassword } from '@/lib/dashboard-password'
 
 export interface Invitation {
   id: string
@@ -135,7 +136,10 @@ export function useCreateInvitationMutation() {
       }
 
       const phoneStr = customer?.phone || '0000'
+      // 실제 값(연락처 뒷 4자리)은 해시로만 저장한다 — 평문은 어디에도 남기지 않는다.
+      // 안내는 "연락처 뒷 4자리입니다"라는 고정 규칙 문구로 대신한다(§lib/dashboard-password.ts).
       const dashboardPassword = phoneStr.slice(-4)
+      const dashboardPasswordHash = await hashDashboardPassword(dashboardPassword)
       const dashboardSlug = `dash-${publicSlug}`
 
       const weddingDate = customer?.wedding_date
@@ -243,7 +247,7 @@ export function useCreateInvitationMutation() {
         theme_version_id: latestVersion?.id || null,
         public_slug: publicSlug,
         dashboard_slug: dashboardSlug,
-        dashboard_password: dashboardPassword,
+        dashboard_password: dashboardPasswordHash,
         block_order: blockOrder,
         content_data: mergedContentData,
         customization_overrides: overrides,

@@ -27,6 +27,18 @@ function firstFontName(stack: string): string {
   return first.replace(/^['"]|['"]$/g, "")
 }
 
+/**
+ * 구글 폰트 @import 임베드 코드에서 실제로 로드되는 font-family 이름을 추출한다.
+ * (예: "...family=Nanum+Myeongjo&display=swap" → "Nanum Myeongjo")
+ * 등록 폰트의 family 필드가 이 값과 다르면, --font-kr 등에 그 family를 넣어도 브라우저가
+ * 로드된 폰트를 찾지 못해 조용히 fallback으로 렌더된다 — "선택해도 적용 안 되는" 버그의 원인.
+ */
+export function extractGoogleFontFamily(embedCode: string): string | null {
+  const match = embedCode.match(/family=([^&:'"]+)/)
+  if (!match) return null
+  return decodeURIComponent(match[1].replace(/\+/g, " "))
+}
+
 /** 등록 폰트를 --font-kr/--font-en 토큰에 넣을 CSS font-family 스택 문자열로 변환 */
 export function buildFontStack(font: RegisteredFont, tokenName: string): string {
   const fallback = tokenName === "--font-en" ? "sans-serif" : "serif"

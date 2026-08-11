@@ -2,13 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useParams } from "next/navigation"
+import JSZip from "jszip"
 import { supabase, logSupabaseError } from "@/lib/supabase"
 import { InvitationFrame, type ThemeTemplate, type TokenMap } from "@/components/invitation/invitation-frame"
 import { ScaledPreview } from "@/components/ui/scaled-preview"
 import { buildSlots } from "@/components/invitation/slot-registry"
 import { buildFieldData } from "@/lib/invitation-data"
 import { SAMPLE_RAW } from "@/lib/sample-invitation"
-import { buildThemeTokens, TOKEN_FIELDS, type ThemeRow } from "@/lib/theme-template"
+import { buildThemeTokens, TOKEN_FIELDS, type BlockManifestEntry, type ThemeRow } from "@/lib/theme-template"
+import { checkThemeContract } from "@/lib/theme-contract"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
@@ -17,7 +19,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { ExternalLink, Loader2, Save, Sparkles, X } from "lucide-react"
+import { ExternalLink, Loader2, Save, Sparkles, Upload, X } from "lucide-react"
 import { toast } from "sonner"
 
 /**
@@ -53,6 +55,10 @@ export default function TemplateThemeEditor() {
   const [css, setCss] = useState("")
   const [slotManifest, setSlotManifest] = useState<string[]>([])
   const [fieldManifest, setFieldManifest] = useState<string[]>([])
+  /** ZIP 업로드(§handleZipUpload)로만 채워진다 — 이 화면엔 수동 편집 UI가 없다(블럭별
+   * 여백/타이틀 편집 가능 여부 선언은 디자이너가 ZIP에 block_manifest.json으로 동봉). */
+  const [blockManifest, setBlockManifest] = useState<BlockManifestEntry[]>([])
+  const [isImportingZip, setIsImportingZip] = useState(false)
   /** 디자인 토큰 (에셋 설정) — themes.styles 에 '--' 키로 저장 */
   const [tokenValues, setTokenValues] = useState<Record<string, string>>({})
   /** 저장 시 보존해야 하는 기존 styles 의 나머지 키 */
@@ -74,6 +80,7 @@ export default function TemplateThemeEditor() {
         setCss(data.template_css || "")
         setSlotManifest(Array.isArray(data.slot_manifest) ? data.slot_manifest : [])
         setFieldManifest(Array.isArray(data.field_manifest) ? data.field_manifest : [])
+        setBlockManifest(Array.isArray(data.block_manifest) ? data.block_manifest as BlockManifestEntry[] : [])
 
         // 토큰: 레거시 키까지 해석해 초기값을 채우고, styles 의 나머지 키는 보존
         const resolved = buildThemeTokens(data as ThemeRow)
@@ -105,6 +112,82 @@ export default function TemplateThemeEditor() {
     toast.success(`추출 완료 · 필드 ${fields.length}개 / 슬롯 ${slots.length}개`)
   }
 
+  /**
+   * ZIP 안에서 파일명(경로 무관, 대소문자 무관)으로 항목을 찾는다 — 디자이너가 압축할 때
+   * 최상위에 바로 넣든 폴더 하나로 감싸든(scripts/themes/<key>/ 관례처럼) 둘 다 받아준다.
+   */
+  function findZipEntry(zip: JSZip, basename: string) {
+    const target = basename.toLowerCase()
+    return Object.values(zip.files).find(
+      (f) => !f.dir && f.name.toLowerCase().split("/").pop() === target
+    )
+  }
+
+  /**
+   * 디자이너 ZIP(template.html/template.css + 선택적 slot_manifest.json/field_manifest.json/
+   * block_manifest.json)을 업로드하면 붙여넣기 없이 바로 반영한다 — scripts/themes/<key>/의
+   * 파일 구성 관례를 그대로 따르므로, 스크립트 경로용으로 이미 준비한 폴더를 압축만 해서
+   * 올려도 된다. 매니페스트 JSON이 없으면 기존 "자동 추출" 로직으로 폴백한다.
+   */
+  const handleZipUpload = async (file: File) => {
+    setIsImportingZip(true)
+    try {
+      const zip = await JSZip.loadAsync(file)
+
+      const htmlEntry = findZipEntry(zip, "template.html")
+      const cssEntry = findZipEntry(zip, "template.css")
+      if (!htmlEntry || !cssEntry) {
+        toast.error("ZIP 안에서 template.html / template.css를 찾지 못했습니다.")
+        return
+      }
+
+      const newHtml = await htmlEntry.async("string")
+      const newCss = await cssEntry.async("string")
+      setHtml(newHtml)
+      setCss(newCss)
+
+      const slotEntry = findZipEntry(zip, "slot_manifest.json")
+      const fieldEntry = findZipEntry(zip, "field_manifest.json")
+      const blockEntry = findZipEntry(zip, "block_manifest.json")
+
+      let newSlots: string[]
+      let newFields: string[]
+      if (slotEntry && fieldEntry) {
+        newSlots = JSON.parse(await slotEntry.async("string"))
+        newFields = JSON.parse(await fieldEntry.async("string"))
+      } else {
+        // 매니페스트 JSON이 동봉되지 않았으면 기존 자동 추출로 폴백
+        const extracted = extractMarkers(newHtml)
+        newFields = extracted.fields
+        newSlots = extracted.slots.filter((s) => KNOWN_SLOTS.includes(s))
+      }
+      setSlotManifest(newSlots)
+      setFieldManifest(newFields)
+
+      const newBlocks: BlockManifestEntry[] = blockEntry ? JSON.parse(await blockEntry.async("string")) : []
+      setBlockManifest(newBlocks)
+
+      setApplied({ html: newHtml, css: newCss, slots: newSlots })
+
+      const contractErrors = checkThemeContract(newHtml, newSlots, newBlocks)
+      if (contractErrors.length > 0) {
+        toast.warning(`가져왔지만 계약 검사 ${contractErrors.length}건 위반 — 저장 전에 확인하세요.`, {
+          description: contractErrors.slice(0, 3).join("\n") + (contractErrors.length > 3 ? "\n…" : ""),
+          duration: 10000,
+        })
+      } else {
+        toast.success(
+          `ZIP에서 가져왔습니다 · 필드 ${newFields.length}개 / 슬롯 ${newSlots.length}개 / 블럭 ${newBlocks.length}개 · 계약 검사 통과`
+        )
+      }
+    } catch (err) {
+      console.error("ZIP 가져오기 실패:", err)
+      toast.error("ZIP 파일을 읽지 못했습니다. 압축이 손상되었거나 형식이 올바르지 않습니다.")
+    } finally {
+      setIsImportingZip(false)
+    }
+  }
+
   const save = async () => {
     setSaving(true)
     // 토큰은 themes.styles 에 '--' 키로 저장 (레거시 키는 그대로 보존)
@@ -120,6 +203,7 @@ export default function TemplateThemeEditor() {
       template_css: css,
       slot_manifest: slotManifest,
       field_manifest: fieldManifest,
+      block_manifest: blockManifest,
       styles: { ...otherStyles, ...cleanTokens },
     }).eq("id", id)
     setSaving(false)
@@ -193,6 +277,35 @@ export default function TemplateThemeEditor() {
                   </RadioGroup>
                 </Field>
               </FieldGroup>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-medium">ZIP으로 가져오기</CardTitle>
+              <CardDescription>
+                template.html / template.css (+ 선택적으로 slot_manifest.json / field_manifest.json /
+                block_manifest.json)이 담긴 ZIP을 올리면 아래 항목이 자동으로 채워집니다. 매니페스트
+                JSON이 없으면 &ldquo;필드·슬롯 자동 추출&rdquo;과 같은 방식으로 HTML에서 뽑아냅니다.
+                가져온 뒤에도 저장 전까지는 아래에서 직접 다듬을 수 있습니다.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <label className="flex h-24 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed text-xs text-muted-foreground hover:bg-muted/50">
+                {isImportingZip ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
+                {isImportingZip ? "가져오는 중…" : "ZIP 파일 선택 또는 드래그"}
+                <input
+                  type="file"
+                  accept=".zip,application/zip"
+                  className="hidden"
+                  disabled={isImportingZip}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) handleZipUpload(file)
+                    e.target.value = ""
+                  }}
+                />
+              </label>
             </CardContent>
           </Card>
 
@@ -310,6 +423,35 @@ export default function TemplateThemeEditor() {
               <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs leading-relaxed text-muted-foreground break-all">
                 {fieldManifest.length ? fieldManifest.join(", ") : "— (자동 추출을 실행하세요)"}
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-medium">블럭 매니페스트 ({blockManifest.length})</CardTitle>
+              <CardDescription>
+                이 화면에서 직접 편집할 수 없습니다 — ZIP의 block_manifest.json으로만 채워집니다.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {blockManifest.length === 0 ? (
+                <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                  — (ZIP에 block_manifest.json이 없으면 비어 있습니다)
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {blockManifest.map((b) => (
+                    <div key={b.key} className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-1.5 text-xs">
+                      <span className="font-mono font-medium">{b.key}</span>
+                      <span className="text-muted-foreground">{b.label}</span>
+                      <span className="ml-auto flex gap-1 text-muted-foreground">
+                        {b.title && <span className="rounded bg-background px-1.5 py-0.5">title</span>}
+                        {b.padding && <span className="rounded bg-background px-1.5 py-0.5">padding</span>}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

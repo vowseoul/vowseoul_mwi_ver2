@@ -9,6 +9,23 @@
 export const DEFAULT_RETENTION_DAYS = 30
 export const DATA_RETENTION_SETTINGS_KEY = "data_retention"
 
+/**
+ * 하객 RSVP·방명록·방문로그 파기 기준일 (예식일로부터 경과일). 고정값이며
+ * 관리자 설정 대상이 아니다. 매일 도는 크론(§app/api/cron/purge-expired-invitations)이
+ * 주력으로 수행하고, app/invitation/[id]/dashboard/page.tsx는 신랑신부가 크론보다
+ * 먼저 들어오는 경우를 위한 안전망이다. 개인정보처리방침(app/privacy)과 동의 문구
+ * (lib/privacy-consent.ts)가 이 값을 함께 참조해 실제 파기 주기와 문구가
+ * 어긋나지 않도록 한다.
+ */
+export const GUEST_DATA_PURGE_DAYS = 14
+
+/**
+ * 소프트 삭제(deleted_at) 후 실제 DELETE(하드 삭제)까지의 유예기간. 오삭제 복구
+ * 여지를 남기면서도 결국은 완전히 파기하기 위한 값이다 — 관리자 설정 대상이 아니고
+ * 개인정보처리방침(app/privacy)에 고정값으로 안내한다.
+ */
+export const HARD_DELETE_GRACE_DAYS = 30
+
 export interface DataRetentionSettings {
   /** 예식일로부터 며칠 뒤에 자동 삭제할지 */
   daysAfterWedding: number

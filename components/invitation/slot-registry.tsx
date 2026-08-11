@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react"
 import type { FieldData, BlockOverrideMap } from "./invitation-frame"
 import type { RawInvitationData } from "@/lib/invitation-data"
 import { supabase } from "@/lib/supabase"
+import { ConsentNotice } from "./consent-notice"
+import { CONSENT_VERSION, RSVP_CONSENT_COPY, GUESTBOOK_CONSENT_COPY } from "@/lib/privacy-consent"
+import { hashPassword } from "@/lib/dashboard-password"
 
 /**
  * 슬롯 레지스트리 — "기능 조합"의 핵심.
@@ -38,6 +41,18 @@ const soft = (pct: number) => `color-mix(in srgb, currentColor ${pct}%, transpar
  * 자동재생을 시도하고, 브라우저 정책으로 막히면 첫 클릭/터치에 재생한다.
  * iframe 내부에 렌더되므로 이벤트는 iframe 문서에도 함께 등록한다.
  * ------------------------------------------------------------------ */
+/** 모든 BgmIsland 인스턴스가 공유하는 "현재 재생 중인 오디오" 싱글턴.
+ * 테마 전환 시 iframe이 다시 write()되며 포탈 대상이 바뀌는 타이밍에 따라 이전 인스턴스의
+ * cleanup이 새 인스턴스의 재생 시작보다 늦게(또는 아예 누락되어) 실행되는 경우가 있어,
+ * 인스턴스별 ref만으로는 두 음원이 겹쳐 재생되거나 화면에서 사라진 이전 음원을 끌 방법이
+ * 없어지는 문제가 있었다. 새 오디오를 재생하기 전 항상 이 싱글턴부터 정지시켜 "동시에
+ * 최대 한 개만 재생된다"를 인스턴스 생명주기와 무관하게 구조적으로 보장한다. */
+let currentBgmAudio: HTMLAudioElement | null = null
+function stopCurrentBgm() {
+  currentBgmAudio?.pause()
+  currentBgmAudio = null
+}
+
 function BgmIsland({ accent, data, raw }: SlotProps) {
   const bgmUrl = (typeof raw?.bgm_url === "string" ? raw.bgm_url : undefined) || data.bgm_url || ""
   const [isPlaying, setIsPlaying] = useState(true)
@@ -53,14 +68,12 @@ function BgmIsland({ accent, data, raw }: SlotProps) {
     if (typeof document !== "undefined" && own !== document) docs.push(document)
 
     if (bgmUrl && isPlaying) {
-      if (!audioRef.current) {
-        audioRef.current = new Audio(bgmUrl)
-        audioRef.current.loop = true
-      } else if (audioRef.current.src !== bgmUrl) {
-        audioRef.current.pause()
+      if (!audioRef.current || audioRef.current.src !== bgmUrl) {
+        stopCurrentBgm()
         audioRef.current = new Audio(bgmUrl)
         audioRef.current.loop = true
       }
+      currentBgmAudio = audioRef.current
 
       audioRef.current.play().catch(() => {
         // 자동재생 차단 → 첫 사용자 상호작용에 재생
@@ -81,10 +94,12 @@ function BgmIsland({ accent, data, raw }: SlotProps) {
       })
     } else if (audioRef.current) {
       audioRef.current.pause()
+      if (currentBgmAudio === audioRef.current) currentBgmAudio = null
     }
 
     return () => {
       audioRef.current?.pause()
+      if (currentBgmAudio === audioRef.current) currentBgmAudio = null
       if (playOnInteraction) {
         docs.forEach((d) => {
           d.removeEventListener("click", playOnInteraction!)
@@ -206,8 +221,56 @@ function getCalendarDays(dateStr: string) {
   return { year, month, targetDay, days, date }
 }
 
+/** RFC5545 텍스트 이스케이프 (콤마/세미콜론/개행) */
+function escapeIcsText(text: string): string {
+  return text.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n")
+}
+
+/** "YYYY-MM-DD" + "HH:MM"(없으면 낮 12시로 폴백)을 캘린더 링크에 쓸 날짜/시각 부품으로 분해 */
+function parseWeddingDateTime(dateStr: string, timeStr?: string) {
+  const dateMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (!dateMatch) return null
+  const timeMatch = (timeStr || "").match(/^(\d{2}):(\d{2})/)
+  return {
+    y: Number(dateMatch[1]), mo: Number(dateMatch[2]), d: Number(dateMatch[3]),
+    h: timeMatch ? Number(timeMatch[1]) : 12, mi: timeMatch ? Number(timeMatch[2]) : 0,
+  }
+}
+
+/** iOS/macOS 캘린더 앱이 여는 .ics 데이터 URI. 예식 소요시간은 관례상 2시간으로 고정한다
+ * (실제 종료 시각을 입력받는 필드가 없다 — 굳이 새 필드를 만들 만큼 중요하지 않다). */
+function buildIcsHref(opts: { title: string; location: string; dateStr: string; timeStr?: string }): string | null {
+  const t = parseWeddingDateTime(opts.dateStr, opts.timeStr)
+  if (!t) return null
+  const pad = (n: number) => String(n).padStart(2, "0")
+  const stamp = (h: number) => `${t.y}${pad(t.mo)}${pad(t.d)}T${pad(h)}${pad(t.mi)}00`
+  const ics = [
+    "BEGIN:VCALENDAR", "VERSION:2.0", "BEGIN:VEVENT",
+    `DTSTART;TZID=Asia/Seoul:${stamp(t.h)}`,
+    `DTEND;TZID=Asia/Seoul:${stamp((t.h + 2) % 24)}`,
+    `SUMMARY:${escapeIcsText(opts.title)}`,
+    `LOCATION:${escapeIcsText(opts.location)}`,
+    "END:VEVENT", "END:VCALENDAR",
+  ].join("\r\n")
+  return `data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`
+}
+
+/** 구글 캘린더 "일정 추가" 템플릿 링크 (안드로이드/데스크톱에서 .ics보다 UX가 매끄럽다) */
+function buildGoogleCalendarHref(opts: { title: string; location: string; dateStr: string; timeStr?: string }): string | null {
+  const t = parseWeddingDateTime(opts.dateStr, opts.timeStr)
+  if (!t) return null
+  const pad = (n: number) => String(n).padStart(2, "0")
+  const stamp = (h: number) => `${t.y}${pad(t.mo)}${pad(t.d)}T${pad(h)}${pad(t.mi)}00`
+  const params = new URLSearchParams({
+    action: "TEMPLATE", text: opts.title, dates: `${stamp(t.h)}/${stamp((t.h + 2) % 24)}`,
+    location: opts.location, ctz: "Asia/Seoul",
+  })
+  return `https://calendar.google.com/calendar/render?${params.toString()}`
+}
+
 function CalendarIsland({ accent, data, raw, blockOverrides }: SlotProps) {
   const dateStr = (typeof raw?.wedding_date === "string" ? raw.wedding_date : data.wedding_date) || ""
+  const timeStr = (typeof raw?.wedding_time === "string" ? raw.wedding_time : data.wedding_time) || ""
   const ddayEnabled = blockOverrides?.calendar?.ddayEnabled !== false
   const [now, setNow] = useState(() => new Date())
 
@@ -255,6 +318,29 @@ function CalendarIsland({ accent, data, raw, blockOverrides }: SlotProps) {
           })}
         </div>
       </div>
+
+      {/* 캘린더 앱에 일정 추가 — iOS/macOS는 .ics 다운로드, 그 외엔 구글 캘린더 링크가 UX가 더 낫다.
+          관리자가 편집기 "블럭" 카드에서 둘을 각각 켜고 끌 수 있다(§customize-client.tsx) — 미설정 시 둘 다 노출. */}
+      {(() => {
+        const title = [data.groom_name, data.bride_name].filter(Boolean).join(" ♥ ") + " 결혼식"
+        const location = [data.venue_name, data.venue_address].filter(Boolean).join(" ")
+        const icsEnabled = blockOverrides?.calendar?.icsButtonEnabled !== false
+        const googleEnabled = blockOverrides?.calendar?.googleCalendarButtonEnabled !== false
+        const icsHref = icsEnabled ? buildIcsHref({ title, location, dateStr, timeStr }) : null
+        const googleHref = googleEnabled ? buildGoogleCalendarHref({ title, location, dateStr, timeStr }) : null
+        if (!icsHref && !googleHref) return null
+        const btnStyle: React.CSSProperties = {
+          flex: 1, padding: "9px 0", borderRadius: 6, cursor: "pointer", textAlign: "center",
+          border: `1px solid ${soft(60)}`, background: "transparent", color: "inherit", fontSize: 12,
+          textDecoration: "none", display: "block",
+        }
+        return (
+          <div style={{ display: "flex", gap: 6, marginTop: 10, maxWidth: 320, margin: "10px auto 0" }}>
+            {icsHref && <a href={icsHref} download="wedding.ics" style={btnStyle}>캘린더 앱에 추가</a>}
+            {googleHref && <a href={googleHref} target="_blank" rel="noopener noreferrer" style={btnStyle}>구글 캘린더</a>}
+          </div>
+        )
+      })()}
 
       {/* D-day 카운트다운 */}
       {ddayEnabled && (
@@ -400,12 +486,19 @@ function AccountRow({ label, value, accent }: { label: string; value: string; ac
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
   }
-  // 계좌번호만 복사해두고 카카오페이 앱을 열어준다 — 카카오페이는 공식 이체 API 없이도
-  // 이 딥링크(kakaotalk://kakaopay/home)로 열리므로, 사용자가 그 안에서 붙여넣기만 하면 된다.
-  // 데스크톱처럼 카카오톡이 없는 환경에서는 딥링크가 그냥 무시되고 복사만 남는다.
+  // 계좌번호만 복사해두고 카카오페이/토스 앱을 열어준다 — 은행마다 다른 공식 송금 API 없이도
+  // 이 딥링크들로 앱이 열리므로, 사용자가 그 안에서 붙여넣기만 하면 된다. 계좌번호+금액을
+  // 앱에 바로 채워 넣는 방식(예: supertoss://send?bank=..&accountNo=..)은 은행명을 각 앱의
+  // 비공식 은행 코드로 정확히 매핑해야 해서 은행별로 조용히 틀린 화면이 열릴 위험이 있다 —
+  // "복사 + 앱 열기"가 덜 매끄럽지만 모든 은행에서 항상 정확하게 동작한다.
+  // 데스크톱처럼 해당 앱이 없는 환경에서는 딥링크가 그냥 무시되고 복사만 남는다(항상 안전한 폴백).
   const sendViaKakaoPay = () => {
     navigator.clipboard?.writeText(numericValue)
     window.location.href = "kakaotalk://kakaopay/home"
+  }
+  const sendViaToss = () => {
+    navigator.clipboard?.writeText(numericValue)
+    window.location.href = "supertoss://send"
   }
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${soft(25)}`, gap: 8 }}>
@@ -419,6 +512,12 @@ function AccountRow({ label, value, accent }: { label: string; value: string; ac
           border: "1px solid #FFE300", background: "#FFE300", color: "#3C1E1E", fontSize: 11.5, fontWeight: 600,
         }}>
           카카오페이
+        </button>
+        <button onClick={sendViaToss} style={{
+          padding: "6px 10px", borderRadius: 7, cursor: "pointer", whiteSpace: "nowrap",
+          border: "1px solid #0064FF", background: "#0064FF", color: "#fff", fontSize: 11.5, fontWeight: 600,
+        }}>
+          토스
         </button>
         <button onClick={copy} style={{
           padding: "6px 12px", borderRadius: 7, cursor: "pointer", whiteSpace: "nowrap",
@@ -710,6 +809,15 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
   const [partySize, setPartySize] = useState(1)
   const [mealChoice, setMealChoice] = useState<string>(mealMenu[0])
   const [shuttleUsed, setShuttleUsed] = useState(false)
+  const [consentAgreed, setConsentAgreed] = useState(false)
+
+  // 응답 취소(삭제) — 개인정보 보호법 제36조 대응. cancelPhone은 전용 입력칸이지만
+  // done 화면에서는 방금 제출한 phone을 그대로 재사용해 다시 입력할 필요가 없게 한다.
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelPhone, setCancelPhone] = useState("")
+  const [cancelBusy, setCancelBusy] = useState(false)
+  const [cancelError, setCancelError] = useState<string | null>(null)
+  const [cancelDone, setCancelDone] = useState(false)
 
   // rsvp_responses.meal_choice/shuttle_required 컬럼은 이미 있었지만 이 폼이 값을
   // 채운 적이 없어 신랑신부 대시보드의 식사·셔틀 집계가 항상 비어 있었다 — 여기서 채운다.
@@ -718,34 +826,94 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
   const mealEnabled = rsvpOverride?.mealEnabled !== false
   const shuttleEnabled = rsvpOverride?.shuttleEnabled !== false
 
+  // 마감일은 "그날 자정까지"로 취급한다 — 하객이 마감일 당일에도 자정 전까지는 응답할 수 있어야 한다.
+  const deadline = rsvpOverride?.rsvpDeadline ? new Date(`${rsvpOverride.rsvpDeadline}T23:59:59`) : null
+  const isPastDeadline = !!deadline && deadline.getTime() < Date.now()
+  const daysUntilDeadline = deadline ? Math.ceil((deadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null
+  const deadlineLabel = deadline ? `${deadline.getMonth() + 1}월 ${deadline.getDate()}일` : null
+
   const submit = async () => {
     if (!name.trim()) { setError("성함을 입력해주세요."); return }
     if (!phone.trim()) { setError("연락처를 입력해주세요."); return }
+    if (!consentAgreed) { setError("개인정보 수집·이용에 동의해주세요."); return }
     setError(null); setSaving(true)
 
     if (invitationId) {
       const isAttending = attending === "yes"
       const wantsMeal = isAttending && mealEnabled && mealChoice !== MEAL_NONE
-      const { error: err } = await supabase.from("rsvp_responses").insert({
-        invitation_id: invitationId,
-        guest_name: name.trim(),
-        phone: phone.trim(),
-        side,
-        is_attending: isAttending,
-        party_size: isAttending ? partySize : 0,
-        meal_required: wantsMeal,
-        meal_choice: wantsMeal ? mealChoice : null,
-        shuttle_required: isAttending && shuttleEnabled ? shuttleUsed : false,
+      // 같은 사람이 여러 번 제출하면(재확인, 답 변경 등) 새 행을 쌓지 않고 기존 응답을
+      // 덮어쓴다 — invitation_id + 전화번호 조합으로 판별한다(§DB의 upsert_rsvp_response,
+      // rsvp_responses_invitation_phone_key 유니크 인덱스). rsvp_responses는 RLS상 anon이
+      // INSERT만 가능해 클라이언트가 직접 "이미 있으면 UPDATE"를 판단할 수 없으므로 RPC로 위임한다.
+      const { error: err } = await supabase.rpc("upsert_rsvp_response", {
+        p_invitation_id: invitationId,
+        p_guest_name: name.trim(),
+        p_phone: phone.trim(),
+        p_side: side,
+        p_is_attending: isAttending,
+        p_party_size: isAttending ? partySize : 0,
+        p_meal_required: wantsMeal,
+        p_meal_choice: wantsMeal ? mealChoice : null,
+        p_shuttle_required: isAttending && shuttleEnabled ? shuttleUsed : false,
+        p_consent_version: CONSENT_VERSION,
       })
       if (err) { setSaving(false); setError("전송에 실패했습니다. 잠시 후 다시 시도해주세요."); return }
     }
     setSaving(false); setDone(true); setOpen(false)
   }
 
+  // 응답 취소 — invitation_id + 전화번호로 본인 응답을 찾아 삭제한다(§app/api/rsvp-cancel/route.ts).
+  const cancelRsvp = async (targetPhone: string) => {
+    if (!targetPhone.trim()) { setCancelError("연락처를 입력해주세요."); return }
+    if (!invitationId) return
+    setCancelBusy(true); setCancelError(null)
+    try {
+      const res = await fetch("/api/rsvp-cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invitationId, phone: targetPhone.trim() }),
+      })
+      if (res.ok) {
+        setCancelDone(true)
+        setCancelOpen(false)
+      } else {
+        setCancelError("해당 연락처로 제출된 참석 응답을 찾을 수 없습니다.")
+      }
+    } catch {
+      setCancelError("취소 처리 중 오류가 발생했습니다.")
+    } finally {
+      setCancelBusy(false)
+    }
+  }
+
   if (done) {
     return (
-      <div style={{ maxWidth: 320, margin: "0 auto", padding: "14px 0", fontSize: 14, lineHeight: 1.7, color: accent }}>
-        {name || "하객"}님, 참석 의사가 전달되었습니다. 감사합니다 ♥
+      <div style={{ maxWidth: 320, margin: "0 auto", padding: "14px 0", fontSize: 14, lineHeight: 1.7, color: accent, textAlign: "center" }}>
+        {cancelDone ? (
+          <>참석 응답이 취소되었습니다.</>
+        ) : (
+          <>
+            {name || "하객"}님, 참석 의사가 전달되었습니다. 감사합니다 ♥
+            <div style={{ marginTop: 10 }}>
+              <button
+                onClick={() => cancelRsvp(phone)}
+                disabled={cancelBusy}
+                style={{ background: "none", border: "none", cursor: cancelBusy ? "wait" : "pointer", fontSize: 12, color: "#9ca3af", textDecoration: "underline", padding: 0 }}
+              >
+                {cancelBusy ? "취소 처리 중…" : "응답 취소하기"}
+              </button>
+              {cancelError && <p style={{ fontSize: 11.5, color: "#dc2626", marginTop: 6 }}>{cancelError}</p>}
+            </div>
+          </>
+        )}
+      </div>
+    )
+  }
+
+  if (isPastDeadline) {
+    return (
+      <div style={{ maxWidth: 320, margin: "0 auto", padding: "14px 0", fontSize: 13.5, lineHeight: 1.6, color: "#9ca3af", textAlign: "center" }}>
+        참석 의사 접수가 마감되었습니다.
       </div>
     )
   }
@@ -758,6 +926,44 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
       }}>
         참석 의사 전달하기
       </button>
+      {deadlineLabel && (
+        <p style={{ marginTop: 8, textAlign: "center", fontSize: 11.5, color: daysUntilDeadline !== null && daysUntilDeadline <= 3 ? "#dc2626" : "inherit", opacity: daysUntilDeadline !== null && daysUntilDeadline <= 3 ? 1 : 0.6 }}>
+          {deadlineLabel}까지 회신 부탁드립니다{daysUntilDeadline !== null && daysUntilDeadline <= 3 ? ` (마감 ${daysUntilDeadline}일 전)` : ""}
+        </p>
+      )}
+
+      {invitationId && !cancelDone && (
+        <div style={{ marginTop: 10, textAlign: "center" }}>
+          <button
+            onClick={() => { setCancelOpen((v) => !v); setCancelError(null) }}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11.5, color: "#9ca3af", textDecoration: "underline", padding: 0 }}
+          >
+            이미 제출한 참석 응답을 취소할래요
+          </button>
+          {cancelOpen && (
+            <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
+              <input
+                value={cancelPhone}
+                onChange={(e) => setCancelPhone(e.target.value)}
+                placeholder="제출 시 입력한 연락처"
+                disabled={cancelBusy}
+                style={{ ...rsvpInput, flex: 1, fontSize: 13, padding: "8px 10px" }}
+              />
+              <button
+                onClick={() => cancelRsvp(cancelPhone)}
+                disabled={cancelBusy}
+                style={{ flexShrink: 0, padding: "0 14px", borderRadius: 8, border: "none", cursor: cancelBusy ? "wait" : "pointer", background: "#dc2626", color: "#fff", fontSize: 13, opacity: cancelBusy ? 0.7 : 1 }}
+              >
+                {cancelBusy ? "확인 중…" : "취소"}
+              </button>
+            </div>
+          )}
+          {cancelError && <p style={{ fontSize: 11.5, color: "#dc2626", marginTop: 6 }}>{cancelError}</p>}
+        </div>
+      )}
+      {cancelDone && (
+        <p style={{ marginTop: 10, textAlign: "center", fontSize: 12.5, color: accent }}>참석 응답이 취소되었습니다.</p>
+      )}
 
       {open && (
         <div
@@ -833,13 +1039,15 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
               </>
             )}
 
+            <ConsentNotice copy={RSVP_CONSENT_COPY} checked={consentAgreed} onChange={setConsentAgreed} accent={accent} />
+
             {error && <p style={{ fontSize: 12, color: "#dc2626", marginBottom: 10 }}>{error}</p>}
 
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
               <button onClick={() => setOpen(false)} style={{ flex: 1, padding: "11px 0", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", color: "#6b7280", cursor: "pointer", fontSize: 14 }}>
                 취소
               </button>
-              <button onClick={submit} disabled={saving} style={{ flex: 2, padding: "11px 0", borderRadius: 8, border: "none", background: accent, color: "#fff", cursor: saving ? "wait" : "pointer", fontSize: 14, opacity: saving ? 0.7 : 1 }}>
+              <button onClick={submit} disabled={saving || !consentAgreed} style={{ flex: 2, padding: "11px 0", borderRadius: 8, border: "none", background: accent, color: "#fff", cursor: saving || !consentAgreed ? "not-allowed" : "pointer", fontSize: 14, opacity: saving || !consentAgreed ? 0.5 : 1 }}>
                 {saving ? "전송 중…" : "전달하기"}
               </button>
             </div>
@@ -898,8 +1106,16 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
   const [loading, setLoading] = useState(!!invitationId)
   const [name, setName] = useState("")
   const [msg, setMsg] = useState("")
+  const [composePassword, setComposePassword] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [consentAgreed, setConsentAgreed] = useState(false)
+
+  // 본인 삭제 — 어떤 글의 삭제 비밀번호 입력창이 열려 있는지 id로 추적한다.
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deletePassword, setDeletePassword] = useState("")
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
 
   useEffect(() => {
     if (!invitationId) { setLoading(false); return }
@@ -923,23 +1139,28 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
 
   const add = async () => {
     if (!name.trim() || !msg.trim()) return
+    if (!composePassword.trim()) { setError("나중에 글을 지울 때 필요한 비밀번호를 입력해주세요."); return }
+    if (!consentAgreed) { setError("개인정보 수집·이용에 동의해주세요."); return }
     setError(null)
 
     if (!invitationId) {
       // 미리보기 모드: 저장 없이 화면에만 반영
       setEntries((e) => [{ id: "preview-" + Date.now(), name, msg }, ...e])
-      setName(""); setMsg("")
+      setName(""); setMsg(""); setComposePassword("")
       return
     }
 
     setSaving(true)
+    const passwordHash = await hashPassword(composePassword.trim())
     const { data, error: err } = await supabase
       .from("guestbook_entries")
       .insert({
         invitation_id: invitationId,
         author_name: name.trim(),
         message: msg.trim(),
-        password_hash: "",
+        password_hash: passwordHash,
+        consent_agreed_at: new Date().toISOString(),
+        consent_version: CONSENT_VERSION,
       })
       .select("id, author_name, message")
       .single()
@@ -950,19 +1171,49 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
       return
     }
     setEntries((e) => [{ id: data.id, name: data.author_name, msg: data.message }, ...e])
-    setName(""); setMsg("")
+    setName(""); setMsg(""); setComposePassword("")
+  }
+
+  const confirmDelete = async (id: string) => {
+    if (!deletePassword.trim()) { setDeleteError("비밀번호를 입력해주세요."); return }
+    setDeleteBusy(true)
+    setDeleteError(null)
+    try {
+      const res = await fetch("/api/guestbook-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entryId: id, password: deletePassword.trim() }),
+      })
+      if (res.ok) {
+        setEntries((es) => es.filter((e) => e.id !== id))
+        setDeletingId(null)
+        setDeletePassword("")
+      } else {
+        setDeleteError("비밀번호가 일치하지 않습니다.")
+      }
+    } catch {
+      setDeleteError("삭제 중 오류가 발생했습니다.")
+    } finally {
+      setDeleteBusy(false)
+    }
   }
 
   return (
     <div style={{ textAlign: "left", maxWidth: 320, margin: "0 auto", fontSize: 13 }}>
+      <ConsentNotice copy={GUESTBOOK_CONSENT_COPY} checked={consentAgreed} onChange={setConsentAgreed} accent={accent} />
       <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="이름"
           disabled={saving}
           style={{ width: 80, flexShrink: 0, padding: "8px 10px", border: "1px solid #e2ddd6", borderRadius: 8, outline: "none", fontSize: 13 }} />
+        <input value={composePassword} onChange={(e) => setComposePassword(e.target.value)} placeholder="삭제용 비밀번호" type="password"
+          disabled={saving}
+          style={{ width: 96, flexShrink: 0, padding: "8px 10px", border: "1px solid #e2ddd6", borderRadius: 8, outline: "none", fontSize: 13 }} />
+      </div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
         <input value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="축하 메시지"
           disabled={saving}
           style={{ flex: 1, minWidth: 0, padding: "8px 10px", border: "1px solid #e2ddd6", borderRadius: 8, outline: "none", fontSize: 13 }} />
-        <button onClick={add} disabled={saving} style={{ flexShrink: 0, whiteSpace: "nowrap", padding: "0 14px", borderRadius: 8, border: "none", cursor: saving ? "wait" : "pointer", background: accent, color: "#fff", fontSize: 13, opacity: saving ? 0.7 : 1 }}>
+        <button onClick={add} disabled={saving || !consentAgreed} style={{ flexShrink: 0, whiteSpace: "nowrap", padding: "0 14px", borderRadius: 8, border: "none", cursor: saving || !consentAgreed ? "not-allowed" : "pointer", background: accent, color: "#fff", fontSize: 13, opacity: saving || !consentAgreed ? 0.5 : 1 }}>
           {saving ? "등록 중…" : "등록"}
         </button>
       </div>
@@ -975,8 +1226,42 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
         ) : (
           entries.map((e) => (
             <div key={e.id} style={{ padding: "10px 12px", background: "rgba(255,255,255,.5)", borderRadius: 8 }}>
-              <span style={{ color: accent, marginRight: 8 }}>{e.name}</span>
-              <span>{e.msg}</span>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                <div>
+                  <span style={{ color: accent, marginRight: 8 }}>{e.name}</span>
+                  <span>{e.msg}</span>
+                </div>
+                {invitationId && (
+                  <button
+                    onClick={() => { setDeletingId(deletingId === e.id ? null : e.id); setDeletePassword(""); setDeleteError(null) }}
+                    style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", fontSize: 11, color: "#9ca3af", padding: 0 }}
+                  >
+                    삭제
+                  </button>
+                )}
+              </div>
+              {deletingId === e.id && (
+                <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(0,0,0,.08)", display: "flex", gap: 6 }}>
+                  <input
+                    type="password"
+                    value={deletePassword}
+                    onChange={(ev) => setDeletePassword(ev.target.value)}
+                    placeholder="작성 시 입력한 비밀번호"
+                    disabled={deleteBusy}
+                    style={{ flex: 1, minWidth: 0, padding: "7px 10px", border: "1px solid #e2ddd6", borderRadius: 8, outline: "none", fontSize: 12 }}
+                  />
+                  <button
+                    onClick={() => confirmDelete(e.id)}
+                    disabled={deleteBusy}
+                    style={{ flexShrink: 0, padding: "0 12px", borderRadius: 8, border: "none", cursor: deleteBusy ? "wait" : "pointer", background: "#dc2626", color: "#fff", fontSize: 12, opacity: deleteBusy ? 0.7 : 1 }}
+                  >
+                    {deleteBusy ? "삭제 중…" : "삭제"}
+                  </button>
+                </div>
+              )}
+              {deletingId === e.id && deleteError && (
+                <p style={{ fontSize: 11, color: "#dc2626", margin: "6px 0 0" }}>{deleteError}</p>
+              )}
             </div>
           ))
         )}
@@ -991,12 +1276,49 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
  * OS 공유 시트(카카오톡 포함, 별도 SDK/API 키 없이도 뜬다)를 그대로 띄우고,
  * 지원하지 않는 환경(대부분의 데스크톱 브라우저)에서는 클립보드 복사로 대체한다.
  * ------------------------------------------------------------------ */
+/** 카카오 JS SDK의 Kakao.Share.sendDefault 호출부만 타입으로 선언 — 나머지는 안 쓴다 */
+interface KakaoGlobal {
+  init: (key: string) => void
+  isInitialized: () => boolean
+  Share: { sendDefault: (options: Record<string, unknown>) => void }
+}
+
+/** NEXT_PUBLIC_KAKAO_JS_KEY가 설정된 경우에만 SDK를 로드해 초기화한다 — 키가 없으면
+ * 아예 로드를 시도하지 않고 카카오 공유 버튼도 노출하지 않는다(무료 카카오 개발자
+ * 콘솔에서 JS 앱 키를 발급받아야 한다 — 비즈메시지 파트너사 계약과는 무관하다). */
+function useKakaoShare(): KakaoGlobal | null {
+  const [kakao, setKakao] = useState<KakaoGlobal | null>(null)
+  const kakaoKey = process.env.NEXT_PUBLIC_KAKAO_JS_KEY
+
+  useEffect(() => {
+    if (!kakaoKey || typeof window === "undefined") return
+    const w = window as typeof window & { Kakao?: KakaoGlobal }
+    if (w.Kakao) {
+      if (!w.Kakao.isInitialized()) w.Kakao.init(kakaoKey)
+      setKakao(w.Kakao)
+      return
+    }
+    const script = document.createElement("script")
+    script.src = "https://t1.kakaocdn.net/kakao_js_sdk/2.7.5/kakao.min.js"
+    script.async = true
+    script.onload = () => {
+      if (w.Kakao && !w.Kakao.isInitialized()) w.Kakao.init(kakaoKey)
+      if (w.Kakao) setKakao(w.Kakao)
+    }
+    document.head.appendChild(script)
+  }, [kakaoKey])
+
+  return kakao
+}
+
 function ShareIsland({ accent, data }: SlotProps) {
   const [copied, setCopied] = useState(false)
+  const kakao = useKakaoShare()
+  const title = data.kakao_share_title || [data.groom_name, data.bride_name].filter(Boolean).join(" ♥ ") || "모바일 청첩장"
+
   const handleShare = () => {
     if (typeof window === "undefined") return
     const url = window.location.href
-    const title = [data.groom_name, data.bride_name].filter(Boolean).join(" ♥ ") || "모바일 청첩장"
     const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> }
     if (nav.share) {
       nav.share({ title, url }).catch(() => { /* 사용자가 공유 시트를 취소한 경우 등 - 무시 */ })
@@ -1006,17 +1328,39 @@ function ShareIsland({ accent, data }: SlotProps) {
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
   }
+
+  const shareViaKakao = () => {
+    if (!kakao || typeof window === "undefined") return
+    const url = window.location.href
+    kakao.Share.sendDefault({
+      objectType: "feed",
+      content: {
+        title,
+        description: data.kakao_share_text || "저희 결혼식에 초대합니다",
+        imageUrl: data.kakao_share_img || data.main_image || "",
+        link: { mobileWebUrl: url, webUrl: url },
+      },
+      buttons: [{ title: "청첩장 보기", link: { mobileWebUrl: url, webUrl: url } }],
+    })
+  }
+
+  const btnStyle: React.CSSProperties = {
+    display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 22px", borderRadius: 20,
+    border: `1px solid ${soft(40)}`, background: "transparent", color: "inherit", fontSize: 12.5,
+    cursor: "pointer", opacity: 0.85,
+  }
+
   return (
-    <button
-      onClick={handleShare}
-      style={{
-        display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 22px", borderRadius: 20,
-        border: `1px solid ${soft(40)}`, background: "transparent", color: "inherit", fontSize: 12.5,
-        cursor: "pointer", opacity: 0.85,
-      }}
-    >
-      {copied ? "청첩장 주소가 복사되었습니다" : "청첩장 주소 공유하기"}
-    </button>
+    <div style={{ display: "inline-flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+      {kakao && (
+        <button onClick={shareViaKakao} style={{ ...btnStyle, border: "1px solid #FFE300", background: "#FFE300", color: "#3C1E1E", opacity: 1 }}>
+          카카오톡 공유
+        </button>
+      )}
+      <button onClick={handleShare} style={btnStyle}>
+        {copied ? "청첩장 주소가 복사되었습니다" : "청첩장 주소 공유하기"}
+      </button>
+    </div>
   )
 }
 

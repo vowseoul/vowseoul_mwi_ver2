@@ -57,5 +57,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "고객 정보를 갱신하지 못했습니다." }, { status: 500 })
   }
 
+  // 관리자 헤더 벨 알림 — 실패해도 폼 제출 자체는 이미 완료된 것이므로 응답을 막지 않는다.
+  const groomName = typeof data?.groom_name === "string" ? data.groom_name : ""
+  const brideName = typeof data?.bride_name === "string" ? data.bride_name : ""
+  const coupleName = [groomName, brideName].filter(Boolean).join(" ♥ ") || "고객"
+  const { error: notifyError } = await supabase.from("notifications").insert({
+    type: "form_submitted",
+    title: "폼 제출 완료",
+    message: `${coupleName}님이 정보 입력 폼을 제출했습니다.`,
+    link_to: `/admin/customers/${customerId}`,
+  })
+  if (notifyError) console.error("form-submit notification insert failed:", notifyError.message)
+
   return NextResponse.json({ ok: true })
 }

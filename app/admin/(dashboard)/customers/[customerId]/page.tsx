@@ -16,17 +16,26 @@ import {
 } from '@/components/ui/select'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { buildContentDataFromForm, deriveOgMetaFromForm, deriveOverridesFromForm, resolveBgmUrlFromSnapshot } from '@/lib/invitation-data'
-import { 
-  useCustomerQuery, 
-  useUpdateCustomerMutation, 
+import {
+  useCustomerQuery,
+  useUpdateCustomerMutation,
   useCustomerFormInstanceQuery,
   useCustomerInvitationQuery,
-  useProfilesQuery 
+  useProfilesQuery
 } from '@/hooks/queries/useCustomers'
+import {
+  useCustomerOrderQuery,
+  useCreateOrderMutation,
+  useSaveOrderMutation,
+  useDuplicateOrderMutation,
+  useDeleteOrderMutation,
+  type Order,
+} from '@/hooks/queries/useOrders'
 import { useThemesQuery } from '@/hooks/queries/useThemes'
 import { useCreateInvitationMutation } from '@/hooks/queries/useInvitations'
 import { useFormTemplateFieldsQuery } from '@/hooks/queries/useForms'
 import { supabase } from '@/lib/supabase'
+import { logAuditEvent } from '@/lib/audit-log'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Dialog,
@@ -36,7 +45,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { ArrowLeft, Save, Copy, Check, ExternalLink, Loader2, Calendar, RefreshCw, FileCheck } from 'lucide-react'
+import { ArrowLeft, Save, Copy, Check, ExternalLink, Loader2, Calendar, RefreshCw, FileCheck, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 export default function CustomerDetailPage({ params }: { params: Promise<{ customerId: string }> }) {
@@ -48,6 +57,85 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
   const { data: formInstance } = useCustomerFormInstanceQuery(customerId)
   const { data: invitation } = useCustomerInvitationQuery(customerId)
   const { data: profiles, isLoading: isLoadingProfiles } = useProfilesQuery()
+
+  // 주문/결제 정보 — 예전 "주문 관리" 화면의 금액·상태·메모 편집을 여기로 통합했다
+  const { data: order } = useCustomerOrderQuery(customerId)
+  const createOrderMutation = useCreateOrderMutation()
+  const saveOrderMutation = useSaveOrderMutation()
+  const duplicateOrderMutation = useDuplicateOrderMutation()
+  const deleteOrderMutation = useDeleteOrderMutation()
+  const [orderAmount, setOrderAmount] = useState(0)
+  const [orderStatus, setOrderStatus] = useState<Order['status']>('registered')
+  const [orderNotes, setOrderNotes] = useState('')
+
+  useEffect(() => {
+    if (order) {
+      setOrderAmount(order.amount)
+      setOrderStatus(order.status)
+      setOrderNotes(order.notes || '')
+    }
+  }, [order])
+
+  // 개인정보취급자 접속기록 (고시 제8조) — 고객 상세(이름·연락처 등)를 열람했다는
+  // 사실을 남긴다. 청첩장 한 건에 묶인 행위가 아니라 invitationId 없이 기록한다.
+  useEffect(() => {
+    if (!customer) return
+    ;(async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      const label = [customer.groom_name, customer.bride_name].filter(Boolean).join(' ♥ ')
+      logAuditEvent(supabase, {
+        actorType: 'admin',
+        actorLabel: user?.email ?? null,
+        action: 'customer_detail.viewed',
+        summary: `고객 상세 정보를 열람했습니다: ${label || customerId}`,
+      })
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerId, !!customer])
+
+  const handleCreateOrder = async () => {
+    try {
+      await createOrderMutation.mutateAsync({ customerId, invitationId: invitation?.id ?? null })
+      toast.success('주문 정보가 추가되었습니다.')
+    } catch (err: any) {
+      toast.error(err.message || '추가 중 오류가 발생했습니다.')
+    }
+  }
+
+  const handleSaveOrder = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!order) return
+    try {
+      await saveOrderMutation.mutateAsync({
+        orderId: order.id,
+        updates: { amount: orderAmount, status: orderStatus, notes: orderNotes },
+      })
+      toast.success('주문 정보가 저장되었습니다.')
+    } catch (err: any) {
+      toast.error(err.message || '저장 중 오류가 발생했습니다.')
+    }
+  }
+
+  const handleDuplicateOrder = async () => {
+    if (!order) return
+    try {
+      await duplicateOrderMutation.mutateAsync({ order })
+      toast.success('청첩장과 주문 정보가 복사되었습니다.')
+    } catch (err: any) {
+      toast.error(err.message || '복사 중 오류가 발생했습니다.')
+    }
+  }
+
+  const handleDeleteOrder = async () => {
+    if (!order) return
+    if (!confirm('정말로 이 주문과 연결된 청첩장을 삭제하시겠습니까? 삭제 후에는 복구할 수 없습니다.')) return
+    try {
+      await deleteOrderMutation.mutateAsync({ orderId: order.id, invitationId: order.invitation_id, customerId })
+      toast.success('주문과 청첩장이 삭제되었습니다.')
+    } catch (err: any) {
+      toast.error(err.message || '삭제 중 오류가 발생했습니다.')
+    }
+  }
 
   // Form version tracking & update logic
   const { data: latestFields } = useFormTemplateFieldsQuery(formInstance?.template_id || '')
@@ -596,6 +684,101 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
             </Card>
           </form>
 
+          {/* 주문 / 결제 정보 카드 — 예전 "주문 관리" 화면의 금액·상태·메모 편집·복사·삭제를 여기로 통합 */}
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="text-lg font-medium">주문 / 결제 정보</CardTitle>
+              <CardDescription>
+                결제 금액과 제작 진행 상태를 기록합니다. 실제 결제는 앱 밖(네이버 스마트스토어 등)에서 이뤄지므로 이 값은 참고용 기록입니다.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {order ? (
+                <form onSubmit={handleSaveOrder}>
+                  <FieldGroup className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <Field>
+                        <FieldLabel htmlFor="orderAmount">결제 금액 (원)</FieldLabel>
+                        <Input
+                          id="orderAmount"
+                          type="number"
+                          value={orderAmount}
+                          onChange={(e) => setOrderAmount(parseInt(e.target.value) || 0)}
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="orderStatus">제작 진행 상태</FieldLabel>
+                        <Select value={orderStatus} onValueChange={(v) => setOrderStatus(v as Order['status'])}>
+                          <SelectTrigger id="orderStatus">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="registered">고객 등록</SelectItem>
+                            <SelectItem value="form_sent">폼 발송</SelectItem>
+                            <SelectItem value="form_completed">폼 작성완료</SelectItem>
+                            <SelectItem value="in_production">제작중</SelectItem>
+                            <SelectItem value="design_review">디자인 피드백중</SelectItem>
+                            <SelectItem value="published">발행완료</SelectItem>
+                            <SelectItem value="delivered">전달완료</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                    </div>
+                    <Field>
+                      <FieldLabel htmlFor="orderNotes">관리 메모 / 특이사항</FieldLabel>
+                      <Textarea
+                        id="orderNotes"
+                        rows={4}
+                        placeholder="제작 관련 의뢰 파일 링크나 가이드를 입력하세요."
+                        value={orderNotes}
+                        onChange={(e) => setOrderNotes(e.target.value)}
+                      />
+                    </Field>
+                  </FieldGroup>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 mt-6 pt-6 border-t border-border">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleDuplicateOrder}
+                        disabled={duplicateOrderMutation.isPending}
+                        className="gap-1.5"
+                      >
+                        {duplicateOrderMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Copy className="h-3.5 w-3.5" />}
+                        청첩장 복사해서 새로 만들기
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleDeleteOrder}
+                        disabled={deleteOrderMutation.isPending}
+                        className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10"
+                      >
+                        {deleteOrderMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                        주문 및 청첩장 삭제
+                      </Button>
+                    </div>
+                    <Button type="submit" size="sm" className="gap-2" disabled={saveOrderMutation.isPending}>
+                      {saveOrderMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      저장하기
+                    </Button>
+                  </div>
+                </form>
+              ) : (
+                <div className="text-center py-6 space-y-3">
+                  <p className="text-sm text-muted-foreground">아직 결제/주문 기록이 없습니다.</p>
+                  <Button variant="outline" size="sm" onClick={handleCreateOrder} disabled={createOrderMutation.isPending} className="gap-1.5">
+                    {createOrderMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    주문 정보 추가
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Original Orderer & Form Submission Info Card (Request 2) */}
           <Card className="mt-6">
             <CardHeader className="bg-muted/10 border-b border-border py-3">
@@ -785,7 +968,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
 
                   <div className="flex justify-between items-center text-xs bg-muted/50 p-2.5 rounded-lg">
                     <span className="text-muted-foreground">대시보드 패스워드:</span>
-                    <span className="font-mono font-bold tracking-wider">{invitation.dashboard_password}</span>
+                    <span className="font-medium text-right">등록된 고객 연락처 뒷 4자리</span>
                   </div>
 
                   <Button

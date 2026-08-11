@@ -39,8 +39,11 @@ export interface BlockOverride {
   /** rsvp 블럭 전용 서브옵션 (§slot-registry.tsx RsvpIsland) */
   mealEnabled?: boolean
   shuttleEnabled?: boolean
+  rsvpDeadline?: string
   /** calendar 블럭 전용 서브옵션 (§slot-registry.tsx CalendarIsland) */
   ddayEnabled?: boolean
+  icsButtonEnabled?: boolean
+  googleCalendarButtonEnabled?: boolean
 }
 export type BlockOverrideMap = Record<string, BlockOverride>
 /** 섹션(블럭) 사이에 끼워 넣는 이미지. lib/theme-template.ts 의 SectionImage 와 동일한 형태 */
@@ -79,6 +82,10 @@ interface InvitationFrameProps {
   preventZoom?: boolean
   /** 섹션 사이에 끼워 넣는 이미지. afterBlock 이 가리키는 [data-block] 섹션 바로 뒤에 삽입된다 */
   sectionImages?: SectionImage[]
+  /** 값이 있으면 "코멘트 모드"로 전환 — [data-block] 클릭 시 그 블록 키를 알려주고, 그
+   * 클릭이 유발했을 원래 동작(RSVP 버튼 열기 등)은 막는다. 시안 검수 화면 전용이라
+   * 평소(발행/일반 미리보기)에는 prop을 아예 넘기지 않아 기본 동작에 영향이 없다. */
+  onBlockClick?: (blockKey: string) => void
 }
 
 function buildSrcDoc(template: ThemeTemplate): string {
@@ -92,7 +99,11 @@ function buildSrcDoc(template: ThemeTemplate): string {
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400&family=Cormorant+Garamond:ital,wght@0,400..600;1,400&family=Gowun+Batang:wght@400;700&family=Noto+Serif+KR:wght@300;400;600&family=Nanum+Myeongjo:wght@400;700&display=swap');
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; }
-    body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; background: var(--bg, #fff); color: var(--ink, #222); }
+    /* body 기본 폰트를 --font-kr로 잡아둔다. 테마 template_css가 자체적으로 body(또는 더 구체적인
+       선택자)에 font-family를 지정하면 그 규칙이 우선하므로 안전하지만, 그런 지정이 전혀 없는
+       테마에서는 이 기본값이 없으면 --font-kr을 아무리 바꿔도 본문(이름·인사말 등)에 반영되지
+       않고 브라우저 기본 글꼴만 보이는 문제가 있었다. */
+    body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; background: var(--bg, #fff); color: var(--ink, #222); font-family: var(--font-kr, inherit); }
     img { max-width: 100%; display: block; }
     /* [data-slot] 아일랜드(계좌·연락처·식순·방명록·RSVP·공유 등)는 React portal로 마운트되어
        테마 CSS의 개별 클래스 지정 없이 조상 요소의 font-family를 그대로 상속한다. 대부분의
@@ -154,6 +165,7 @@ export function InvitationFrame({
   height = 720,
   preventZoom = false,
   sectionImages = [],
+  onBlockClick,
 }: InvitationFrameProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [doc, setDoc] = useState<Document | null>(null)
@@ -250,21 +262,27 @@ export function InvitationFrame({
     applyAltClasses(doc, hiddenBlocks)
   }, [doc, hiddenBlocks])
 
-  // 블럭 타이틀/영문 소제목 바인딩 — 빈 값이면 템플릿 기본 텍스트를 그대로 둔다 ([data-field]와 동일 규칙)
+  // 블럭 타이틀/영문 소제목 바인딩 — 빈 값이면 템플릿 기본 텍스트로 되돌아간다. 공백만 입력한
+  // 경우는 truthy라 그대로 빈칸처럼 보이는 값이 적용된다(의도적으로 구분되는 상태 — 완전히
+  // 비워야만 "기본값 사용"으로 취급한다). 각 요소의 원래 기본 텍스트는 최초 진입 시 딱 한 번
+  // dataset에 캐시해둔다 — 그래야 "커스텀 → 다시 빈칸"으로 되돌렸을 때 무엇으로 복원해야 할지
+  // 알 수 있다(문서를 새로 write()한 직후엔 항상 새 DOM이라 다시 그 시점의 기본값으로 캐시된다).
   useEffect(() => {
     if (!doc) return
     doc.querySelectorAll<HTMLElement>("[data-block]").forEach((section) => {
       const key = section.getAttribute("data-block")
       if (!key) return
       const override = blockOverrides[key]
-      if (!override) return
-      if (override.title) {
-        const titleEl = section.querySelector<HTMLElement>("[data-block-title]")
-        if (titleEl) titleEl.textContent = override.title
+
+      const titleEl = section.querySelector<HTMLElement>("[data-block-title]")
+      if (titleEl) {
+        if (titleEl.dataset.vsDefaultText === undefined) titleEl.dataset.vsDefaultText = titleEl.textContent ?? ""
+        titleEl.textContent = override?.title || titleEl.dataset.vsDefaultText
       }
-      if (override.label) {
-        const labelEl = section.querySelector<HTMLElement>("[data-block-label]")
-        if (labelEl) labelEl.textContent = override.label
+      const labelEl = section.querySelector<HTMLElement>("[data-block-label]")
+      if (labelEl) {
+        if (labelEl.dataset.vsDefaultText === undefined) labelEl.dataset.vsDefaultText = labelEl.textContent ?? ""
+        labelEl.textContent = override?.label || labelEl.dataset.vsDefaultText
       }
     })
   }, [doc, blockOverrides])
@@ -350,6 +368,24 @@ export function InvitationFrame({
     }
   }, [doc, preventZoom])
 
+  // 코멘트 모드(onBlockClick 전달 시에만) — [data-block] 클릭을 capture 단계에서 가로채
+  // 블록 키를 알려주고, 그 클릭이 원래 열었을 RSVP 모달 등 슬롯 아일랜드의 동작은 막는다.
+  // 평소에는 onBlockClick 자체를 안 넘기므로 리스너가 아예 붙지 않는다.
+  useEffect(() => {
+    if (!doc || !onBlockClick) return
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null
+      const block = target?.closest<HTMLElement>("[data-block]")
+      const key = block?.getAttribute("data-block")
+      if (!key) return
+      e.preventDefault()
+      e.stopPropagation()
+      onBlockClick(key)
+    }
+    doc.addEventListener("click", handleClick, true)
+    return () => doc.removeEventListener("click", handleClick, true)
+  }, [doc, onBlockClick])
+
   // 커스텀 폰트 로딩 — 에셋 관리에서 등록한 폰트를 iframe 문서 안에 주입한다.
   // (iframe은 별도 realm이라 부모 문서에 <link>/<style>을 추가해도 적용되지 않는다)
   useEffect(() => {
@@ -371,6 +407,22 @@ export function InvitationFrame({
         .filter(Boolean)
     )
   }, [doc, fontFaces])
+
+  // 개인정보처리방침 링크 — 테마 template.html을 건드리지 않고 문서 최하단에 공통 주입한다.
+  // 새 테마가 추가돼도 자동으로 붙는다(개인정보 보호법 제30조 고지 도달 경로).
+  useEffect(() => {
+    if (!doc) return
+    const linkId = "vs-privacy-link"
+    if (doc.getElementById(linkId)) return
+    const link = doc.createElement("a")
+    link.id = linkId
+    link.href = "/privacy"
+    link.target = "_top"
+    link.textContent = "개인정보처리방침"
+    link.style.cssText =
+      "display:block;text-align:center;margin:24px 0 14px;font-size:10px;opacity:.35;color:inherit;text-decoration:underline;"
+    doc.body.appendChild(link)
+  }, [doc])
 
   return (
     <iframe

@@ -24,8 +24,12 @@ export function dashboardCookieName(invitationId: string): string {
 /**
  * 서명 키. 미설정 시 개발 환경에서만 고정 폴백을 쓰고, 프로덕션에서는
  * 서명 없는 토큰이 발급되지 않도록 즉시 실패시킨다.
+ *
+ * export 하는 이유: lib/visit-hash.ts(방문자 IP 해시)도 같은 키를 재사용한다 —
+ * 용도가 다른 두 서명(대시보드 토큰 vs IP 해시)이 값을 섞어 쓰지 않도록 각자
+ * HMAC 메시지 앞에 별도 접두사를 붙여 구분한다.
  */
-function getSecret(): string {
+export function getSecret(): string {
   const secret = process.env.DASHBOARD_SESSION_SECRET
   if (secret) return secret
   if (process.env.NODE_ENV === "production") {

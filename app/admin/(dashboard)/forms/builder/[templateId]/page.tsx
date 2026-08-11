@@ -17,12 +17,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { 
-  useFieldsQuery, 
-  useFormTemplateQuery, 
-  useFormTemplateFieldsQuery, 
-  useSaveTemplateFieldsMutation 
+import {
+  useFieldsQuery,
+  useFormTemplateQuery,
+  useFormTemplateFieldsQuery,
+  useSaveTemplateFieldsMutation
 } from '@/hooks/queries/useForms'
+import { useBgmLibraryQuery, useRegisterBgmAssetMutation } from '@/hooks/queries/useBgms'
 import { supabase } from '@/lib/supabase'
 import { uploadFile } from '@/lib/storage'
 import { uploadImage } from '@/lib/image-upload'
@@ -94,6 +95,9 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
   const { data: allFields, isLoading: isLoadingFields } = useFieldsQuery()
   const { data: templateFields, isLoading: isLoadingTemplateFields } = useFormTemplateFieldsQuery(templateId)
   const saveMutation = useSaveTemplateFieldsMutation()
+  // bgm/music 필드 선택지를 에셋 관리의 BGM 라이브러리와 동기화한다(§요청 5)
+  const { data: bgmLibrary } = useBgmLibraryQuery()
+  const registerBgmAsset = useRegisterBgmAssetMutation()
 
   // State to hold the current builder list
   const [selectedFields, setSelectedFields] = useState<any[]>([])
@@ -1259,12 +1263,16 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                                       for (let i = 0; i < files.length; i++) {
                                                         const file = files[i]
                                                         const publicUrl = await uploadFile(file, 'forms/music')
+                                                        const title = file.name.replace(/\.[^/.]+$/, "")
                                                         newMusic.push({
                                                           name: file.name,
                                                           url: publicUrl,
-                                                          title: file.name.replace(/\.[^/.]+$/, ""),
+                                                          title,
                                                           tags: "#잔잔한 #행복한"
                                                         })
+                                                        // 폼 빌더에서 직접 올린 음원도 BGM 관리 라이브러리에 함께 등록한다(§요청 5) —
+                                                        // 실패해도 이 필드에 업로드된 것 자체는 무효화하지 않는다.
+                                                        registerBgmAsset.mutate({ name: title, url: publicUrl })
                                                       }
                                                       handleUpdateFieldProperty(field.field_library_id, 'options', { ...currentOpts, music_files: newMusic })
                                                       toast.success('음원이 성공적으로 업로드되었습니다.', { id: 'music-upload' })
@@ -1276,6 +1284,11 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                                 />
                                               </label>
                                             </div>
+                                            {bgmLibrary && bgmLibrary.length > 0 && (
+                                              <p className="text-[9px] text-muted-foreground">
+                                                에셋 관리 &gt; BGM 관리에 등록된 음원 {bgmLibrary.length}곡도 이 필드 선택지에 자동으로 함께 제공됩니다.
+                                              </p>
+                                            )}
                                             {field.options?.music_files?.length > 0 && (
                                               <div className="flex flex-col gap-2 bg-background p-2 rounded border border-border mt-1 max-h-60 overflow-y-auto">
                                                 {field.options.music_files.map((file: any, idx: number) => (

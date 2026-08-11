@@ -9,6 +9,7 @@ import { buildSlots } from "@/components/invitation/slot-registry"
 import { buildFieldData, mergeInvitationRaw } from "@/lib/invitation-data"
 import {
   BLOCK_KEYS,
+  BLOCK_LABEL_FALLBACK,
   buildThemeTokens,
   extractBlockOverrides,
   extractDisabledSlots,
@@ -25,6 +26,9 @@ import {
 } from "@/lib/theme-template"
 import { buildFontStack, fetchRegisteredFonts, fontPreviewStyle, resolveFontFaces, type RegisteredFont } from "@/lib/fonts"
 import { useInjectFontFaces } from "@/lib/use-font-faces"
+import { useInvitationRevisionsQuery, useResolveRevisionMutation } from "@/hooks/queries/useInvitationRevisions"
+import { useAuditLogsQuery } from "@/hooks/queries/useAuditLogs"
+import { logAuditEvent } from "@/lib/audit-log"
 import { cn } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
@@ -53,6 +57,13 @@ import { toast } from "sonner"
 
 type FieldType = "text" | "textarea" | "tel" | "image"
 interface FieldDef { key: string; label: string; type: FieldType }
+
+const REVIEW_STATUS_LABEL: Record<string, string> = {
+  none: "검수 전",
+  in_review: "검수 요청됨",
+  changes_requested: "수정 요청 있음",
+  approved: "확정됨",
+}
 
 /** field_manifest 에 있을 때만 노출되는 필드 (테마가 실제로 쓰는 것만 보여준다) */
 const CONTENT_FIELD_DEFS: FieldDef[] = [
@@ -445,11 +456,15 @@ export default function CustomizeClient({
     const css = activeThemeRow.template_css || ""
     return SIZE_TOKEN_FIELDS.filter((t) => typeof css === "string" && css.includes(`var(${t.name}`))
   }, [activeThemeRow])
-  /** 색/폰트 토큰도 사이즈 토큰과 동일한 규칙으로 걸러낸다 — 테마 CSS가 참조하지 않는 토큰의
-   * 피커를 보여주면 바꿔도 아무 효과가 없다 */
+  /** 색 토큰은 사이즈 토큰과 동일한 규칙으로 걸러낸다 — 테마 CSS가 참조하지 않는 토큰의
+   * 피커를 보여주면 바꿔도 아무 효과가 없다. 폰트 토큰(--font-kr/--font-en)은 예외다 —
+   * InvitationFrame의 기본 리셋 스타일시트(테마 template_css가 아님)가 body 기본 폰트로
+   * --font-kr을 항상 참조하므로, 테마 CSS 안에 이 토큰이 없어도 항상 실제 효과가 있다. */
   const visibleTokenFields = useMemo(() => {
     const css = activeThemeRow.template_css || ""
-    return TOKEN_FIELDS.filter((t) => typeof css === "string" && css.includes(`var(${t.name}`))
+    return TOKEN_FIELDS.filter(
+      (t) => t.type === "font" || (typeof css === "string" && css.includes(`var(${t.name}`))
+    )
   }, [activeThemeRow])
   const typographySizeTokens = useMemo(() => visibleSizeTokens.filter((t) => t.group === "typography"), [visibleSizeTokens])
   const layoutSizeTokens = useMemo(() => visibleSizeTokens.filter((t) => t.group === "layout"), [visibleSizeTokens])
@@ -576,6 +591,14 @@ export default function CustomizeClient({
       toast.error(`저장 실패: ${error.message}`)
     } else {
       toast.success("저장되었습니다.")
+      const { data: userData } = await supabase.auth.getUser()
+      logAuditEvent(supabase, {
+        invitationId,
+        actorType: "admin",
+        actorLabel: userData.user?.email ?? null,
+        action: "invitation.save",
+        summary: "청첩장 내용/디자인을 저장했습니다.",
+      })
     }
   }
 
@@ -591,16 +614,54 @@ export default function CustomizeClient({
 
   const copyDashboardLink = async () => {
     if (!publicSlug) return
-    const password = String(invitation.dashboard_password ?? "")
-    // 대시보드는 /dashboard/[slug] 가 public_slug 로 조회한다(dashboard_slug 컬럼은 쓰지 않음).
-    const text = password
-      ? `${window.location.origin}/dashboard/${publicSlug}\n비밀번호: ${password}`
-      : `${window.location.origin}/dashboard/${publicSlug}`
+    // dashboard_password는 이제 해시로 저장되어 관리자도 실제 값을 알 수 없다
+    // (§lib/dashboard-password.ts). 대신 값이 만들어지는 고정 규칙을 안내한다.
+    const text = `${window.location.origin}/dashboard/${publicSlug}\n비밀번호: 등록된 고객 연락처 뒷 4자리`
     try {
       await navigator.clipboard.writeText(text)
-      toast.success("고객용 대시보드 링크가 클립보드에 복사되었습니다.")
+      toast.success("고객용 대시보드 링크가 복사되었습니다. (비밀번호는 등록된 고객 연락처 뒷 4자리입니다)")
     } catch {
       toast.error("링크 복사에 실패했습니다.")
+    }
+  }
+
+  const [reviewStatus, setReviewStatus] = useState<string>(String(invitation.review_status ?? "none"))
+  const [reviewRound, setReviewRound] = useState<number>(Number(invitation.review_round ?? 0))
+  const [sendingReview, setSendingReview] = useState(false)
+  const revisionsQuery = useInvitationRevisionsQuery(invitationId)
+  const resolveRevision = useResolveRevisionMutation(invitationId)
+  const auditLogsQuery = useAuditLogsQuery(invitationId)
+
+  // "검수 요청 보내기" — 알림톡 자동발송은 아직 없어서(§FEATURE_ROADMAP.md §9, 별도 비용 발생)
+  // 이번 라운드에는 링크+비밀번호를 클립보드에 복사해 관리자가 직접 전달하는 방식으로 시작한다.
+  const sendReviewRequest = async () => {
+    if (!publicSlug) return
+    setSendingReview(true)
+    try {
+      const nextRound = reviewRound + 1
+      const { error } = await supabase
+        .from("invitations")
+        .update({ review_status: "in_review", review_round: nextRound })
+        .eq("id", invitationId)
+      if (error) throw error
+      setReviewStatus("in_review")
+      setReviewRound(nextRound)
+
+      const text = `${window.location.origin}/review/${publicSlug}\n비밀번호: 등록된 고객 연락처 뒷 4자리`
+      await navigator.clipboard.writeText(text)
+      toast.success("검수 링크가 복사되었습니다. (비밀번호는 등록된 고객 연락처 뒷 4자리입니다) 고객에게 전달해주세요.")
+      const { data: userData } = await supabase.auth.getUser()
+      logAuditEvent(supabase, {
+        invitationId,
+        actorType: "admin",
+        actorLabel: userData.user?.email ?? null,
+        action: "review.requested",
+        summary: `검수 요청을 보냈습니다 (${nextRound}차).`,
+      })
+    } catch {
+      toast.error("검수 요청 처리에 실패했습니다.")
+    } finally {
+      setSendingReview(false)
     }
   }
 
@@ -634,9 +695,18 @@ export default function CustomizeClient({
         </div>
 
         <Tabs defaultValue="content" className="gap-6">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="content">내용</TabsTrigger>
             <TabsTrigger value="design">디자인</TabsTrigger>
+            <TabsTrigger value="review" className="gap-1.5">
+              검수
+              {revisionsQuery.data && revisionsQuery.data.filter((r) => r.status === "open").length > 0 && (
+                <span className="rounded-full bg-destructive px-1.5 text-[10px] font-medium text-destructive-foreground">
+                  {revisionsQuery.data.filter((r) => r.status === "open").length}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="history">이력</TabsTrigger>
           </TabsList>
 
           <TabsContent value="content" className="space-y-6">
@@ -1070,20 +1140,25 @@ export default function CustomizeClient({
               <CardContent>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   {visibleTokenFields.filter((t) => t.type === "color").map((t) => {
-                    const value = typeof overrides[t.name] === "string" ? (overrides[t.name] as string) : ""
-                    const placeholder = themeTokens[t.name] || "테마 기본값"
+                    const hasOverride = typeof overrides[t.name] === "string"
+                    const overrideValue = hasOverride ? (overrides[t.name] as string) : ""
+                    const themeDefault = themeTokens[t.name] || ""
+                    // 오버라이드가 없으면(=테마 기본값을 그대로 쓰는 중) 입력칸을 비워두지 않고
+                    // 현재 실제로 적용 중인 테마 기본 색을 그대로 채워 보여준다 — 빈 칸은 "색이
+                    // 없다"처럼 보이지만 실제로는 테마 기본색이 적용되어 있는 상태였다.
+                    const displayValue = overrideValue || themeDefault
                     return (
                       <Field key={t.name}>
                         <FieldLabel>{t.label}</FieldLabel>
                         <div className="flex items-start gap-2">
                           <input
                             type="color"
-                            value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : (/^#[0-9a-fA-F]{6}$/.test(placeholder) ? placeholder : "#ffffff")}
+                            value={/^#[0-9a-fA-F]{6}$/.test(displayValue) ? displayValue : "#ffffff"}
                             onChange={(e) => setOverride(t.name, e.target.value)}
                             className="h-9 w-10 shrink-0 cursor-pointer rounded-md border border-input bg-transparent p-1"
                           />
-                          <Input value={value} onChange={(e) => setOverride(t.name, e.target.value)} placeholder={placeholder} className="min-w-0 flex-1" />
-                          {value && (
+                          <Input value={displayValue} onChange={(e) => setOverride(t.name, e.target.value)} placeholder="테마 기본값" className="min-w-0 flex-1" />
+                          {overrideValue && (
                             <Button type="button" variant="ghost" size="icon-sm" title="테마 기본값으로" onClick={() => clearOverride(t.name)}>
                               <X className="h-3.5 w-3.5" />
                             </Button>
@@ -1285,16 +1360,41 @@ export default function CustomizeClient({
                                     onCheckedChange={(c) => setBlockOverride(b.key, { shuttleEnabled: c })}
                                   />
                                 </div>
+                                <Field>
+                                  <FieldLabel>응답 마감일</FieldLabel>
+                                  <Input
+                                    type="date"
+                                    value={override?.rsvpDeadline ?? ""}
+                                    onChange={(e) => setBlockOverride(b.key, { rsvpDeadline: e.target.value || undefined })}
+                                  />
+                                  <FieldDescription>비워두면 마감 없이 상시 접수됩니다.</FieldDescription>
+                                </Field>
                               </>
                             )}
                             {b.key === "calendar" && (
-                              <div className="flex items-center justify-between border-t pt-4">
-                                <span className="text-sm">D-day 카운트다운 표시</span>
-                                <Switch
-                                  checked={override?.ddayEnabled !== false}
-                                  onCheckedChange={(c) => setBlockOverride(b.key, { ddayEnabled: c })}
-                                />
-                              </div>
+                              <>
+                                <div className="flex items-center justify-between border-t pt-4">
+                                  <span className="text-sm">D-day 카운트다운 표시</span>
+                                  <Switch
+                                    checked={override?.ddayEnabled !== false}
+                                    onCheckedChange={(c) => setBlockOverride(b.key, { ddayEnabled: c })}
+                                  />
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm">&ldquo;캘린더 앱에 추가&rdquo; 버튼</span>
+                                  <Switch
+                                    checked={override?.icsButtonEnabled !== false}
+                                    onCheckedChange={(c) => setBlockOverride(b.key, { icsButtonEnabled: c })}
+                                  />
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm">&ldquo;구글 캘린더&rdquo; 버튼</span>
+                                  <Switch
+                                    checked={override?.googleCalendarButtonEnabled !== false}
+                                    onCheckedChange={(c) => setBlockOverride(b.key, { googleCalendarButtonEnabled: c })}
+                                  />
+                                </div>
+                              </>
                             )}
                           </AccordionContent>
                         </AccordionItem>
@@ -1392,6 +1492,110 @@ export default function CustomizeClient({
               </CardContent>
             </Card>
           </TabsContent>
+
+          <TabsContent value="review" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-medium">시안 검수 현황</CardTitle>
+                <CardDescription>
+                  {REVIEW_STATUS_LABEL[reviewStatus] ?? reviewStatus}
+                  {reviewRound > 0 && ` · ${reviewRound}차 검수`}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {revisionsQuery.isLoading ? (
+                  <p className="text-sm text-muted-foreground">불러오는 중…</p>
+                ) : !revisionsQuery.data || revisionsQuery.data.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    아직 고객이 남긴 수정 요청이 없습니다. 왼쪽 하단 &ldquo;검수 요청 보내기&rdquo;로 검수 링크를 전달해보세요.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {[...revisionsQuery.data]
+                      .sort((a, b) => (a.status === b.status ? 0 : a.status === "open" ? -1 : 1))
+                      .map((r) => {
+                        const label = (r.block_key && (blockManifest.find((b) => b.key === r.block_key)?.label ?? BLOCK_LABEL_FALLBACK[r.block_key as keyof typeof BLOCK_LABEL_FALLBACK])) || r.block_key || "전체"
+                        return (
+                          <div
+                            key={r.id}
+                            className={cn(
+                              "rounded-lg border p-3 text-sm",
+                              r.status === "resolved" ? "bg-muted/40 opacity-70" : "bg-background"
+                            )}
+                          >
+                            <div className="mb-1 flex items-center justify-between gap-2">
+                              <button
+                                type="button"
+                                className="text-xs font-semibold text-primary hover:underline"
+                                onClick={() => r.block_key && setFocusBlock(r.block_key)}
+                              >
+                                {label}
+                              </button>
+                              {r.status === "open" ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 gap-1 px-2 text-[11px]"
+                                  disabled={resolveRevision.isPending}
+                                  onClick={() => resolveRevision.mutate(r.id)}
+                                >
+                                  처리 완료
+                                </Button>
+                              ) : (
+                                <span className="text-[11px] text-muted-foreground">처리 완료됨</span>
+                              )}
+                            </div>
+                            <p className="whitespace-pre-wrap text-foreground">{r.note}</p>
+                          </div>
+                        )
+                      })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="history" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-medium">변경 이력</CardTitle>
+                <CardDescription>이 청첩장에 대한 관리자·신랑신부의 변경 기록입니다.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {auditLogsQuery.isLoading ? (
+                  <p className="text-sm text-muted-foreground">불러오는 중…</p>
+                ) : !auditLogsQuery.data || auditLogsQuery.data.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">아직 기록된 변경 이력이 없습니다.</p>
+                ) : (
+                  <ol className="space-y-3">
+                    {auditLogsQuery.data.map((log) => (
+                      <li key={log.id} className="flex gap-3 border-l-2 border-muted pl-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span
+                              className={cn(
+                                "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                                log.actor_type === "admin" && "bg-primary/10 text-primary",
+                                log.actor_type === "customer" && "bg-amber-500/10 text-amber-600",
+                                log.actor_type === "system" && "bg-muted text-muted-foreground"
+                              )}
+                            >
+                              {log.actor_type === "admin" ? "관리자" : log.actor_type === "customer" ? "신랑신부" : "시스템"}
+                            </span>
+                            {log.actor_label && <span className="text-xs text-muted-foreground">{log.actor_label}</span>}
+                            <span className="text-[11px] text-muted-foreground/70">
+                              {new Date(log.created_at).toLocaleString("ko-KR")}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 text-sm text-foreground">{log.summary}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
 
         {/* xl 미만(1단 레이아웃)에서는 실제 스크롤이 main이 아니라 html에서 일어나(admin 레이아웃의
@@ -1417,6 +1621,12 @@ export default function CustomizeClient({
           {publicSlug && (
             <Button variant="outline" className="gap-2" onClick={copyDashboardLink}>
               <Copy className="h-3.5 w-3.5" /> 고객용 대시보드 복사하기
+            </Button>
+          )}
+          {publicSlug && (
+            <Button variant="outline" className="gap-2" onClick={sendReviewRequest} disabled={sendingReview}>
+              {sendingReview ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Copy className="h-3.5 w-3.5" />}
+              검수 요청 보내기
             </Button>
           )}
         </div>

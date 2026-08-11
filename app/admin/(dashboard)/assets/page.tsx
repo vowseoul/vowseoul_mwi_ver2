@@ -14,7 +14,7 @@ import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { sampleThemes, sampleBGMs, Theme, samplePhrases } from '@/lib/store'
 import { supabase, logSupabaseError } from '@/lib/supabase'
 import { resolveThemeSwatch } from '@/lib/theme-template'
-import { fontPreviewStyle, fontFileFormatLabel, type RegisteredFont } from '@/lib/fonts'
+import { fontPreviewStyle, fontFileFormatLabel, extractGoogleFontFamily, type RegisteredFont } from '@/lib/fonts'
 import { useInjectFontFaces } from '@/lib/use-font-faces'
 import { Plus, Play, Pause, Trash2, Upload, Loader2, CheckCircle2 } from 'lucide-react'
 import { uploadFile, deleteFile } from '@/lib/storage'
@@ -120,10 +120,15 @@ export default function AssetsPage() {
 
     setIsSavingFont(true)
     try {
+      // 구글 폰트 임베드는 @import가 실제로 등록하는 family 이름이 정해져 있다 — 직접 입력한
+      // family가 이와 다르면 --font-kr 등에 넣어도 로드된 폰트를 못 찾아 조용히 기본 글꼴로
+      // 렌더된다(한글 폰트가 선택해도 적용 안 되던 버그의 원인). 파싱 가능하면 실제 이름으로 맞춘다.
+      const resolvedFamily =
+        fontType === 'embed' ? extractGoogleFontFamily(embedCode) || newFontFamily : newFontFamily
       const newFont = {
         id: `font_${Date.now()}`,
         name: newFontName,
-        family: newFontFamily,
+        family: resolvedFamily,
         type: fontType,
         embedCode: fontType === 'embed' ? embedCode : undefined,
         fileUrl: fontType === 'file' ? fontFileUrl : undefined

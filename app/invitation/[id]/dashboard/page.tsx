@@ -5,6 +5,9 @@ import Link from 'next/link'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { dashboardCookieName, verifyDashboardToken } from '@/lib/dashboard-session'
 import { mergeInvitationRaw } from '@/lib/invitation-data'
+import { SELF_EDIT_SETTINGS_KEY, parseSelfEditSettings } from '@/lib/self-edit'
+import { GUEST_DATA_PURGE_DAYS } from '@/lib/data-retention'
+import { purgeGuestData } from '@/lib/guest-data-purge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Calendar, ShieldAlert } from 'lucide-react'
@@ -14,7 +17,7 @@ export const dynamic = 'force-dynamic'
 
 /** 하객 개인정보 보호 정책 (예식일 기준 경과일) */
 const DASHBOARD_EXPIRY_DAYS = 7
-const DATA_PURGE_DAYS = 14
+const DATA_PURGE_DAYS = GUEST_DATA_PURGE_DAYS
 
 /**
  * 신랑신부 대시보드 진입점.
@@ -83,15 +86,38 @@ export default async function CustomerDashboardPage({ params }: { params: Promis
   }
 
   // 하객 데이터는 anon 키로 읽을 수 없으므로(RLS) 브라우저가 아니라 여기서 읽어 넘긴다.
-  const [{ data: rsvps }, { data: guestbook }, { data: visits }] = await Promise.all([
+  //
+  // 방문 통계는 visit_logs 원본을 통째로 읽지 않는다 — 인기 청첩장은 며칠 사이에도
+  // 수천 행이 쌓일 수 있어, 매 요청마다 그걸 전부 내려받아 클라이언트에서 날짜별로
+  // 세는 방식은 방문이 쌓일수록 점점 느려진다. 대신 하루 1회 크론(§app/api/cron/
+  // aggregate-visit-stats)이 미리 집계해둔 visit_daily_stats(청첩장당 최대 며칠치
+  // 행)를 쓰고, 아직 집계되지 않은 "오늘" 하루치만 count 쿼리로 센다.
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const [{ data: rsvps }, { data: guestbook }, { data: dailyStats }, { count: todayVisitCount }, { data: selfEditSetting }] = await Promise.all([
     supabase.from('rsvp_responses').select('*').eq('invitation_id', id).order('created_at', { ascending: false }),
     supabase.from('guestbook_entries').select('*').eq('invitation_id', id).order('created_at', { ascending: false }),
-    supabase.from('visit_logs').select('id, visited_at').eq('invitation_id', id).order('visited_at', { ascending: false }),
+    supabase.from('visit_daily_stats').select('visit_date, total_visits').eq('invitation_id', id),
+    supabase.from('visit_logs').select('id', { count: 'exact', head: true }).eq('invitation_id', id).gte('visited_at', `${todayStr}T00:00:00.000Z`),
+    supabase.from('settings').select('value').eq('key', SELF_EDIT_SETTINGS_KEY).maybeSingle(),
   ])
+  const selfEditEnabled = parseSelfEditSettings(selfEditSetting?.value).enabled
+
+  const totalVisits = (dailyStats ?? []).reduce((sum, d) => sum + (d.total_visits || 0), 0) + (todayVisitCount ?? 0)
+
+  const dailyVisitStats = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date()
+    d.setDate(d.getDate() - (6 - i))
+    const dateStr = d.toISOString().slice(0, 10)
+    const count = dateStr === todayStr
+      ? (todayVisitCount ?? 0)
+      : (dailyStats ?? []).find((s) => s.visit_date === dateStr)?.total_visits ?? 0
+    return { date: dateStr, count }
+  })
 
   return (
     <CustomerDashboardClient
       invitationId={id}
+      selfEditEnabled={selfEditEnabled}
       header={{
         groomName: String(raw.groom_name ?? '신랑'),
         brideName: String(raw.bride_name ?? '신부'),
@@ -118,11 +144,8 @@ export default async function CustomerDashboardPage({ params }: { params: Promis
         is_visible: g.is_visible !== false,
         createdAt: String(g.created_at ?? ''),
       }))}
-      initialVisits={(visits ?? []).map((v) => ({
-        id: String(v.id),
-        visitedDate: String(v.visited_at ?? '').split('T')[0],
-        visitedAt: String(v.visited_at ?? ''),
-      }))}
+      totalVisits={totalVisits}
+      dailyVisitStats={dailyVisitStats}
     />
   )
 }
@@ -139,19 +162,13 @@ function daysSince(weddingDate: unknown): number | null {
 }
 
 /**
- * 예식일 14일 경과 시 수집 데이터 영구 삭제.
- *
- * `after()` 콜백 안에서는 `cookies()` 를 호출할 수 없다(Next.js 제약) — 따라서
- * 쿠키 세션에 의존하는 createSupabaseServerClient() 대신 세션이 필요 없는
- * 순수 anon 클라이언트를 여기서 직접 만든다.
+ * 예식일 14일 경과 시 수집 데이터 영구 삭제 — 매일 도는 크론
+ * (§app/api/cron/purge-expired-invitations)이 주력이고, 이건 신랑신부가 크론보다
+ * 먼저 대시보드에 들어오는 경우를 위한 안전망이다.
  */
 async function purgeCollectedData(invitationId: string) {
   try {
-    const supabase = createSupabaseAdminClient()
-    for (const table of ['rsvp_responses', 'guestbook_entries', 'visit_logs'] as const) {
-      const { error } = await supabase.from(table).delete().eq('invitation_id', invitationId)
-      if (error) console.error(`purge ${table} failed:`, error.message)
-    }
+    await purgeGuestData(createSupabaseAdminClient(), invitationId)
   } catch (err) {
     console.error('purgeCollectedData failed:', err)
   }

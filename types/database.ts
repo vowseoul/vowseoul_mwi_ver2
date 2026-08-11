@@ -371,6 +371,8 @@ export interface Database {
           deleted_at: string | null
           created_at: string
           updated_at: string
+          review_status: 'none' | 'in_review' | 'changes_requested' | 'approved'
+          review_round: number
         }
         Insert: {
           id?: string
@@ -390,8 +392,56 @@ export interface Database {
           deleted_at?: string | null
           created_at?: string
           updated_at?: string
+          review_status?: 'none' | 'in_review' | 'changes_requested' | 'approved'
+          review_round?: number
         }
         Update: Partial<Database['public']['Tables']['invitations']['Insert']>
+      }
+      invitation_revisions: {
+        Row: {
+          id: string
+          invitation_id: string
+          round: number
+          block_key: string | null
+          note: string
+          status: 'open' | 'resolved'
+          resolved_by: string | null
+          created_at: string
+          resolved_at: string | null
+        }
+        Insert: {
+          id?: string
+          invitation_id: string
+          round?: number
+          block_key?: string | null
+          note: string
+          status?: 'open' | 'resolved'
+          resolved_by?: string | null
+          created_at?: string
+          resolved_at?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['invitation_revisions']['Insert']>
+      }
+      audit_logs: {
+        Row: {
+          id: string
+          invitation_id: string | null
+          actor_type: 'admin' | 'customer' | 'system'
+          actor_label: string | null
+          action: string
+          summary: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          invitation_id?: string | null
+          actor_type: 'admin' | 'customer' | 'system'
+          actor_label?: string | null
+          action: string
+          summary: string
+          created_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['audit_logs']['Insert']>
       }
       invitation_blocks: {
         Row: {
@@ -699,7 +749,22 @@ export interface Database {
       }
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      upsert_rsvp_response: {
+        Args: {
+          p_invitation_id: string
+          p_guest_name: string
+          p_phone: string
+          p_side: string
+          p_is_attending: boolean
+          p_party_size: number
+          p_meal_required: boolean
+          p_meal_choice: string | null
+          p_shuttle_required: boolean
+        }
+        Returns: Database['public']['Tables']['rsvp_responses']['Row']
+      }
+    }
     Enums: Record<string, never>
     CompositeTypes: Record<string, never>
   }

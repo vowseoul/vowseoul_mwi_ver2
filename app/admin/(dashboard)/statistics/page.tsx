@@ -37,6 +37,7 @@ export default function StatisticsPage() {
 
   const [invitations, setInvitations] = useState<any[]>([])
   const [orders, setOrdersData] = useState<any[]>([])
+  const [customers, setCustomers] = useState<any[]>([])
   const [visitLogs, setVisitLogs] = useState<any[]>([])
   const [themeNames, setThemeNames] = useState<Record<string, string>>({})
   const [bgmNames, setBgmNames] = useState<Record<string, string>>({})
@@ -60,10 +61,19 @@ export default function StatisticsPage() {
         logSupabaseError('statistics: invitations', invError)
 
         // 매출은 청첩장 건당 5만원 고정이 아니라 실제 orders.amount 합계를 쓴다(§1-B).
+        // 주문 관리 화면은 없어졌지만(고객 관리로 통합) amount/notes 데이터는 orders
+        // 테이블에 그대로 남아있으므로 매출 집계는 계속 여기서 읽는다.
         const { data: ordersData, error: ordersError } = await supabase
           .from('orders')
           .select('amount, created_at')
         logSupabaseError('statistics: orders', ordersError)
+
+        // 건수 지표(총 고객 수, 일별 신규 등록)는 orders 가 아니라 customers 기준으로 센다.
+        const { data: customersData, error: customersError } = await supabase
+          .from('customers')
+          .select('id, status, created_at')
+          .is('deleted_at', null)
+        logSupabaseError('statistics: customers', customersError)
 
         // 시간대별 트래픽은 visit_daily_stats(일 단위 집계)가 아니라 visit_logs 의
         // 실제 방문 시각(visited_at)에서 직접 시간대를 뽑아야 정확하다.
@@ -77,6 +87,7 @@ export default function StatisticsPage() {
 
         if (invData) setInvitations(invData)
         if (ordersData) setOrdersData(ordersData)
+        if (customersData) setCustomers(customersData)
         if (logsData) setVisitLogs(logsData)
 
         // 테마 이름 해석: theme_version_id → theme_versions.theme_id → themes.name
@@ -133,20 +144,27 @@ export default function StatisticsPage() {
     fetchStats()
   }, [])
 
-  // 1. 일별 매출/건수 — orders.amount 실합계 (§1-B: 5만원 고정 아님)
-  const revenueMap: Record<string, { date: string; revenue: number; count: number }> = {}
+  // 1. 일별 매출/신규 고객 — 매출은 orders.amount 실합계(§1-B: 5만원 고정 아님)를 쓰고,
+  // 건수는 orders 가 아니라 customers 신규 등록 건수로 센다(§ 주문 관리 → 고객 관리 통합).
+  const revenueMap: Record<string, { date: string; revenue: number; newCustomers: number }> = {}
   for (let i = 6; i >= 0; i--) {
     const d = subDays(new Date(), i)
     const dateStr = format(d, 'MM/dd')
-    revenueMap[dateStr] = { date: dateStr, revenue: 0, count: 0 }
+    revenueMap[dateStr] = { date: dateStr, revenue: 0, newCustomers: 0 }
   }
 
   orders.forEach((o) => {
     if (!o.created_at) return
     const dateStr = format(new Date(o.created_at), 'MM/dd')
     if (revenueMap[dateStr]) {
-      revenueMap[dateStr].count += 1
       revenueMap[dateStr].revenue += o.amount || 0
+    }
+  })
+  customers.forEach((c) => {
+    if (!c.created_at) return
+    const dateStr = format(new Date(c.created_at), 'MM/dd')
+    if (revenueMap[dateStr]) {
+      revenueMap[dateStr].newCustomers += 1
     }
   })
   const revenueData = Object.values(revenueMap)
@@ -193,7 +211,7 @@ export default function StatisticsPage() {
   const trafficData = trafficBuckets.map((hour) => ({ hour, visits: trafficMap[hour] }))
 
   const totalRevenue = orders.reduce((sum, o) => sum + (o.amount || 0), 0)
-  const totalOrders = orders.length
+  const totalCustomers = customers.length
 
   // Calculate RSVP Activation rate
   const rsvpActiveCount = invitations.filter(inv => inv.content_data?.rsvpEnabled !== false).length
@@ -253,13 +271,13 @@ export default function StatisticsPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              총 주문 건수
+              총 고객 수
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{totalOrders}건</div>
+            <div className="text-3xl font-bold">{totalCustomers}명</div>
             <p className="mt-1 text-xs text-muted-foreground">
-              전체 누적 주문 건수
+              전체 누적 등록 고객 수
             </p>
           </CardContent>
         </Card>
@@ -295,7 +313,7 @@ export default function StatisticsPage() {
       <Card>
         <CardHeader>
           <CardTitle>매출 추이</CardTitle>
-          <CardDescription>최근 7일 일별 주문 건수 및 매출액</CardDescription>
+          <CardDescription>최근 7일 일별 매출액 및 신규 고객 등록 건수</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="h-[300px]">
@@ -322,26 +340,26 @@ export default function StatisticsPage() {
                     borderRadius: '8px'
                   }}
                   formatter={(value: any, name: string) => [
-                    name === 'revenue' ? `${value.toLocaleString()}원` : `${value}건`,
-                    name === 'revenue' ? '매출' : '건수'
+                    name === 'revenue' ? `${value.toLocaleString()}원` : `${value}명`,
+                    name === 'revenue' ? '매출' : '신규 고객'
                   ]}
                 />
                 <Legend />
-                <Line 
+                <Line
                   yAxisId="left"
-                  type="monotone" 
-                  dataKey="revenue" 
+                  type="monotone"
+                  dataKey="revenue"
                   name="매출"
-                  stroke="hsl(var(--foreground))" 
+                  stroke="hsl(var(--foreground))"
                   strokeWidth={2}
                   dot={{ fill: 'hsl(var(--foreground))' }}
                 />
-                <Line 
+                <Line
                   yAxisId="right"
-                  type="monotone" 
-                  dataKey="count" 
-                  name="건수"
-                  stroke="hsl(var(--muted-foreground))" 
+                  type="monotone"
+                  dataKey="newCustomers"
+                  name="신규 고객"
+                  stroke="hsl(var(--muted-foreground))"
                   strokeWidth={2}
                   strokeDasharray="5 5"
                   dot={{ fill: 'hsl(var(--muted-foreground))' }}

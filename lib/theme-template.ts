@@ -120,6 +120,15 @@ export const BLOCK_KEYS = [
 ] as const
 export type BlockKey = (typeof BLOCK_KEYS)[number]
 
+/** BLOCK_KEYS 고정 한글 라벨 — 테마별 block_manifest에 라벨이 있으면 그쪽이 우선이고
+ * (getBlockManifest), 제목 편집이 없어 manifest에 안 실리는 블럭(rsvp/share/guestbook 등)의
+ * 폴백으로 쓴다. 시안 검수 화면(고객)과 수정요청 패널(관리자) 양쪽에서 공유한다. */
+export const BLOCK_LABEL_FALLBACK: Record<BlockKey, string> = {
+  hero: "메인", greeting: "인사말", gallery: "갤러리", sequence: "예식 순서",
+  calendar: "캘린더 · D-day", location: "오시는 길", account: "마음 전하실 곳",
+  contact: "연락처", rsvp: "참석 여부", share: "공유하기", guestbook: "방명록",
+}
+
 /** themes.block_manifest 한 항목 — "이 테마가 이 블럭에 대해 무엇을 지원하는가" 선언 */
 export interface BlockManifestEntry {
   key: string
@@ -151,8 +160,14 @@ export interface BlockOverride {
   mealEnabled?: boolean
   /** rsvp 블럭 전용: false 면 셔틀버스 이용 질문을 숨긴다 (미설정 시 노출) */
   shuttleEnabled?: boolean
+  /** rsvp 블럭 전용: 응답 마감일("YYYY-MM-DD"). 없으면 마감 없이 상시 접수 */
+  rsvpDeadline?: string
   /** calendar 블럭 전용: false 면 D-day 카운트다운을 숨긴다 (미설정 시 노출) */
   ddayEnabled?: boolean
+  /** calendar 블럭 전용: false 면 ".ics 캘린더 앱에 추가" 버튼을 숨긴다 (미설정 시 노출) */
+  icsButtonEnabled?: boolean
+  /** calendar 블럭 전용: false 면 "구글 캘린더" 버튼을 숨긴다 (미설정 시 노출) */
+  googleCalendarButtonEnabled?: boolean
 }
 
 /**
@@ -173,7 +188,10 @@ export function extractBlockOverrides(overrides: unknown): Record<string, BlockO
     if (typeof r.label === "string") entry.label = r.label
     if (typeof r.mealEnabled === "boolean") entry.mealEnabled = r.mealEnabled
     if (typeof r.shuttleEnabled === "boolean") entry.shuttleEnabled = r.shuttleEnabled
+    if (typeof r.rsvpDeadline === "string" && r.rsvpDeadline) entry.rsvpDeadline = r.rsvpDeadline
     if (typeof r.ddayEnabled === "boolean") entry.ddayEnabled = r.ddayEnabled
+    if (typeof r.icsButtonEnabled === "boolean") entry.icsButtonEnabled = r.icsButtonEnabled
+    if (typeof r.googleCalendarButtonEnabled === "boolean") entry.googleCalendarButtonEnabled = r.googleCalendarButtonEnabled
     if (Object.keys(entry).length > 0) out[key] = entry
   }
   return out
