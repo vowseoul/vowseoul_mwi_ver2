@@ -51,6 +51,11 @@ export interface BlockOverride {
   calendarDayShapeSize?: number
   calendarDayTextColor?: string
   calendarDaySvgColor?: string
+  /** greeting 블럭 전용 서브옵션 (§invitation-frame.tsx 인사말 아이콘 이펙트) */
+  greetingIconShape?: "heart" | "custom"
+  greetingIconCustomUrl?: string
+  greetingIconSize?: number
+  greetingIconColor?: string
 }
 export type BlockOverrideMap = Record<string, BlockOverride>
 /** 섹션(블럭) 사이에 끼워 넣는 이미지. lib/theme-template.ts 의 SectionImage 와 동일한 형태 */
@@ -108,6 +113,10 @@ function buildSrcDoc(template: ThemeTemplate): string {
   <!-- 기본 폰트 + 리셋 (자체 스타일시트) -->
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400&family=Cormorant+Garamond:ital,wght@0,400..600;1,400&family=Gowun+Batang:wght@400;700&family=Noto+Serif+KR:wght@300;400;600&family=Nanum+Myeongjo:wght@400;700&display=swap');
+    /* admin 페이지와 동일한 폰트 — RSVP/방명록 등 데이터 입력용 팝업 전용(.vs-popup),
+       청첩장 본문의 --font-kr/--font-en과는 별개로 항상 이 폰트를 쓴다. */
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
+    .vs-popup { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; }
     /* body 기본 폰트를 --font-kr로 잡아둔다. 테마 template_css가 자체적으로 body(또는 더 구체적인
@@ -256,6 +265,33 @@ export function InvitationFrame({
     if (greetingImageWrap) greetingImageWrap.classList.toggle("is-fill", data.greeting_image_ratio === "fill")
   }, [doc, data])
 
+  // [data-copy-field="키"] 요소를 클릭하면 그 필드값을 클립보드에 복사한다(예: 식장 주소 카드).
+  // 내부에 [data-copy-feedback] 요소가 있으면 문구를 잠깐 "복사되었습니다"로 바꿨다 되돌린다.
+  useEffect(() => {
+    if (!doc) return
+    const cleanups: (() => void)[] = []
+    doc.querySelectorAll<HTMLElement>("[data-copy-field]").forEach((el) => {
+      const key = el.getAttribute("data-copy-field")
+      if (!key) return
+      const feedbackEl = el.querySelector<HTMLElement>("[data-copy-feedback]")
+      const originalText = feedbackEl?.textContent ?? ""
+      let timer: ReturnType<typeof setTimeout> | null = null
+      const onClick = () => {
+        const value = data[key]
+        if (!value) return
+        navigator.clipboard?.writeText(value)
+        if (feedbackEl) {
+          feedbackEl.textContent = "주소가 복사되었습니다"
+          if (timer) clearTimeout(timer)
+          timer = setTimeout(() => { feedbackEl.textContent = originalText }, 1500)
+        }
+      }
+      el.addEventListener("click", onClick)
+      cleanups.push(() => { el.removeEventListener("click", onClick); if (timer) clearTimeout(timer) })
+    })
+    return () => cleanups.forEach((fn) => fn())
+  }, [doc, data])
+
   // 토큰 → CSS 변수 주입 (tokens 변경 시 실시간 반영, 리로드 없음)
   useEffect(() => {
     if (!doc) return
@@ -319,6 +355,60 @@ export function InvitationFrame({
       }
     })
   }, [doc, blockOverrides])
+
+  // 인사말 아이콘(하트/직접 업로드, 크기, 색상) — [data-greeting-icon] 요소 안의
+  // [data-greeting-icon-heart]/[data-greeting-icon-custom] 두 자식 중 하나만 보여준다.
+  // custom 이미지가 svg면 CSS mask로 색을 입히고, 그 외(png 등)는 배경 이미지로 그대로 얹는다.
+  useEffect(() => {
+    if (!doc) return
+    const el = doc.querySelector<HTMLElement>("[data-greeting-icon]")
+    if (!el) return
+    const g = blockOverrides.greeting
+    const shape = g?.greetingIconShape || "heart"
+    const size = g?.greetingIconSize ?? 24
+    const color = g?.greetingIconColor || tokens["--accent"] || "#D76C6C"
+    const customUrl = g?.greetingIconCustomUrl
+
+    el.style.width = `${size}px`
+    el.style.height = `${size}px`
+
+    const heartEl = el.querySelector<HTMLElement>("[data-greeting-icon-heart]")
+    const customEl = el.querySelector<HTMLElement>("[data-greeting-icon-custom]")
+
+    if (shape === "custom" && customUrl) {
+      if (heartEl) heartEl.style.display = "none"
+      if (customEl) {
+        customEl.style.display = "inline-block"
+        const isSvg = customUrl.toLowerCase().split("?")[0].endsWith(".svg")
+        if (isSvg) {
+          customEl.style.backgroundImage = "none"
+          customEl.style.backgroundColor = color
+          customEl.style.setProperty("-webkit-mask-image", `url(${customUrl})`)
+          customEl.style.setProperty("mask-image", `url(${customUrl})`)
+          customEl.style.setProperty("-webkit-mask-size", "contain")
+          customEl.style.setProperty("mask-size", "contain")
+          customEl.style.setProperty("-webkit-mask-repeat", "no-repeat")
+          customEl.style.setProperty("mask-repeat", "no-repeat")
+          customEl.style.setProperty("-webkit-mask-position", "center")
+          customEl.style.setProperty("mask-position", "center")
+        } else {
+          customEl.style.backgroundColor = "transparent"
+          customEl.style.removeProperty("-webkit-mask-image")
+          customEl.style.removeProperty("mask-image")
+          customEl.style.backgroundImage = `url(${customUrl})`
+          customEl.style.backgroundSize = "contain"
+          customEl.style.backgroundRepeat = "no-repeat"
+          customEl.style.backgroundPosition = "center"
+        }
+      }
+    } else {
+      if (customEl) customEl.style.display = "none"
+      if (heartEl) {
+        heartEl.style.display = ""
+        heartEl.style.color = color
+      }
+    }
+  }, [doc, blockOverrides, tokens])
 
   // 섹션 사이 삽입 이미지 — afterBlock 이 가리키는 [data-block] 섹션 바로 뒤에 <div class="vs-section-image">
   // 를 끼워 넣는다. 테마 template.html 을 전혀 건드리지 않아 어떤 테마에도 그대로 적용된다.

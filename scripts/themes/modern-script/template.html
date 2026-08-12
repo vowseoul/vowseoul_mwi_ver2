@@ -43,7 +43,14 @@
 
   <!-- 2. GREETING SECTION -->
   <section class="ms-section ms-greeting" data-block="greeting">
-    <div class="ms-divider">♥</div>
+    <div class="ms-divider">
+      <span class="ms-divider__icon" data-greeting-icon>
+        <svg class="ms-divider__icon-heart" viewBox="0 0 24 24" fill="currentColor" data-greeting-icon-heart>
+          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+        </svg>
+        <span class="ms-divider__icon-custom" data-greeting-icon-custom style="display:none"></span>
+      </span>
+    </div>
     <div class="ms-greeting__message" data-field="greeting_message">
 사랑으로 하나 된 두 사람이
 서로를 이해하며 한 길을 걸어가려 합니다.
@@ -129,19 +136,11 @@
       <h2 class="ms-section__title" data-block-title>식장 위치</h2>
     </div>
 
-    <div class="ms-card ms-location__info-card">
+    <div class="ms-card ms-location__info-card" data-copy-field="venue_address">
       <h3 class="ms-location__venue" data-field="venue_name">보우서울</h3>
       <p class="ms-location__hall" data-field="venue_hall">그랜드홀</p>
       <p class="ms-location__address" data-field="venue_address">서울 강남구 학동로 1212</p>
-      
-      <!-- Copy Address Button -->
-      <button class="ms-button ms-button--copy" type="button">
-        <svg class="ms-button__icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-        </svg>
-        주소 복사
-      </button>
+      <p class="ms-location__hint" data-copy-feedback>터치하여 주소 복사</p>
     </div>
 
     <!-- Map Slot -->

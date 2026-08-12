@@ -216,6 +216,20 @@
   margin: 0 auto 24px;
 }
 
+.sb-greeting__icon {
+  width: 24px;
+  height: 24px;
+  margin: 0 auto 20px;
+  opacity: 0.8;
+}
+
+.sb-greeting__icon-heart,
+.sb-greeting__icon-custom {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .sb-greeting__message {
   font-size: var(--text-body, 14px);
   line-height: 1.8;
@@ -410,6 +424,7 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   margin-bottom: 16px;
   border-radius: var(--radius, 0);
+  cursor: pointer;
 }
 
 .sb-location-card__name {

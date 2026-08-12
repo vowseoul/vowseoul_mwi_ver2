@@ -1,6 +1,6 @@
 [
   { "key": "hero", "label": "표지", "title": false, "padding": false },
-  { "key": "greeting", "label": "인사말", "title": false, "padding": false },
+  { "key": "greeting", "label": "인사말", "title": false, "padding": true },
   { "key": "gallery", "label": "갤러리", "title": true, "padding": true },
   { "key": "sequence", "label": "식순", "title": true, "padding": true },
   { "key": "calendar", "label": "캘린더 · D-day", "title": false, "padding": true },

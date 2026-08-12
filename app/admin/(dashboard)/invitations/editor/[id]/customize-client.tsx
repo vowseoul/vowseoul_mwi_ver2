@@ -535,6 +535,18 @@ export default function CustomizeClient({
     }
   }
 
+  const uploadGreetingIcon = async (blockKey: string, file: File) => {
+    setUploadingKey("greetingIconCustomUrl")
+    try {
+      const url = await uploadImage(file, "invitations/content")
+      setBlockOverride(blockKey, { greetingIconCustomUrl: url })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "아이콘 이미지 업로드에 실패했습니다.")
+    } finally {
+      setUploadingKey(null)
+    }
+  }
+
   const uploadOgImage = async (file: File) => {
     setUploadingOgImage(true)
     try {
@@ -1538,6 +1550,55 @@ export default function CustomizeClient({
                                   defaultValue="#ffffff"
                                   onChange={(v) => setBlockOverride(b.key, { calendarDayTextColor: v })}
                                   onReset={() => setBlockOverride(b.key, { calendarDayTextColor: undefined })}
+                                />
+                              </>
+                            )}
+                            {b.key === "greeting" && (
+                              <>
+                                <Field className="border-t pt-4">
+                                  <FieldLabel>인사말 아이콘 모양</FieldLabel>
+                                  <RadioGroup
+                                    value={override?.greetingIconShape || "heart"}
+                                    onValueChange={(v) => setBlockOverride(b.key, { greetingIconShape: v as "heart" | "custom" })}
+                                    className="flex flex-row gap-6"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <RadioGroupItem value="heart" id={`${b.key}-icon-heart`} />
+                                      <Label htmlFor={`${b.key}-icon-heart`} className="font-normal cursor-pointer">하트</Label>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <RadioGroupItem value="custom" id={`${b.key}-icon-custom`} />
+                                      <Label htmlFor={`${b.key}-icon-custom`} className="font-normal cursor-pointer">직접 업로드</Label>
+                                    </div>
+                                  </RadioGroup>
+                                </Field>
+
+                                {override?.greetingIconShape === "custom" && (
+                                  <ImageField
+                                    def={{ key: "greetingIconCustomUrl", label: "아이콘 이미지", type: "image" }}
+                                    value={override?.greetingIconCustomUrl || ""}
+                                    uploading={uploadingKey === "greetingIconCustomUrl"}
+                                    onUpload={(file) => uploadGreetingIcon(b.key, file)}
+                                    onClear={() => setBlockOverride(b.key, { greetingIconCustomUrl: undefined })}
+                                  />
+                                )}
+
+                                <SizeSliderField
+                                  label="아이콘 크기"
+                                  value={override?.greetingIconSize}
+                                  defaultValue={24}
+                                  min={12}
+                                  max={64}
+                                  onChange={(v) => setBlockOverride(b.key, { greetingIconSize: v })}
+                                  onReset={() => setBlockOverride(b.key, { greetingIconSize: undefined })}
+                                />
+
+                                <BlockColorField
+                                  label="아이콘 색상"
+                                  value={override?.greetingIconColor}
+                                  defaultValue={accent}
+                                  onChange={(v) => setBlockOverride(b.key, { greetingIconColor: v })}
+                                  onReset={() => setBlockOverride(b.key, { greetingIconColor: undefined })}
                                 />
                               </>
                             )}

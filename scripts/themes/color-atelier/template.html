@@ -32,11 +32,12 @@
 
   <!-- 2. GREETING SECTION -->
   <section class="ca-section ca-greeting" data-block="greeting" data-alt="1">
-    <!-- Heart Icon Decoration -->
-    <div class="ca-greeting__icon-wrap">
-      <svg class="ca-greeting__icon" viewBox="0 0 24 24" fill="currentColor">
+    <!-- Greeting Icon (하트 기본, 관리자 설정으로 직접 업로드 이미지로 교체 가능) -->
+    <div class="ca-greeting__icon-wrap" data-greeting-icon>
+      <svg class="ca-greeting__icon" viewBox="0 0 24 24" fill="currentColor" data-greeting-icon-heart>
         <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
       </svg>
+      <div class="ca-greeting__icon-custom" data-greeting-icon-custom style="display:none"></div>
     </div>
 
     <div class="ca-greeting__message" data-field="greeting_message">
@@ -80,9 +81,10 @@
     <h4 class="ca-section__header-sub" data-block-label>LOCATION</h4>
     <h3 class="ca-section__header-title" data-block-title>식장 위치</h3>
 
-    <div class="ca-location-card">
+    <div class="ca-location-card" data-copy-field="venue_address">
       <h3 class="ca-location-card__name" data-field="venue_name">VOW SEOUL GRAND HALL</h3>
       <p class="ca-location-card__address" data-field="venue_address">서울 강남구 학동로 1212</p>
+      <p class="ca-location-card__hint" data-copy-feedback>터치하여 주소 복사</p>
     </div>
 
     <div data-slot="map"></div>

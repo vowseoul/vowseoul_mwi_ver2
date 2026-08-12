@@ -741,11 +741,10 @@ function ContactIsland({ accent, data }: SlotProps) {
 const NAVER_MAPS_SCRIPT_ID = "naver-maps-script"
 const NAVER_CLIENT_ID = "od370yq3ix"
 
-function MapIsland({ accent, data }: SlotProps) {
+function MapIsland({ data }: SlotProps) {
   const address = data.venue_address || ""
   const venueName = data.venue_name || ""
   const mapRef = useRef<HTMLDivElement>(null)
-  const [copied, setCopied] = useState(false)
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [mapError, setMapError] = useState(false)
 
@@ -813,12 +812,6 @@ function MapIsland({ accent, data }: SlotProps) {
     }
   }, [address, venueName])
 
-  const copy = () => {
-    navigator.clipboard?.writeText(address)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
-  }
-
   const openNaver = () => window.open(`https://map.naver.com/v5/search/${encodeURIComponent(address)}`, "_blank")
   const openKakao = () => {
     const url = coords
@@ -862,16 +855,6 @@ function MapIsland({ accent, data }: SlotProps) {
           <button onClick={openKakao} style={navBtn}>카카오맵</button>
           <button onClick={openTmap} style={navBtn}>티맵</button>
         </div>
-      )}
-
-      {address && (
-        <button onClick={copy} style={{
-          marginTop: 8, width: "100%", padding: "10px 0", borderRadius: 6, cursor: "pointer",
-          border: `1px solid ${accent}`, background: copied ? accent : "transparent",
-          color: copied ? "#fff" : accent, fontSize: 13,
-        }}>
-          {copied ? "주소가 복사되었습니다" : "주소 복사하기"}
-        </button>
       )}
     </div>
   )
@@ -1097,21 +1080,8 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
       )}
 
       {open && (
-        <div
-          onClick={() => setOpen(false)}
-          style={{
-            position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,.45)",
-            display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: "100%", maxWidth: 320, maxHeight: "85%", overflowY: "auto",
-              background: "#fff", color: "#333", borderRadius: 10, padding: 20, textAlign: "left",
-              boxShadow: "0 12px 40px rgba(0,0,0,.25)",
-            }}
-          >
+        <div onClick={() => setOpen(false)} style={popupOverlay}>
+          <div className="vs-popup" onClick={(e) => e.stopPropagation()} style={popupCard}>
             <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>참석 여부 전달</h3>
             <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 16 }}>참석 여부와 인원을 알려주세요</p>
 
@@ -1224,6 +1194,19 @@ const rsvpInput: React.CSSProperties = {
 const stepBtn: React.CSSProperties = {
   width: 34, height: 34, borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", cursor: "pointer", fontSize: 16, color: "#374151",
 }
+/** RSVP·방명록 등 데이터 입력 팝업 공통 오버레이/카드 — admin 페이지 Dialog와 동일한
+ * 톤(흰 배경, 옅은 회색 보더, 8px radius, 은은한 그림자)을 쓴다. 폰트는 .vs-popup 클래스가
+ * Pretendard로 고정한다(§invitation-frame.tsx buildSrcDoc) — 청첩장 테마의 --font-kr를
+ * 그대로 물려받으면 입력 폼에는 어울리지 않는 서체가 섞여 지저분해 보이기 때문. */
+const popupOverlay: React.CSSProperties = {
+  position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,.5)",
+  display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+}
+const popupCard: React.CSSProperties = {
+  width: "100%", maxWidth: 320, maxHeight: "85%", overflowY: "auto",
+  background: "#fff", color: "#1a1a1a", borderRadius: 8, padding: 24, textAlign: "left",
+  border: "1px solid #e5e7eb", boxShadow: "0 10px 15px -3px rgba(0,0,0,.1), 0 4px 6px -4px rgba(0,0,0,.1)",
+}
 
 /* ---------------------------- Guestbook ---------------------------- */
 /**
@@ -1235,6 +1218,7 @@ const stepBtn: React.CSSProperties = {
 function GuestbookIsland({ accent, invitationId }: SlotProps) {
   const [entries, setEntries] = useState<{ id: string; name: string; msg: string }[]>([])
   const [loading, setLoading] = useState(!!invitationId)
+  const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [msg, setMsg] = useState("")
   const [composePassword, setComposePassword] = useState("")
@@ -1277,7 +1261,7 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
     if (!invitationId) {
       // 미리보기 모드: 저장 없이 화면에만 반영
       setEntries((e) => [{ id: "preview-" + Date.now(), name, msg }, ...e])
-      setName(""); setMsg(""); setComposePassword("")
+      setName(""); setMsg(""); setComposePassword(""); setOpen(false)
       return
     }
 
@@ -1302,7 +1286,7 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
       return
     }
     setEntries((e) => [{ id: data.id, name: data.author_name, msg: data.message }, ...e])
-    setName(""); setMsg(""); setComposePassword("")
+    setName(""); setMsg(""); setComposePassword(""); setOpen(false)
   }
 
   const confirmDelete = async (id: string) => {
@@ -1331,25 +1315,7 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
 
   return (
     <div style={{ textAlign: "left", maxWidth: 320, margin: "0 auto", fontSize: 13 }}>
-      <ConsentNotice copy={GUESTBOOK_CONSENT_COPY} checked={consentAgreed} onChange={setConsentAgreed} accent={accent} />
-      <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="이름"
-          disabled={saving}
-          style={{ width: 80, flexShrink: 0, padding: "8px 10px", border: "1px solid #e2ddd6", borderRadius: 8, outline: "none", fontSize: 13 }} />
-        <input value={composePassword} onChange={(e) => setComposePassword(e.target.value)} placeholder="삭제용 비밀번호" type="password"
-          disabled={saving}
-          style={{ width: 96, flexShrink: 0, padding: "8px 10px", border: "1px solid #e2ddd6", borderRadius: 8, outline: "none", fontSize: 13 }} />
-      </div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-        <input value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="축하 메시지"
-          disabled={saving}
-          style={{ flex: 1, minWidth: 0, padding: "8px 10px", border: "1px solid #e2ddd6", borderRadius: 8, outline: "none", fontSize: 13 }} />
-        <button onClick={add} disabled={saving || !consentAgreed} style={{ flexShrink: 0, whiteSpace: "nowrap", padding: "0 14px", borderRadius: 8, border: "none", cursor: saving || !consentAgreed ? "not-allowed" : "pointer", background: accent, color: "#fff", fontSize: 13, opacity: saving || !consentAgreed ? 0.5 : 1 }}>
-          {saving ? "등록 중…" : "등록"}
-        </button>
-      </div>
-      {error && <p style={{ fontSize: 12, color: "#dc2626", margin: "4px 0" }}>{error}</p>}
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {loading ? (
           <div style={{ padding: "10px 12px", opacity: 0.6 }}>불러오는 중…</div>
         ) : entries.length === 0 ? (
@@ -1397,6 +1363,51 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
           ))
         )}
       </div>
+
+      <button
+        onClick={() => setOpen(true)}
+        style={{
+          width: "100%", marginTop: 12, padding: "12px 0", borderRadius: 6, cursor: "pointer",
+          border: `1px solid ${accent}`, background: "transparent", color: accent, fontSize: 13.5,
+        }}
+      >
+        축하 메시지 남기기
+      </button>
+
+      {open && (
+        <div onClick={() => setOpen(false)} style={popupOverlay}>
+          <div className="vs-popup" onClick={(e) => e.stopPropagation()} style={popupCard}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>축하 메시지 남기기</h3>
+            <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 16 }}>신랑 신부에게 축하의 메시지를 남겨주세요</p>
+
+            <RsvpField label="이름">
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="이름을 입력해주세요" disabled={saving} style={rsvpInput} />
+            </RsvpField>
+            <RsvpField label="삭제용 비밀번호">
+              <input value={composePassword} onChange={(e) => setComposePassword(e.target.value)} placeholder="나중에 글을 지울 때 필요해요" type="password" disabled={saving} style={rsvpInput} />
+            </RsvpField>
+            <RsvpField label="축하 메시지">
+              <textarea
+                value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="축하 메시지를 남겨주세요" rows={4} disabled={saving}
+                style={{ ...rsvpInput, resize: "vertical", fontFamily: "inherit" }}
+              />
+            </RsvpField>
+
+            <ConsentNotice copy={GUESTBOOK_CONSENT_COPY} checked={consentAgreed} onChange={setConsentAgreed} accent={accent} />
+
+            {error && <p style={{ fontSize: 12, color: "#dc2626", marginBottom: 10 }}>{error}</p>}
+
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <button onClick={() => setOpen(false)} style={{ flex: 1, padding: "11px 0", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", color: "#6b7280", cursor: "pointer", fontSize: 14 }}>
+                취소
+              </button>
+              <button onClick={add} disabled={saving || !consentAgreed} style={{ flex: 2, padding: "11px 0", borderRadius: 8, border: "none", background: accent, color: "#fff", cursor: saving || !consentAgreed ? "not-allowed" : "pointer", fontSize: 14, opacity: saving || !consentAgreed ? 0.5 : 1 }}>
+                {saving ? "등록 중…" : "등록하기"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

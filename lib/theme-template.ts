@@ -180,6 +180,14 @@ export interface BlockOverride {
   calendarDayTextColor?: string
   /** calendar 블럭 전용: 업로드한 SVG 모양에 입힐 색상(hex). 미설정 시 테마 accent 색 */
   calendarDaySvgColor?: string
+  /** greeting 블럭 전용: 인사말 아이콘 모양 (미설정 시 하트) */
+  greetingIconShape?: "heart" | "custom"
+  /** greeting 블럭 전용: greetingIconShape가 'custom'일 때 사용할 업로드 이미지 URL */
+  greetingIconCustomUrl?: string
+  /** greeting 블럭 전용: 아이콘 크기(px). 미설정 시 24 */
+  greetingIconSize?: number
+  /** greeting 블럭 전용: 아이콘 색상(hex). 하트/커스텀 SVG 모두 적용. 미설정 시 테마 accent 색 */
+  greetingIconColor?: string
 }
 
 /**
@@ -210,6 +218,10 @@ export function extractBlockOverrides(overrides: unknown): Record<string, BlockO
     if (typeof r.calendarDayShapeSize === "number" && Number.isFinite(r.calendarDayShapeSize)) entry.calendarDayShapeSize = r.calendarDayShapeSize
     if (typeof r.calendarDayTextColor === "string" && r.calendarDayTextColor) entry.calendarDayTextColor = r.calendarDayTextColor
     if (typeof r.calendarDaySvgColor === "string" && r.calendarDaySvgColor) entry.calendarDaySvgColor = r.calendarDaySvgColor
+    if (r.greetingIconShape === "heart" || r.greetingIconShape === "custom") entry.greetingIconShape = r.greetingIconShape
+    if (typeof r.greetingIconCustomUrl === "string" && r.greetingIconCustomUrl) entry.greetingIconCustomUrl = r.greetingIconCustomUrl
+    if (typeof r.greetingIconSize === "number" && Number.isFinite(r.greetingIconSize)) entry.greetingIconSize = r.greetingIconSize
+    if (typeof r.greetingIconColor === "string" && r.greetingIconColor) entry.greetingIconColor = r.greetingIconColor
     if (Object.keys(entry).length > 0) out[key] = entry
   }
   return out
