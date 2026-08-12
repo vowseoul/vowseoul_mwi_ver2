@@ -3,8 +3,9 @@
 import { useState } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
-import { ArrowLeft, ArrowUp, ArrowDown, Loader2, Plus, Save, X } from "lucide-react"
+import { ArrowLeft, ArrowUp, ArrowDown, Loader2, Plus, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { SaveButton } from "@/components/ui/save-button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
@@ -33,7 +34,6 @@ export default function EditClient({
   const [galleryImages, setGalleryImages] = useState<string[]>(initialGalleryImages)
   const [scrollMotion, setScrollMotion] = useState<ScrollMotionSettings>(initialScrollMotion ?? DEFAULT_SCROLL_MOTION)
   const [uploadingGallery, setUploadingGallery] = useState(false)
-  const [saving, setSaving] = useState(false)
 
   const setField = (key: string, value: string) => setFields((cur) => ({ ...cur, [key]: value }))
 
@@ -59,8 +59,7 @@ export default function EditClient({
     })
   }
 
-  const save = async () => {
-    setSaving(true)
+  const save = async (): Promise<boolean> => {
     try {
       const res = await fetch("/api/self-edit", {
         method: "POST",
@@ -70,10 +69,10 @@ export default function EditClient({
       const result = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(result?.error || "저장에 실패했습니다.")
       toast.success("수정 내용이 저장되었습니다. 청첩장에 바로 반영됩니다.")
+      return true
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "저장에 실패했습니다.")
-    } finally {
-      setSaving(false)
+      return false
     }
   }
 
@@ -86,10 +85,7 @@ export default function EditClient({
               <ArrowLeft className="h-3.5 w-3.5" /> 대시보드로
             </Button>
           </Link>
-          <Button size="sm" onClick={save} disabled={saving} className="gap-1.5">
-            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-            저장
-          </Button>
+          <SaveButton size="sm" onSave={save} className="gap-1.5" />
         </div>
       </header>
 
@@ -234,10 +230,7 @@ export default function EditClient({
           <Link href="/privacy" className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground">
             개인정보처리방침
           </Link>
-          <Button onClick={save} disabled={saving} className="gap-2">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {saving ? "저장 중…" : "저장"}
-          </Button>
+          <SaveButton onSave={save} className="gap-2" />
         </div>
       </main>
     </div>

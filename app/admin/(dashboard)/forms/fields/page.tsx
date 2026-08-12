@@ -176,6 +176,12 @@ export default function FieldLibraryPage() {
   const [blockName, setBlockName] = useState('')
   const [blockDescription, setBlockDescription] = useState('')
   const [blockFields, setBlockFields] = useState<any[]>([])
+  /** 방금 추가되거나 이동된 필드 행 — 잠깐 배경을 강조해 "이게 방금 바뀐 행"임을 보여준다(Feedback) */
+  const [highlightFieldKey, setHighlightFieldKey] = useState<string | null>(null)
+  const flashHighlight = (fieldKey: string) => {
+    setHighlightFieldKey(fieldKey)
+    setTimeout(() => setHighlightFieldKey((cur) => (cur === fieldKey ? null : cur)), 1200)
+  }
   const [isSavingBlock, setIsSavingBlock] = useState(false)
   const [expandedLinkKey, setExpandedLinkKey] = useState<string | null>(null)
 
@@ -436,6 +442,7 @@ export default function FieldLibraryPage() {
         page_title: ''
       }
     ])
+    flashHighlight(fieldKey)
   }
 
   const handleRemoveFieldFromBlock = (index: number) => {
@@ -454,6 +461,7 @@ export default function FieldLibraryPage() {
       updated[targetIdx] = temp
       return updated
     })
+    flashHighlight(blockFields[index].field_key)
   }
 
   const handleUpdateBlockFieldProp = (index: number, prop: string, value: any) => {
@@ -785,9 +793,10 @@ export default function FieldLibraryPage() {
                         const libF = fields?.find(f => f.field_key === bf.field_key)
                         const isExpanded = expandedLinkKey === bf.field_key
                         const hasParent = !!bf.parent_field_key
+                        const isHighlighted = highlightFieldKey === bf.field_key
                         return (
                           <React.Fragment key={index}>
-                            <TableRow className="hover:bg-muted/5">
+                            <TableRow className={`hover:bg-muted/5 transition-colors duration-700 ${isHighlighted ? "bg-primary/10" : ""}`}>
                               <TableCell className="text-center align-middle">
                                 <div className="flex items-center justify-center gap-1">
                                   <Button

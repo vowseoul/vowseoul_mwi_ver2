@@ -4,6 +4,7 @@ import React, { useState, useEffect, use } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import { SaveButton } from '@/components/ui/save-button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -27,10 +28,9 @@ import { useBgmLibraryQuery, useRegisterBgmAssetMutation } from '@/hooks/queries
 import { supabase } from '@/lib/supabase'
 import { uploadFile } from '@/lib/storage'
 import { uploadImage } from '@/lib/image-upload'
-import { 
-  ArrowLeft, 
-  Save, 
-  Plus, 
+import {
+  ArrowLeft,
+  Plus,
   Trash2, 
   ChevronUp, 
   ChevronDown, 
@@ -101,7 +101,12 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
 
   // State to hold the current builder list
   const [selectedFields, setSelectedFields] = useState<any[]>([])
-  const [isSaving, setIsSaving] = useState(false)
+  /** 방금 추가되거나 이동된 필드 — 잠깐 배경을 강조해 "이게 방금 바뀐 행"임을 보여준다(Feedback) */
+  const [highlightFieldKey, setHighlightFieldKey] = useState<string | null>(null)
+  const flashHighlight = (fieldKey: string) => {
+    setHighlightFieldKey(fieldKey)
+    setTimeout(() => setHighlightFieldKey((cur) => (cur === fieldKey ? null : cur)), 1200)
+  }
   const [searchQuery, setSearchQuery] = useState('')
   const [choicesInputs, setChoicesInputs] = useState<Record<string, string>>({})
 
@@ -319,6 +324,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
         },
       },
     ])
+    flashHighlight(field.field_key)
     toast.success(`"${field.label}" 필드가 ${lastPage} > ${lastSection}에 추가되었습니다.`)
   }
 
@@ -353,6 +359,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
         },
       },
     ])
+    flashHighlight(field.field_key)
     toast.success(`"${field.label}" 필드가 ${pageTitle} > ${sectionTitle}에 추가되었습니다.`)
   }
 
@@ -523,15 +530,15 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
     
     updated.splice(insertIndex, 0, movedField)
     setSelectedFields(updated)
+    flashHighlight(movedField.field_key)
   }
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<boolean> => {
     if (selectedFields.length === 0) {
       toast.error('최소 1개 이상의 필드를 구성해야 합니다.')
-      return
+      return false
     }
 
-    setIsSaving(true)
     try {
       const formattedFields = selectedFields.map((f, index) => ({
         field_library_id: f.field_library_id,
@@ -549,11 +556,11 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
 
       toast.success('폼 레이아웃 구성 및 신규 버전이 저장되었습니다.')
       router.push('/admin/forms')
+      return true
     } catch (err: any) {
       console.error(err)
       toast.error(err.message || '저장 중 오류가 발생했습니다.')
-    } finally {
-      setIsSaving(false)
+      return false
     }
   }
 
@@ -608,10 +615,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
           <Button variant="outline" asChild>
             <Link href="/admin/forms">취소</Link>
           </Button>
-          <Button onClick={handleSave} className="gap-2" disabled={isSaving}>
-            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            설정 저장 (신규 버전 발행)
-          </Button>
+          <SaveButton onSave={handleSave} className="gap-2" idleLabel="설정 저장 (신규 버전 발행)" />
         </div>
       </div>
 
@@ -949,15 +953,17 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                       
                                       updated.splice(targetIdx, 0, movedField)
                                       setSelectedFields(updated)
+                                      flashHighlight(movedField.field_key)
                                     }
                                     setDraggingIndex(null)
                                     setDragOverSection(null)
                                     setDragOverFieldOriginalIndex(null)
                                   }}
                                   className={cn(
-                                    "flex flex-col border border-border rounded-lg bg-card shadow-xs transition-all duration-200 overflow-hidden",
+                                    "flex flex-col border border-border rounded-lg bg-card shadow-xs transition-all duration-700 overflow-hidden",
                                     draggingIndex === field.originalIndex && "opacity-40 border-dashed border-primary",
-                                    dragOverFieldOriginalIndex === field.originalIndex && "border-primary bg-primary/5 ring-1 ring-primary/30"
+                                    dragOverFieldOriginalIndex === field.originalIndex && "border-primary bg-primary/5 ring-1 ring-primary/30",
+                                    highlightFieldKey === field.field_key && "bg-primary/10"
                                   )}
                                 >
                                   {/* Field Summary Row */}

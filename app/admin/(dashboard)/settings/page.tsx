@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { SaveButton } from "@/components/ui/save-button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -38,7 +39,6 @@ import { toast } from "sonner"
 import PaperTypesCard from "./paper-types-card"
 
 export default function AdminSettingsPage() {
-  const [isSaving, setIsSaving] = useState(false)
   const [isFeatureOpen, setIsFeatureOpen] = useState(true)
 
   const queryClient = useQueryClient()
@@ -169,7 +169,6 @@ export default function AdminSettingsPage() {
 
   // 데이터 자동 파기 정책 — 예식일 + 보관일수가 지나면 청첩장을 자동 삭제한다 (§lib/data-retention.ts)
   const [retentionDays, setRetentionDays] = useState<number>(DEFAULT_RETENTION_DAYS)
-  const [isSavingRetention, setIsSavingRetention] = useState(false)
 
   // 신랑신부 셀프 편집 기능 on/off (§lib/self-edit.ts)
   const [selfEditEnabled, setSelfEditEnabled] = useState(false)
@@ -177,9 +176,7 @@ export default function AdminSettingsPage() {
 
   // 개인정보 처리방침에 채워 넣을 사업자 정보 · CPO · 국외이전 고지 (§lib/business-info.ts)
   const [businessInfo, setBusinessInfo] = useState<BusinessInfo>(EMPTY_BUSINESS_INFO)
-  const [isSavingBusinessInfo, setIsSavingBusinessInfo] = useState(false)
   const [dataTransfer, setDataTransfer] = useState<DataTransferInfo>(EMPTY_DATA_TRANSFER_INFO)
-  const [isSavingDataTransfer, setIsSavingDataTransfer] = useState(false)
 
   useEffect(() => {
     fetchCurrentSetting()
@@ -261,32 +258,30 @@ export default function AdminSettingsPage() {
     setDataTransfer(parseDataTransferInfo(dataTransferData?.value))
   }
 
-  const handleSaveBusinessInfo = async () => {
-    setIsSavingBusinessInfo(true)
+  const handleSaveBusinessInfo = async (): Promise<boolean> => {
     const { error } = await supabase.from('settings').upsert({
       key: BUSINESS_INFO_SETTINGS_KEY,
       value: businessInfo,
     })
-    setIsSavingBusinessInfo(false)
     if (error) {
       toast.error('사업자 정보 저장에 실패했습니다.')
-    } else {
-      toast.success('사업자 정보가 저장되었습니다.')
+      return false
     }
+    toast.success('사업자 정보가 저장되었습니다.')
+    return true
   }
 
-  const handleSaveDataTransfer = async () => {
-    setIsSavingDataTransfer(true)
+  const handleSaveDataTransfer = async (): Promise<boolean> => {
     const { error } = await supabase.from('settings').upsert({
       key: DATA_TRANSFER_SETTINGS_KEY,
       value: dataTransfer,
     })
-    setIsSavingDataTransfer(false)
     if (error) {
       toast.error('국외이전 정보 저장에 실패했습니다.')
-    } else {
-      toast.success('국외이전 정보가 저장되었습니다.')
+      return false
     }
+    toast.success('국외이전 정보가 저장되었습니다.')
+    return true
   }
 
   const handleSaveSelfEdit = async (nextEnabled: boolean) => {
@@ -305,22 +300,21 @@ export default function AdminSettingsPage() {
     }
   }
 
-  const handleSaveRetention = async () => {
+  const handleSaveRetention = async (): Promise<boolean> => {
     if (!Number.isFinite(retentionDays) || retentionDays < 1) {
       toast.error('보관일수는 1일 이상이어야 합니다.')
-      return
+      return false
     }
-    setIsSavingRetention(true)
     const { error } = await supabase.from('settings').upsert({
       key: DATA_RETENTION_SETTINGS_KEY,
       value: { daysAfterWedding: Math.floor(retentionDays) },
     })
-    setIsSavingRetention(false)
     if (error) {
       toast.error('데이터 보관 정책 저장에 실패했습니다.')
-    } else {
-      toast.success('데이터 보관 정책이 저장되었습니다.')
+      return false
     }
+    toast.success('데이터 보관 정책이 저장되었습니다.')
+    return true
   }
 
   const fetchImages = async () => {
@@ -410,32 +404,30 @@ export default function AdminSettingsPage() {
     }
   }
 
-  const handleSaveHeroContent = async () => {
-    setIsSaving(true)
+  const handleSaveHeroContent = async (): Promise<boolean> => {
     const { error } = await supabase.from('settings').upsert({
       key: 'hero_content',
       value: heroContent
     })
-    setIsSaving(false)
     if (error) {
       toast.error('메인 텍스트 저장에 실패했습니다.')
-    } else {
-      toast.success('메인 텍스트 설정이 저장되었습니다.')
+      return false
     }
+    toast.success('메인 텍스트 설정이 저장되었습니다.')
+    return true
   }
 
-  const handleSave = async () => {
-    setIsSaving(true)
+  const handleSave = async (): Promise<boolean> => {
     const { error } = await supabase.from('settings').upsert({
       key: 'is_feature_open',
       value: { open: isFeatureOpen }
     })
-    setIsSaving(false)
     if (error) {
       toast.error('설정 저장에 실패했습니다.')
-    } else {
-      toast.success('설정이 성공적으로 저장되었습니다.')
+      return false
     }
+    toast.success('설정이 성공적으로 저장되었습니다.')
+    return true
   }
 
   const currentImageUrl = supabase.storage.from('vow-seoul-storage').getPublicUrl(currentMainImagePath).data.publicUrl
@@ -571,10 +563,7 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
               <div className="flex justify-end">
-                <Button onClick={handleSave} disabled={isSaving}>
-                  <Save className="w-4 h-4 mr-2" />
-                  {isSaving ? "저장 중..." : "저장"}
-                </Button>
+                <SaveButton onSave={handleSave} />
               </div>
             </CardContent>
           </Card>
@@ -610,10 +599,7 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
               <div className="flex justify-end">
-                <Button onClick={handleSaveRetention} disabled={isSavingRetention}>
-                  <Save className="w-4 h-4 mr-2" />
-                  {isSavingRetention ? "저장 중..." : "저장"}
-                </Button>
+                <SaveButton onSave={handleSaveRetention} />
               </div>
             </CardContent>
           </Card>
@@ -848,10 +834,7 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
               <div className="flex justify-end mt-4">
-                <Button onClick={handleSaveHeroContent} disabled={isSaving}>
-                  <Save className="w-4 h-4 mr-2" />
-                  {isSaving ? "저장 중..." : "메인 텍스트 저장"}
-                </Button>
+                <SaveButton onSave={handleSaveHeroContent} idleLabel="메인 텍스트 저장" />
               </div>
             </CardContent>
           </Card>
@@ -910,10 +893,7 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
               <div className="flex justify-end">
-                <Button onClick={handleSaveBusinessInfo} disabled={isSavingBusinessInfo}>
-                  <Save className="w-4 h-4 mr-2" />
-                  {isSavingBusinessInfo ? "저장 중..." : "저장"}
-                </Button>
+                <SaveButton onSave={handleSaveBusinessInfo} />
               </div>
             </CardContent>
           </Card>
@@ -973,10 +953,7 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
               <div className="flex justify-end">
-                <Button onClick={handleSave} disabled={isSaving}>
-                  <Save className="w-4 h-4 mr-2" />
-                  {isSaving ? "저장 중..." : "저장"}
-                </Button>
+                <SaveButton onSave={handleSave} />
               </div>
             </CardContent>
           </Card>
@@ -1036,10 +1013,7 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
               <div className="flex justify-end">
-                <Button onClick={handleSave} disabled={isSaving}>
-                  <Save className="w-4 h-4 mr-2" />
-                  {isSaving ? "저장 중..." : "저장"}
-                </Button>
+                <SaveButton onSave={handleSave} />
               </div>
             </CardContent>
           </Card>
@@ -1109,10 +1083,7 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
               <div className="flex justify-end">
-                <Button onClick={handleSave} disabled={isSaving}>
-                  <Save className="w-4 h-4 mr-2" />
-                  {isSaving ? "저장 중..." : "저장"}
-                </Button>
+                <SaveButton onSave={handleSave} />
               </div>
             </CardContent>
           </Card>
@@ -1202,10 +1173,7 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
               <div className="flex justify-end">
-                <Button onClick={handleSaveBusinessInfo} disabled={isSavingBusinessInfo}>
-                  <Save className="w-4 h-4 mr-2" />
-                  {isSavingBusinessInfo ? "저장 중..." : "저장"}
-                </Button>
+                <SaveButton onSave={handleSaveBusinessInfo} />
               </div>
             </CardContent>
           </Card>
@@ -1251,10 +1219,7 @@ export default function AdminSettingsPage() {
                 </div>
               )}
               <div className="flex justify-end">
-                <Button onClick={handleSaveDataTransfer} disabled={isSavingDataTransfer}>
-                  <Save className="w-4 h-4 mr-2" />
-                  {isSavingDataTransfer ? "저장 중..." : "저장"}
-                </Button>
+                <SaveButton onSave={handleSaveDataTransfer} />
               </div>
             </CardContent>
           </Card>

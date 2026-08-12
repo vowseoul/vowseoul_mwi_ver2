@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import { SaveButton } from '@/components/ui/save-button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -80,33 +81,31 @@ export default function InvitationsListPage() {
 
   const [slugEditTarget, setSlugEditTarget] = useState<{ id: string; name: string } | null>(null)
   const [editedSlug, setEditedSlug] = useState('')
-  const [isSavingSlug, setIsSavingSlug] = useState(false)
 
   const openSlugEditor = (id: string, currentSlug: string, name: string) => {
     setSlugEditTarget({ id, name })
     setEditedSlug(currentSlug)
   }
 
-  const handleSlugSave = async () => {
-    if (!slugEditTarget) return
+  const handleSlugSave = async (): Promise<boolean> => {
+    if (!slugEditTarget) return false
     const trimmed = editedSlug.trim()
     if (!trimmed) {
       toast.error('링크 주소를 입력해주세요.')
-      return
+      return false
     }
     if (!/^[a-z0-9-]+$/.test(trimmed)) {
       toast.error('링크 주소는 영문 소문자, 숫자, 하이픈(-)만 허용됩니다.')
-      return
+      return false
     }
-    setIsSavingSlug(true)
     try {
       await slugMutation.mutateAsync({ invitationId: slugEditTarget.id, publicSlug: trimmed })
       toast.success('접속 링크 주소가 변경되었습니다.')
       setSlugEditTarget(null)
+      return true
     } catch (err: any) {
       toast.error(err.message || '링크 주소 변경에 실패했습니다.')
-    } finally {
-      setIsSavingSlug(false)
+      return false
     }
   }
 
@@ -637,13 +636,10 @@ export default function InvitationsListPage() {
             </Field>
           </FieldGroup>
           <DialogFooter className="mt-4 gap-2">
-            <Button variant="outline" size="sm" onClick={() => setSlugEditTarget(null)} disabled={isSavingSlug}>
+            <Button variant="outline" size="sm" onClick={() => setSlugEditTarget(null)}>
               취소
             </Button>
-            <Button size="sm" onClick={handleSlugSave} disabled={isSavingSlug}>
-              {isSavingSlug ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
-              저장
-            </Button>
+            <SaveButton size="sm" onSave={handleSlugSave} />
           </DialogFooter>
         </DialogContent>
       </Dialog>

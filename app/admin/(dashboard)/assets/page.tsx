@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { SaveButton } from '@/components/ui/save-button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -41,7 +42,6 @@ export default function AssetsPage() {
   const [newBgmGenre, setNewBgmGenre] = useState('')
   const [newBgmHashtags, setNewBgmHashtags] = useState('')
   const [editingBgmId, setEditingBgmId] = useState<string | null>(null)
-  const [isSavingBgm, setIsSavingBgm] = useState(false)
   const [isBgmDialogOpen, setIsBgmDialogOpen] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
@@ -53,7 +53,6 @@ export default function AssetsPage() {
   const [embedCode, setEmbedCode] = useState('')
   const [fontFileUrl, setFontFileUrl] = useState<string | null>(null)
   const [isUploadingFont, setIsUploadingFont] = useState(false)
-  const [isSavingFont, setIsSavingFont] = useState(false)
   const [isFontDialogOpen, setIsFontDialogOpen] = useState(false)
   const fontFileInputRef = useRef<HTMLInputElement>(null)
 
@@ -113,12 +112,11 @@ export default function AssetsPage() {
     }
   }
 
-  const handleSaveFont = async () => {
-    if (!newFontName || !newFontFamily) return alert('폰트명과 폰트 패밀리명을 입력해주세요.')
-    if (fontType === 'embed' && !embedCode) return alert('웹 폰트 임베드 코드를 입력해주세요.')
-    if (fontType === 'file' && !fontFileUrl) return alert('폰트 파일을 업로드해주세요.')
+  const handleSaveFont = async (): Promise<boolean> => {
+    if (!newFontName || !newFontFamily) { alert('폰트명과 폰트 패밀리명을 입력해주세요.'); return false }
+    if (fontType === 'embed' && !embedCode) { alert('웹 폰트 임베드 코드를 입력해주세요.'); return false }
+    if (fontType === 'file' && !fontFileUrl) { alert('폰트 파일을 업로드해주세요.'); return false }
 
-    setIsSavingFont(true)
     try {
       // 구글 폰트 임베드는 @import가 실제로 등록하는 family 이름이 정해져 있다 — 직접 입력한
       // family가 이와 다르면 --font-kr 등에 넣어도 로드된 폰트를 못 찾아 조용히 기본 글꼴로
@@ -145,11 +143,11 @@ export default function AssetsPage() {
       setIsFontDialogOpen(false)
       resetFontForm()
       await fetchFonts()
+      return true
     } catch (err) {
       console.error('Save font error:', err)
       alert('폰트 저장에 실패했습니다.')
-    } finally {
-      setIsSavingFont(false)
+      return false
     }
   }
 
@@ -262,9 +260,8 @@ export default function AssetsPage() {
     }
   }
 
-  const handleSaveBgm = async () => {
-    if (!bgmUrl || !newBgmName) return alert('음원 파일과 곡명을 입력해주세요.')
-    setIsSavingBgm(true)
+  const handleSaveBgm = async (): Promise<boolean> => {
+    if (!bgmUrl || !newBgmName) { alert('음원 파일과 곡명을 입력해주세요.'); return false }
     // bgms.id 는 uuid 컬럼이라 유효한 UUID 형식이어야 한다 ('bgm_'+타임스탬프는 삽입이 실패함).
     const newBgm = {
       id: editingBgmId || crypto.randomUUID(),
@@ -276,15 +273,15 @@ export default function AssetsPage() {
       url: bgmUrl,
     }
     const { error } = await supabase.from('bgms').upsert(newBgm)
-    setIsSavingBgm(false)
     if (error) {
       alert('BGM 저장에 실패했습니다.')
       console.error(error)
-    } else {
-      setIsBgmDialogOpen(false)
-      resetBgmForm()
-      fetchBgms() // 목록 새로고침
+      return false
     }
+    setIsBgmDialogOpen(false)
+    resetBgmForm()
+    fetchBgms() // 목록 새로고침
+    return true
   }
 
   const handleDeleteBgm = async (id: string) => {
@@ -557,10 +554,12 @@ export default function AssetsPage() {
                       <Input placeholder="#잔잔한 #로맨틱 (공백으로 구분)" value={newBgmHashtags} onChange={e => setNewBgmHashtags(e.target.value)} />
                     </Field>
                   </FieldGroup>
-                  <Button className="mt-4 w-full" onClick={handleSaveBgm} disabled={isSavingBgm || isUploadingBgm}>
-                    {isSavingBgm ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    {editingBgmId ? '수정하기' : '업로드'}
-                  </Button>
+                  <SaveButton
+                    className="mt-4 w-full"
+                    onSave={handleSaveBgm}
+                    disabled={isUploadingBgm}
+                    idleLabel={editingBgmId ? '수정하기' : '업로드'}
+                  />
                 </DialogContent>
               </Dialog>
             </CardHeader>
@@ -702,10 +701,7 @@ export default function AssetsPage() {
                       </Field>
                     )}
                   </FieldGroup>
-                  <Button className="mt-4 w-full" onClick={handleSaveFont} disabled={isSavingFont || isUploadingFont}>
-                    {isSavingFont ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    등록하기
-                  </Button>
+                  <SaveButton className="mt-4 w-full" onSave={handleSaveFont} disabled={isUploadingFont} idleLabel="등록하기" />
                 </DialogContent>
               </Dialog>
             </CardHeader>

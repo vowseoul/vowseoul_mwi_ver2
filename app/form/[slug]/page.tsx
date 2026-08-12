@@ -3,6 +3,7 @@
 import React, { useState, useEffect, use, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import { SaveButton } from '@/components/ui/save-button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -90,7 +91,6 @@ function PublicFormContent({ slug }: { slug: string }) {
   const [currentStep, setCurrentStep] = useState(0)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [savingDraft, setSavingDraft] = useState(false)
   const [customSelectTexts, setCustomSelectTexts] = useState<Record<string, boolean>>({})
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null)
   const [uploadingFields, setUploadingFields] = useState<string[]>([])
@@ -498,8 +498,7 @@ function PublicFormContent({ slug }: { slug: string }) {
   }
 
   // 3. Manual Draft Save Handler
-  const handleSaveDraft = async () => {
-    setSavingDraft(true)
+  const handleSaveDraft = async (): Promise<boolean> => {
     const draftKey = `vowseoul_draft_${instance.slug || instance.id}`
 
     // Immediate Local Storage write
@@ -530,9 +529,8 @@ function PublicFormContent({ slug }: { slug: string }) {
     } catch (err: any) {
       console.warn('Server draft save failed, saved locally:', err)
       toast.success('이 기기에 입력 내용이 임시 저장되었습니다!')
-    } finally {
-      setSavingDraft(false)
     }
+    return true
   }
 
   const handleNext = () => {
@@ -1291,18 +1289,14 @@ function PublicFormContent({ slug }: { slug: string }) {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <Button
-            type="button"
+          <SaveButton
             variant="ghost"
             size="sm"
-            onClick={handleSaveDraft}
-            disabled={savingDraft}
+            onSave={handleSaveDraft}
             className="h-7 sm:h-8 text-[11px] sm:text-xs text-muted-foreground hover:text-foreground px-2 sm:px-3 font-medium border border-border/80 sm:border-none rounded-lg shrink-0"
-          >
-            {savingDraft ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
-            <span className="hidden sm:inline">나중에 이어쓰기 (임시저장)</span>
-            <span className="sm:hidden">임시저장</span>
-          </Button>
+            idleLabel={<><span className="hidden sm:inline">나중에 이어쓰기 (임시저장)</span><span className="sm:hidden">임시저장</span></>}
+            successLabel="저장됨"
+          />
 
           {(instance.customer?.groom_name || instance.customer?.bride_name) && (
             <div className="text-right border-l border-border pl-2 sm:pl-3 shrink-0">

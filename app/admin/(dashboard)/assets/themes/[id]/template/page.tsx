@@ -19,7 +19,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { ExternalLink, Loader2, Save, Sparkles, Upload, X } from "lucide-react"
+import { SaveButton } from "@/components/ui/save-button"
+import { ExternalLink, Loader2, Sparkles, Upload, X } from "lucide-react"
 import { toast } from "sonner"
 
 /**
@@ -47,7 +48,6 @@ export default function TemplateThemeEditor() {
   const id = String(params.id)
 
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
 
   const [name, setName] = useState("")
   const [renderEngine, setRenderEngine] = useState<"legacy" | "template">("template")
@@ -188,8 +188,7 @@ export default function TemplateThemeEditor() {
     }
   }
 
-  const save = async () => {
-    setSaving(true)
+  const save = async (): Promise<boolean> => {
     // 토큰은 themes.styles 에 '--' 키로 저장 (레거시 키는 그대로 보존)
     const cleanTokens: Record<string, string> = {}
     for (const [k, v] of Object.entries(tokenValues)) {
@@ -206,12 +205,12 @@ export default function TemplateThemeEditor() {
       block_manifest: blockManifest,
       styles: { ...otherStyles, ...cleanTokens },
     }).eq("id", id)
-    setSaving(false)
     if (error) {
       toast.error(`저장 실패: ${error.message}`)
-    } else {
-      toast.success("저장되었습니다.")
+      return false
     }
+    toast.success("저장되었습니다.")
+    return true
   }
 
   const previewTemplate: ThemeTemplate = useMemo(
@@ -460,10 +459,7 @@ export default function TemplateThemeEditor() {
             고질적인 문제) sticky가 기준을 잃으므로 fixed로 뷰포트 하단에 고정하고(사이드바 폭만큼
             lg:left-64 로 비켜준다), xl 이상에서는 원래의(검증된) 컬럼 내부 sticky로 되돌린다. */}
         <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t bg-background px-4 py-4 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] lg:left-64 lg:px-6 xl:sticky xl:inset-x-auto xl:left-auto xl:z-auto xl:mt-6 xl:px-0 xl:shadow-none">
-          <Button onClick={save} disabled={saving} className="gap-2">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {saving ? "저장 중…" : "저장"}
-          </Button>
+          <SaveButton onSave={save} className="gap-2" />
           <Button variant="outline" asChild>
             <a href={`/preview/theme/${id}`} target="_blank" rel="noreferrer" className="gap-2">
               새 탭에서 미리보기 <ExternalLink className="h-3.5 w-3.5" />
