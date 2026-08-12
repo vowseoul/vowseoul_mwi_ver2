@@ -15,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { TableRowsSkeleton, CardListSkeleton } from '@/components/admin/list-skeleton'
 import {
   Dialog,
   DialogContent,
@@ -296,7 +297,7 @@ export default function InvitationsListPage() {
           {/* 모바일 카드 리스트 — sm 미만에서는 6열 테이블 대신 카드로 보여준다 */}
           <div className="sm:hidden divide-y divide-border">
             {isLoading ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">청첩장 목록을 로딩 중입니다...</p>
+              <CardListSkeleton rows={6} />
             ) : error ? (
               <p className="py-8 text-center text-sm text-destructive">목록 조회 중 오류가 발생했습니다.</p>
             ) : filteredInvitations?.length === 0 ? (
@@ -431,11 +432,7 @@ export default function InvitationsListPage() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                    청첩장 목록을 로딩 중입니다...
-                  </TableCell>
-                </TableRow>
+                <TableRowsSkeleton rows={6} columns={6} />
               ) : error ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-8 text-destructive">

@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { TableRowsSkeleton, CardListSkeleton } from '@/components/admin/list-skeleton'
 import {
   Dialog,
   DialogContent,
@@ -976,7 +977,7 @@ export default function FormTemplatesPage() {
           {/* 모바일 카드 리스트 — sm 미만에서는 6열 테이블 대신 카드로 보여준다 */}
           <div className="sm:hidden max-h-[calc(100vh-280px)] overflow-y-auto divide-y divide-border">
             {isLoading ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">폼 템플릿을 불러오는 중입니다...</p>
+              <CardListSkeleton rows={6} />
             ) : error ? (
               <p className="py-8 text-center text-sm text-destructive">템플릿 로딩 중 오류가 발생했습니다.</p>
             ) : filteredTemplates?.length === 0 ? (
@@ -1088,11 +1089,7 @@ export default function FormTemplatesPage() {
               </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                    폼 템플릿을 불러오는 중입니다...
-                  </TableCell>
-                </TableRow>
+                <TableRowsSkeleton rows={6} columns={6} />
               ) : error ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-8 text-destructive">

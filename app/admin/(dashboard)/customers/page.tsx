@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { TableRowsSkeleton, CardListSkeleton } from '@/components/admin/list-skeleton'
 import {
   Select,
   SelectContent,
@@ -223,7 +224,7 @@ export default function CustomersPage() {
           {/* 모바일 카드 리스트 — sm 미만에서는 7열 테이블 대신 카드로 보여준다 */}
           <div className="sm:hidden divide-y divide-border">
             {isLoading ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">고객 데이터를 불러오는 중입니다...</p>
+              <CardListSkeleton rows={6} />
             ) : error ? (
               <p className="py-8 text-center text-sm text-destructive">데이터를 불러오는 동안 오류가 발생했습니다.</p>
             ) : customersList.length === 0 ? (
@@ -294,11 +295,7 @@ export default function CustomersPage() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                    고객 데이터를 불러오는 중입니다...
-                  </TableCell>
-                </TableRow>
+                <TableRowsSkeleton rows={6} columns={7} />
               ) : error ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-destructive">

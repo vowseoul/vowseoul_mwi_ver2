@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { buildFontFaceRule, joinFontFaceCss } from "@/lib/fonts"
+import { SCROLL_MOTION_INTENSITY_PARAMS, type ScrollMotionSettings } from "@/lib/scroll-motion"
 
 /**
  * InvitationFrame — B(하이브리드) + iframe 구조의 핵심 렌더러 프로토타입.
@@ -86,6 +87,8 @@ interface InvitationFrameProps {
    * 클릭이 유발했을 원래 동작(RSVP 버튼 열기 등)은 막는다. 시안 검수 화면 전용이라
    * 평소(발행/일반 미리보기)에는 prop을 아예 넘기지 않아 기본 동작에 영향이 없다. */
   onBlockClick?: (blockKey: string) => void
+  /** 하객이 스크롤할 때 섹션이 나타나는 방식. 없거나 preset이 'none'이면 정적으로 표시(기본값) */
+  scrollMotion?: ScrollMotionSettings
 }
 
 function buildSrcDoc(template: ThemeTemplate): string {
@@ -124,6 +127,22 @@ function buildSrcDoc(template: ThemeTemplate): string {
     .vs-section-image { width: 100%; background: inherit; }
     .vs-section-image img { width: 100%; height: auto; display: block; }
     .vs-section-image__caption { padding: 10px 24px; font-size: 12px; text-align: center; opacity: 0.6; }
+    /* 스크롤 모션 — 프리셋별 진입 전 상태. 실제 관찰/클래스 부착은 스크립트 쪽 useEffect가 담당하고,
+       여기는 정적 규칙만 정의한다(설정과 무관하게 항상 존재해도 무해함 — .vs-reveal 클래스가
+       없으면 아무 효과가 없다). .vs-revealed는 마지막에 두어 프리셋별 transform을 항상 이긴다. */
+    .vs-reveal {
+      opacity: 0;
+      transition: opacity var(--vs-motion-duration, 600ms) var(--vs-ease-out-soft, cubic-bezier(0.16,1,0.3,1)),
+                  transform var(--vs-motion-duration, 600ms) var(--vs-ease-out-soft, cubic-bezier(0.16,1,0.3,1));
+    }
+    .vs-reveal[data-vs-preset="fade-up"] { transform: translateY(var(--vs-motion-distance, 24px)); }
+    .vs-reveal[data-vs-preset="zoom"] { transform: scale(var(--vs-motion-scale, 0.96)); }
+    .vs-reveal[data-vs-preset="slide-alt"][data-vs-dir="l"] { transform: translateX(calc(-1 * var(--vs-motion-distance, 24px))); }
+    .vs-reveal[data-vs-preset="slide-alt"][data-vs-dir="r"] { transform: translateX(var(--vs-motion-distance, 24px)); }
+    .vs-reveal.vs-revealed { opacity: 1; transform: none; }
+    @media (prefers-reduced-motion: reduce) {
+      .vs-reveal { transition: none !important; opacity: 1 !important; transform: none !important; }
+    }
   </style>
   <!-- 테마 CSS는 별도 스타일시트로 주입 → 템플릿 선두의 @import(커스텀 폰트)가 유효하게 유지됨 -->
   <style>
@@ -166,6 +185,7 @@ export function InvitationFrame({
   preventZoom = false,
   sectionImages = [],
   onBlockClick,
+  scrollMotion,
 }: InvitationFrameProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [doc, setDoc] = useState<Document | null>(null)
@@ -329,6 +349,56 @@ export function InvitationFrame({
       lastInserted.set(img.afterBlock, wrapper)
     }
   }, [doc, sectionImages])
+
+  // 스크롤 모션 — 하객이 스크롤하며 섹션에 다가가면 나타나는 연출. iframe은 별도 realm이라
+  // IntersectionObserver/matchMedia도 그 문서의 window(doc.defaultView)에서 만들어야 한다.
+  // 부모 window로 만들면 뷰포트 기준이 iframe이 아닌 부모 페이지가 되어 버린다.
+  // 첫 [data-block](히어로)은 절대 대상에 넣지 않는다 — 열자마자 빈 화면처럼 보이면 안 되므로.
+  useEffect(() => {
+    if (!doc) return
+    const view = doc.defaultView
+    if (!view) return
+
+    const preset = scrollMotion?.preset ?? "none"
+    const blocks = Array.from(doc.querySelectorAll<HTMLElement>("[data-block]"))
+    const targets = [...blocks.slice(1), ...Array.from(doc.querySelectorAll<HTMLElement>("[data-vs-section-image]"))]
+
+    // 설정을 바꿀 때마다(관리자 실시간 미리보기) 이전 프리셋의 흔적을 지운다 — 지우지 않으면
+    // 이미 revealed 된 섹션은 새 프리셋으로 바꿔도 화면에 반영되지 않는다.
+    targets.forEach((el) => {
+      el.classList.remove("vs-reveal", "vs-revealed")
+      el.removeAttribute("data-vs-preset")
+      el.removeAttribute("data-vs-dir")
+    })
+
+    if (preset === "none" || view.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+
+    const { distance, scale, duration } = SCROLL_MOTION_INTENSITY_PARAMS[scrollMotion?.intensity ?? "normal"]
+    const root = doc.documentElement
+    root.style.setProperty("--vs-motion-distance", distance)
+    root.style.setProperty("--vs-motion-scale", scale)
+    root.style.setProperty("--vs-motion-duration", duration)
+
+    targets.forEach((el, i) => {
+      el.classList.add("vs-reveal")
+      el.setAttribute("data-vs-preset", preset)
+      if (preset === "slide-alt") el.setAttribute("data-vs-dir", i % 2 === 0 ? "l" : "r")
+    })
+
+    const observer = new view.IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue
+          entry.target.classList.add("vs-revealed")
+          observer.unobserve(entry.target)
+        }
+      },
+      { root: null, threshold: 0.15, rootMargin: "0px 0px -10% 0px" }
+    )
+    targets.forEach((el) => observer.observe(el))
+
+    return () => observer.disconnect()
+  }, [doc, scrollMotion, sectionImages])
 
   // 블럭 포커스 — 편집기에서 블럭 아코디언을 펼치면 미리보기가 해당 섹션으로 스크롤
   useEffect(() => {

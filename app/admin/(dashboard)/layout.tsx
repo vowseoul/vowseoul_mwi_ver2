@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect } from 'react'
-import Link from 'next/link'
+import Link, { useLinkStatus } from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { 
@@ -25,7 +25,8 @@ import {
   FileText,
   Sparkles,
   LogOut,
-  HelpCircle
+  HelpCircle,
+  Loader2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -41,6 +42,13 @@ const navItems = [
   { href: '/admin/inquiries', label: '문의 관리', icon: HelpCircle },
   { href: '/admin/settings', label: '시스템 설정', icon: Settings },
 ]
+
+/** useLinkStatus()는 자신을 감싼 <Link>의 진행중 여부를 읽으므로 Link 내부에서만 호출할 수 있다.
+ * 클릭 즉시(다음 페이지 응답을 기다리는 동안) 아이콘이 스피너로 바뀌어 "지금 이동 중"임을 보여준다 — Visibility. */
+function NavIcon({ icon: Icon }: { icon: React.ComponentType<{ className?: string }> }) {
+  const { pending } = useLinkStatus()
+  return pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />
+}
 
 export default function AdminLayout({
   children,
@@ -137,7 +145,7 @@ export default function AdminLayout({
                         : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                     )}
                   >
-                    <item.icon className="h-4 w-4" />
+                    <NavIcon icon={item.icon} />
                     {item.label}
                   </Link>
                 </li>
@@ -163,7 +171,7 @@ export default function AdminLayout({
                 {navItems.map((item) => (
                   <DropdownMenuItem key={item.href} asChild>
                     <Link href={item.href} className="flex items-center gap-2">
-                      <item.icon className="h-4 w-4" />
+                      <NavIcon icon={item.icon} />
                       {item.label}
                     </Link>
                   </DropdownMenuItem>

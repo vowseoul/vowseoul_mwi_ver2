@@ -15,18 +15,23 @@ import {
   SELF_EDIT_GREETING_FIELD as GREETING_FIELD,
   SELF_EDIT_ACCOUNT_FIELDS as ACCOUNT_FIELDS,
 } from "@/lib/self-edit"
+import { DEFAULT_SCROLL_MOTION, type ScrollMotionSettings } from "@/lib/scroll-motion"
+import { ScrollMotionField } from "@/components/invitation/scroll-motion-field"
 
 export default function EditClient({
   invitationId,
   initialFields,
   initialGalleryImages,
+  initialScrollMotion,
 }: {
   invitationId: string
   initialFields: Record<string, string>
   initialGalleryImages: string[]
+  initialScrollMotion?: ScrollMotionSettings
 }) {
   const [fields, setFields] = useState<Record<string, string>>(initialFields)
   const [galleryImages, setGalleryImages] = useState<string[]>(initialGalleryImages)
+  const [scrollMotion, setScrollMotion] = useState<ScrollMotionSettings>(initialScrollMotion ?? DEFAULT_SCROLL_MOTION)
   const [uploadingGallery, setUploadingGallery] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -60,7 +65,7 @@ export default function EditClient({
       const res = await fetch("/api/self-edit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invitationId, fields, galleryImages }),
+        body: JSON.stringify({ invitationId, fields, galleryImages, scrollMotion }),
       })
       const result = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(result?.error || "저장에 실패했습니다.")
@@ -209,6 +214,19 @@ export default function EditClient({
                 />
               </label>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base font-medium">스크롤 모션</CardTitle>
+            <CardDescription>
+              하객이 청첩장을 스크롤할 때 각 섹션이 나타나는 방식입니다. 색상·폰트·테마 변경은
+              담당자를 통해서만 가능하지만, 이 항목은 여기서 바로 바꾸실 수 있습니다.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ScrollMotionField value={scrollMotion} onChange={setScrollMotion} idPrefix="self-edit-scroll-motion" />
           </CardContent>
         </Card>
 

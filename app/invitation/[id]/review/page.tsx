@@ -4,6 +4,7 @@ import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { dashboardCookieName, verifyDashboardToken } from '@/lib/dashboard-session'
 import { mergeInvitationRaw } from '@/lib/invitation-data'
 import { buildInvitationTokens, extractBlockOverrides, extractDisabledSlots, extractSectionImages, getHiddenBlocks, type ThemeRow } from '@/lib/theme-template'
+import { extractScrollMotion } from '@/lib/scroll-motion'
 import { fetchRegisteredFonts, resolveFontFaces } from '@/lib/fonts'
 import ReviewClient from './review-client'
 
@@ -86,6 +87,7 @@ export default async function InvitationReviewPage({ params }: { params: Promise
       blockOverrides={extractBlockOverrides(invitation.customization_overrides)}
       hiddenBlocks={getHiddenBlocks(disabledSlots)}
       sectionImages={extractSectionImages(invitation.customization_overrides)}
+      scrollMotion={extractScrollMotion(invitation.customization_overrides)}
       reviewStatus={invitation.review_status}
       initialRevisions={(revisions ?? []).map((r) => ({
         id: String(r.id),

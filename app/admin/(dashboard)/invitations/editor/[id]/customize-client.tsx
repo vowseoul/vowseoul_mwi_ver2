@@ -24,6 +24,8 @@ import {
   type SectionImage,
   type ThemeRow,
 } from "@/lib/theme-template"
+import { extractScrollMotion, type ScrollMotionSettings } from "@/lib/scroll-motion"
+import { ScrollMotionField } from "@/components/invitation/scroll-motion-field"
 import { buildFontStack, fetchRegisteredFonts, fontPreviewStyle, resolveFontFaces, type RegisteredFont } from "@/lib/fonts"
 import { useInjectFontFaces } from "@/lib/use-font-faces"
 import { useInvitationRevisionsQuery, useResolveRevisionMutation } from "@/hooks/queries/useInvitationRevisions"
@@ -40,10 +42,11 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
+import { SaveButton } from "@/components/ui/save-button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Slider } from "@/components/ui/slider"
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Copy, ExternalLink, Image as ImageIcon, Loader2, Plus, Save, X } from "lucide-react"
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Copy, ExternalLink, Image as ImageIcon, Loader2, Plus, X } from "lucide-react"
 import { toast } from "sonner"
 
 /**
@@ -329,6 +332,11 @@ export default function CustomizeClient({
   const [sectionImages, setSectionImages] = useState<SectionImage[]>(
     () => extractSectionImages(invitation.customization_overrides)
   )
+
+  /** 스크롤 모션 — 고객 셀프편집 화면(edit-client.tsx)에서도 동일 값을 바꿀 수 있다 */
+  const [scrollMotion, setScrollMotion] = useState<ScrollMotionSettings>(
+    () => extractScrollMotion(invitation.customization_overrides)
+  )
   const [isUploadingSectionImage, setIsUploadingSectionImage] = useState(false)
   const addSectionImage = async (file: File) => {
     setIsUploadingSectionImage(true)
@@ -400,7 +408,6 @@ export default function CustomizeClient({
   const [uploadingOgImage, setUploadingOgImage] = useState(false)
 
   const [uploadingKey, setUploadingKey] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (!showBgm) return
@@ -534,9 +541,7 @@ export default function CustomizeClient({
   const moveGalleryImage = (index: number, direction: -1 | 1) =>
     setGalleryImages((cur) => moveArrayItem(cur, index, direction))
 
-  const save = async () => {
-    setSaving(true)
-
+  const save = async (): Promise<boolean> => {
     const cleanTokens: Record<string, string | number> = {}
     for (const [k, v] of Object.entries(overrides)) {
       if (typeof v === "number") cleanTokens[k] = v
@@ -547,8 +552,8 @@ export default function CustomizeClient({
       : {}
     const preservedOverrideKeys: Record<string, unknown> = {}
     // "blocks" 를 여기서 빠뜨리면 매번 옛 값이 되살아난다 — disabled_slots 때 겪은 실수의 반복,
-    // PLAN_DESIGN_CONTROLS.md §5.3
-    for (const [k, v] of Object.entries(existingOverrides)) if (!k.startsWith("--") && k !== "disabled_slots" && k !== "blocks" && k !== "sectionImages") preservedOverrideKeys[k] = v
+    // PLAN_DESIGN_CONTROLS.md §5.3. scrollMotion도 아래에서 명시적으로 다시 채워 넣으므로 동일하게 제외한다.
+    for (const [k, v] of Object.entries(existingOverrides)) if (!k.startsWith("--") && k !== "disabled_slots" && k !== "blocks" && k !== "sectionImages" && k !== "scrollMotion") preservedOverrideKeys[k] = v
 
     const existingContentData = (invitation.content_data && typeof invitation.content_data === "object")
       ? invitation.content_data as Record<string, unknown>
@@ -579,27 +584,27 @@ export default function CustomizeClient({
       .from("invitations")
       .update({
         content_data: contentPayload,
-        customization_overrides: { ...preservedOverrideKeys, ...cleanTokens, disabled_slots: disabledSlots, blocks: blockOverrides, sectionImages },
+        customization_overrides: { ...preservedOverrideKeys, ...cleanTokens, disabled_slots: disabledSlots, blocks: blockOverrides, sectionImages, scrollMotion },
         bgm_url: bgmUrl || null,
         theme_version_id: themeVersionId,
         og_meta: { ...existingOgMeta, title: ogTitle || null, description: ogDescription || null, image: ogImage || null },
         updated_at: new Date().toISOString(),
       })
       .eq("id", invitationId)
-    setSaving(false)
     if (error) {
       toast.error(`저장 실패: ${error.message}`)
-    } else {
-      toast.success("저장되었습니다.")
-      const { data: userData } = await supabase.auth.getUser()
-      logAuditEvent(supabase, {
-        invitationId,
-        actorType: "admin",
-        actorLabel: userData.user?.email ?? null,
-        action: "invitation.save",
-        summary: "청첩장 내용/디자인을 저장했습니다.",
-      })
+      return false
     }
+    toast.success("저장되었습니다.")
+    const { data: userData } = await supabase.auth.getUser()
+    logAuditEvent(supabase, {
+      invitationId,
+      actorType: "admin",
+      actorLabel: userData.user?.email ?? null,
+      action: "invitation.save",
+      summary: "청첩장 내용/디자인을 저장했습니다.",
+    })
+    return true
   }
 
   const copyInvitationLink = async () => {
@@ -1134,6 +1139,19 @@ export default function CustomizeClient({
 
             <Card>
               <CardHeader>
+                <CardTitle className="text-base font-medium">스크롤 모션</CardTitle>
+                <CardDescription>
+                  하객이 스크롤할 때 각 섹션이 나타나는 방식입니다. 신랑신부도 대시보드에서
+                  직접 바꿀 수 있는 항목입니다.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ScrollMotionField value={scrollMotion} onChange={setScrollMotion} idPrefix="admin-scroll-motion" />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
                 <CardTitle className="text-base font-medium">색상</CardTitle>
                 <CardDescription>비워두면 테마 기본값이 사용됩니다.</CardDescription>
               </CardHeader>
@@ -1602,10 +1620,7 @@ export default function CustomizeClient({
             고질적인 문제) sticky가 기준을 잃으므로 fixed로 뷰포트 하단에 고정하고(사이드바 폭만큼
             lg:left-64 로 비켜준다), xl 이상에서는 원래의(검증된) 컬럼 내부 sticky로 되돌린다. */}
         <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t bg-background px-4 py-4 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] lg:left-64 lg:px-6 xl:sticky xl:inset-x-auto xl:left-auto xl:z-auto xl:mt-6 xl:px-0 xl:shadow-none">
-          <Button onClick={save} disabled={saving} className="gap-2">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {saving ? "저장 중…" : "저장"}
-          </Button>
+          <SaveButton onSave={save} className="gap-2" />
           {publicSlug && (
             <Button variant="outline" asChild>
               <a href={`/w/${publicSlug}`} target="_blank" rel="noreferrer" className="gap-2">
@@ -1637,7 +1652,7 @@ export default function CustomizeClient({
       <div className="order-1 xl:order-2 xl:h-full xl:overflow-hidden">
         <div className="mb-2.5 text-xs text-muted-foreground">실시간 미리보기 (실제 데이터)</div>
         {/* 좁은 화면(패널 폭이 380px 미만인 태블릿·모바일)에서는 가로 스크롤 대신 비율을 유지한 채 축소한다 */}
-        <div className="rounded-2xl bg-muted/40 py-5 px-3">
+        <div className="relative rounded-2xl bg-muted/40 py-5 px-3">
           <ScaledPreview width={380} height={680}>
             <InvitationFrame
               template={template}
@@ -1648,11 +1663,19 @@ export default function CustomizeClient({
               blockOverrides={blockOverrides}
               hiddenBlocks={hiddenBlocks}
               sectionImages={sectionImages}
+              scrollMotion={scrollMotion}
               focusBlock={focusBlock}
               width={380}
               height={680}
             />
           </ScaledPreview>
+          {/* 테마 전환 중 — "지금 다시 그리는 중"임을 보여주는 shimmer. Visibility 원칙:
+              흰 화면만 보이면 로딩인지 깨진 것인지 구분이 안 된다. */}
+          {switchingTheme && (
+            <div className="absolute inset-3 flex items-center justify-center rounded-xl bg-background/60 backdrop-blur-sm">
+              <div className="h-full w-full animate-pulse rounded-xl bg-muted/70" />
+            </div>
+          )}
         </div>
       </div>
     </div>
