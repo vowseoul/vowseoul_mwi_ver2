@@ -185,6 +185,17 @@
   border-radius: var(--radius, 4px);
 }
 
+/* 좌우로 꽉 채우기 — 섹션 좌우 패딩만큼 음수 마진으로 밀어내 화면 끝까지 채운다 */
+.ca-greeting__image.is-fill {
+  max-width: none;
+  margin-left: calc(-1 * var(--section-px, 24px));
+  margin-right: calc(-1 * var(--section-px, 24px));
+  width: calc(100% + var(--section-px, 24px) * 2);
+}
+.ca-greeting__image.is-fill img {
+  border-radius: 0;
+}
+
 /* share 섹션은 위 여백을 없애 RSVP 섹션과 바로 이어지도록 한다.
    원래 template.html의 인라인 style="padding-top:0"이었던 것을 클래스로 옮김
    (인라인 스타일은 블럭 여백 오버라이드 주입 CSS를 항상 이겨버리기 때문 — data-block 계약 문서 §2.3) */

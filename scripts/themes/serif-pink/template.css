@@ -198,6 +198,19 @@
   box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.08);
 }
 
+/* 좌우로 꽉 채우기 — 섹션 좌우 패딩만큼 음수 마진으로 밀어내 화면 끝까지 채운다 */
+.se-greeting__image.is-fill {
+  max-width: none;
+  padding: 0;
+  margin-left: calc(-1 * var(--section-px, 24px));
+  margin-right: calc(-1 * var(--section-px, 24px));
+  width: calc(100% + var(--section-px, 24px) * 2);
+}
+.se-greeting__image.is-fill img {
+  border-radius: 0;
+  box-shadow: none;
+}
+
 .se-profile {
   display: flex;
   gap: 16px;

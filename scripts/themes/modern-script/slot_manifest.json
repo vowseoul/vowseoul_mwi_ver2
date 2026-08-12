@@ -1,9 +1,12 @@
 [
   "bgm",
   "gallery",
+  "sequence",
+  "calendar",
   "map",
   "account",
   "contact",
   "rsvp",
+  "share",
   "guestbook"
 ]

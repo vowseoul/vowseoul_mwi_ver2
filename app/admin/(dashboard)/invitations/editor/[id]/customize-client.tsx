@@ -151,7 +151,7 @@ const SLOT_LABELS: Record<string, string> = {
 const ALL_TEXT_FIELD_DEFS = [...CONTENT_FIELD_DEFS, ...ACCOUNT_FIELD_DEFS]
 const MANAGED_CONTENT_KEYS = new Set([
   ...ALL_TEXT_FIELD_DEFS.map((f) => f.key),
-  "wedding_date", "wedding_time", "gallery_images", "gallery_view_type", "gallery_align", "wedding_programs", "show_wedding_program",
+  "wedding_date", "wedding_time", "gallery_images", "gallery_view_type", "gallery_align", "greeting_image_ratio", "wedding_programs", "show_wedding_program",
   "phone_expose", "groom_show_phone", "bride_show_phone",
   ...DECEASED_KEYS,
 ])
@@ -392,6 +392,9 @@ export default function CustomizeClient({
   const [galleryAlign, setGalleryAlign] = useState<"center" | "bottom">(
     () => (initialRaw.gallery_align === "bottom" ? "bottom" : "center")
   )
+  const [greetingImageRatio, setGreetingImageRatio] = useState<"natural" | "fill">(
+    () => (initialRaw.greeting_image_ratio === "fill" ? "fill" : "natural")
+  )
   const [sequenceRows, setSequenceRows] = useState<SequenceRow[]>(() => normalizeSequenceRows(initialRaw.wedding_programs))
   const [showProgram, setShowProgram] = useState(() => isShown(initialRaw.show_wedding_program))
   const [phoneExpose, setPhoneExpose] = useState(() => isShown(initialRaw.phone_expose))
@@ -434,13 +437,14 @@ export default function CustomizeClient({
     gallery_images: galleryImages,
     gallery_view_type: galleryViewType,
     gallery_align: galleryAlign,
+    greeting_image_ratio: greetingImageRatio,
     wedding_programs: sequenceRows,
     show_wedding_program: showProgram ? "예" : "아니오",
     phone_expose: phoneExpose ? "예" : "아니오",
     groom_show_phone: groomShowPhone ? "예" : "아니오",
     bride_show_phone: brideShowPhone ? "예" : "아니오",
     bgm_url: bgmUrl,
-  }), [initialRaw, content, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone, bgmUrl])
+  }), [initialRaw, content, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign, greetingImageRatio, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone, bgmUrl])
 
   const data = useMemo(() => buildFieldData(liveRaw), [liveRaw])
 
@@ -519,6 +523,18 @@ export default function CustomizeClient({
     }
   }
 
+  const uploadCalendarDayShape = async (blockKey: string, file: File) => {
+    setUploadingKey("calendarDayCustomShapeUrl")
+    try {
+      const url = await uploadImage(file, "invitations/content")
+      setBlockOverride(blockKey, { calendarDayCustomShapeUrl: url })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "강조 이미지 업로드에 실패했습니다.")
+    } finally {
+      setUploadingKey(null)
+    }
+  }
+
   const uploadOgImage = async (file: File) => {
     setUploadingOgImage(true)
     try {
@@ -576,6 +592,7 @@ export default function CustomizeClient({
       gallery_images: galleryImages,
       gallery_view_type: galleryViewType,
       gallery_align: galleryAlign,
+      greeting_image_ratio: greetingImageRatio,
       wedding_programs: sequenceRows,
       show_wedding_program: showProgram ? "예" : "아니오",
       phone_expose: phoneExpose ? "예" : "아니오",
@@ -810,6 +827,25 @@ export default function CustomizeClient({
                       />
                     ))}
                   </FieldGroup>
+                  {visibleContentFields.some((f) => f.key === "greeting_image") && (
+                    <Field className="mt-4">
+                      <FieldLabel>인사말 이미지 비율</FieldLabel>
+                      <RadioGroup
+                        value={greetingImageRatio}
+                        onValueChange={(v) => setGreetingImageRatio(v as "natural" | "fill")}
+                        className="flex flex-row gap-6"
+                      >
+                        <div className="flex items-center gap-2">
+                          <RadioGroupItem value="natural" id="greeting-ratio-natural" />
+                          <Label htmlFor="greeting-ratio-natural" className="font-normal cursor-pointer">현재 비율</Label>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <RadioGroupItem value="fill" id="greeting-ratio-fill" />
+                          <Label htmlFor="greeting-ratio-fill" className="font-normal cursor-pointer">좌우로 꽉 채우기</Label>
+                        </div>
+                      </RadioGroup>
+                    </Field>
+                  )}
                 </CardContent>
               </Card>
             )}
@@ -1442,6 +1478,67 @@ export default function CustomizeClient({
                                     onCheckedChange={(c) => setBlockOverride(b.key, { ddayRollingEnabled: c })}
                                   />
                                 </div>
+
+                                <Field className="border-t pt-4">
+                                  <FieldLabel>예식일 강조 표시 모양</FieldLabel>
+                                  <RadioGroup
+                                    value={override?.calendarDayShape || "circle"}
+                                    onValueChange={(v) => setBlockOverride(b.key, { calendarDayShape: v as "circle" | "heart" | "custom" })}
+                                    className="flex flex-row gap-6"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <RadioGroupItem value="circle" id={`${b.key}-shape-circle`} />
+                                      <Label htmlFor={`${b.key}-shape-circle`} className="font-normal cursor-pointer">동그라미</Label>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <RadioGroupItem value="heart" id={`${b.key}-shape-heart`} />
+                                      <Label htmlFor={`${b.key}-shape-heart`} className="font-normal cursor-pointer">하트</Label>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <RadioGroupItem value="custom" id={`${b.key}-shape-custom`} />
+                                      <Label htmlFor={`${b.key}-shape-custom`} className="font-normal cursor-pointer">직접 업로드</Label>
+                                    </div>
+                                  </RadioGroup>
+                                </Field>
+
+                                {override?.calendarDayShape === "custom" && (
+                                  <>
+                                    <ImageField
+                                      def={{ key: "calendarDayCustomShapeUrl", label: "강조 이미지", type: "image" }}
+                                      value={override?.calendarDayCustomShapeUrl || ""}
+                                      uploading={uploadingKey === "calendarDayCustomShapeUrl"}
+                                      onUpload={(file) => uploadCalendarDayShape(b.key, file)}
+                                      onClear={() => setBlockOverride(b.key, { calendarDayCustomShapeUrl: undefined })}
+                                    />
+                                    {override?.calendarDayCustomShapeUrl?.toLowerCase().split("?")[0].endsWith(".svg") && (
+                                      <BlockColorField
+                                        label="업로드 이미지 색상 (SVG 전용)"
+                                        value={override?.calendarDaySvgColor}
+                                        defaultValue={accent}
+                                        onChange={(v) => setBlockOverride(b.key, { calendarDaySvgColor: v })}
+                                        onReset={() => setBlockOverride(b.key, { calendarDaySvgColor: undefined })}
+                                      />
+                                    )}
+                                  </>
+                                )}
+
+                                <SizeSliderField
+                                  label="강조 표시 크기"
+                                  value={override?.calendarDayShapeSize}
+                                  defaultValue={32}
+                                  min={20}
+                                  max={48}
+                                  onChange={(v) => setBlockOverride(b.key, { calendarDayShapeSize: v })}
+                                  onReset={() => setBlockOverride(b.key, { calendarDayShapeSize: undefined })}
+                                />
+
+                                <BlockColorField
+                                  label="강조일자 텍스트 색상"
+                                  value={override?.calendarDayTextColor}
+                                  defaultValue="#ffffff"
+                                  onChange={(v) => setBlockOverride(b.key, { calendarDayTextColor: v })}
+                                  onReset={() => setBlockOverride(b.key, { calendarDayTextColor: undefined })}
+                                />
                               </>
                             )}
                           </AccordionContent>
@@ -1737,6 +1834,36 @@ function SizeSliderField({ label, value, defaultValue, min, max, onChange, onRes
         <Slider value={[current]} min={min} max={max} step={1} onValueChange={([v]) => onChange(v)} className="flex-1" />
         {isSet && (
           <Button type="button" variant="ghost" size="icon-sm" title="테마 기본값으로" onClick={onReset}>
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        )}
+      </div>
+    </Field>
+  )
+}
+
+/** 블럭 오버라이드용 색상 필드 — "색상" 카드의 테마 토큰 피커와 동일한 모양(스와치+hex+되돌리기)을 따른다 */
+function BlockColorField({ label, value, defaultValue, onChange, onReset }: {
+  label: string
+  value: string | undefined
+  defaultValue: string
+  onChange: (v: string) => void
+  onReset: () => void
+}) {
+  const displayValue = value || defaultValue
+  return (
+    <Field>
+      <FieldLabel>{label}</FieldLabel>
+      <div className="flex items-start gap-2">
+        <input
+          type="color"
+          value={/^#[0-9a-fA-F]{6}$/.test(displayValue) ? displayValue : "#ffffff"}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-9 w-10 shrink-0 cursor-pointer rounded-md border border-input bg-transparent p-1"
+        />
+        <Input value={displayValue} onChange={(e) => onChange(e.target.value)} placeholder="기본값" className="min-w-0 flex-1" />
+        {value && (
+          <Button type="button" variant="ghost" size="icon-sm" title="기본값으로" onClick={onReset}>
             <X className="h-3.5 w-3.5" />
           </Button>
         )}

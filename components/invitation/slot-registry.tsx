@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { Copy, Check, Phone, MessageSquare, MessageCircle, Send, Instagram } from "lucide-react"
 import type { FieldData, BlockOverrideMap } from "./invitation-frame"
 import type { RawInvitationData } from "@/lib/invitation-data"
 import { supabase } from "@/lib/supabase"
@@ -35,6 +36,12 @@ export interface SlotProps {
 
 /** currentColor 기반 반투명 색 (테마 색을 그대로 따라감) */
 const soft = (pct: number) => `color-mix(in srgb, currentColor ${pct}%, transparent)`
+
+/** 계좌/연락처 블럭의 아이콘형 버튼 공통 스타일 */
+const iconBtnStyle = (borderColor: string, background: string, iconColor: string): React.CSSProperties => ({
+  width: 38, height: 38, borderRadius: 10, display: "inline-flex", alignItems: "center", justifyContent: "center",
+  border: `1px solid ${borderColor}`, background, color: iconColor, cursor: "pointer", flexShrink: 0,
+})
 
 /* ------------------------------- BGM ------------------------------- *
  * 이전 버전에서 안정적으로 동작하던 로직을 그대로 이식.
@@ -302,11 +309,62 @@ function RollingNumber({ value, enabled }: { value: number; enabled: boolean }) 
 
   return <>{display}</>
 }
+
+/** 예식일 강조 표시 — 동그라미/하트/직접 업로드 중 선택 (ver1 기능 이식).
+ * custom 이미지가 svg면 CSS mask로 색을 입히고, 그 외(png 등)는 이미지를 그대로 얹는다. */
+function CalendarDayMarker({ day, accent, shape, size, textColor, svgColor, customUrl }: {
+  day: number; accent: string; shape: "circle" | "heart" | "custom"; size: number
+  textColor: string; svgColor: string; customUrl?: string
+}) {
+  const numberStyle: React.CSSProperties = { position: "relative", zIndex: 1, fontWeight: 700, color: textColor, fontSize: 12 }
+
+  if (shape === "custom" && customUrl) {
+    const isSvg = customUrl.toLowerCase().split("?")[0].endsWith(".svg")
+    return (
+      <div style={{ position: "relative", width: size, height: size, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {isSvg ? (
+          <div style={{
+            position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none", backgroundColor: svgColor,
+            WebkitMaskImage: `url(${customUrl})`, maskImage: `url(${customUrl})`,
+            WebkitMaskSize: "contain", maskSize: "contain",
+            WebkitMaskRepeat: "no-repeat", maskRepeat: "no-repeat",
+            WebkitMaskPosition: "center", maskPosition: "center",
+          } as React.CSSProperties} />
+        ) : (
+          <img src={customUrl} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", zIndex: 0, pointerEvents: "none" }} />
+        )}
+        <span style={numberStyle}>{day}</span>
+      </div>
+    )
+  }
+
+  if (shape === "heart") {
+    return (
+      <div style={{ position: "relative", width: size, height: size, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <svg viewBox="0 0 24 24" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 0, pointerEvents: "none", fill: accent }}>
+          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+        </svg>
+        <span style={numberStyle}>{day}</span>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ width: size, height: size, borderRadius: "50%", background: accent, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <span style={numberStyle}>{day}</span>
+    </div>
+  )
+}
 function CalendarIsland({ accent, data, raw, blockOverrides }: SlotProps) {
   const dateStr = (typeof raw?.wedding_date === "string" ? raw.wedding_date : data.wedding_date) || ""
   const timeStr = (typeof raw?.wedding_time === "string" ? raw.wedding_time : data.wedding_time) || ""
   const ddayEnabled = blockOverrides?.calendar?.ddayEnabled !== false
   const ddayRollingEnabled = blockOverrides?.calendar?.ddayRollingEnabled === true
+  const dayShape = blockOverrides?.calendar?.calendarDayShape || "circle"
+  const dayShapeSize = blockOverrides?.calendar?.calendarDayShapeSize ?? 32
+  const dayTextColor = blockOverrides?.calendar?.calendarDayTextColor || "#ffffff"
+  const daySvgColor = blockOverrides?.calendar?.calendarDaySvgColor || accent
+  const dayCustomUrl = blockOverrides?.calendar?.calendarDayCustomShapeUrl
   const [now, setNow] = useState(() => new Date())
 
   useEffect(() => {
@@ -338,15 +396,15 @@ function CalendarIsland({ accent, data, raw, blockOverrides }: SlotProps) {
           {cal.days.map((day, i) => {
             if (day === null) return <div key={`e-${i}`} />
             const isWeddingDay = day === cal.targetDay
+            if (isWeddingDay) {
+              return (
+                <div key={i} style={{ margin: "0 auto" }}>
+                  <CalendarDayMarker day={day} accent={accent} shape={dayShape} size={dayShapeSize} textColor={dayTextColor} svgColor={daySvgColor} customUrl={dayCustomUrl} />
+                </div>
+              )
+            }
             return (
-              <div
-                key={i}
-                style={{
-                  padding: "4px 0", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 28, height: 28, margin: "0 auto",
-                  ...(isWeddingDay ? { borderRadius: "50%", fontWeight: 700, color: "#fff", background: accent } : null),
-                }}
-              >
+              <div key={i} style={{ padding: "4px 0", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, margin: "0 auto" }}>
                 {day}
               </div>
             )
@@ -555,26 +613,22 @@ function AccountRow({ label, value, accent }: { label: string; value: string; ac
         <div style={{ fontSize: 13.5 }}>{value}</div>
       </div>
       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-        <button onClick={sendViaKakaoPay} style={{
-          padding: "6px 10px", borderRadius: 7, cursor: "pointer", whiteSpace: "nowrap",
-          border: "1px solid #FFE300", background: "#FFE300", color: "#3C1E1E", fontSize: 11.5, fontWeight: 600,
-        }}>
-          카카오페이
+        <button onClick={sendViaKakaoPay} aria-label="카카오페이로 보내기" title="카카오페이" style={iconBtnStyle(
+          "color-mix(in srgb, #FFE300 50%, transparent)", "color-mix(in srgb, #FFE300 16%, transparent)", "#3C1E1E"
+        )}>
+          <MessageCircle size={16} />
         </button>
-        <button onClick={sendViaToss} style={{
-          padding: "6px 10px", borderRadius: 7, cursor: "pointer", whiteSpace: "nowrap",
-          border: "1px solid #0064FF", background: "#0064FF", color: "#fff", fontSize: 11.5, fontWeight: 600,
-        }}>
-          토스
+        <button onClick={sendViaToss} aria-label="토스로 보내기" title="토스" style={iconBtnStyle(
+          "color-mix(in srgb, #0064FF 45%, transparent)", "color-mix(in srgb, #0064FF 14%, transparent)", "#0064FF"
+        )}>
+          <Send size={16} />
         </button>
-        <button onClick={copy} style={{
-          padding: "6px 12px", borderRadius: 7, cursor: "pointer", whiteSpace: "nowrap",
-          border: `1px solid ${accent}`, background: copied ? accent : "transparent",
-          color: copied ? "#fff" : accent, fontSize: 12,
+        <button onClick={copy} aria-label={copied ? "복사됨" : "계좌번호 복사"} title={copied ? "복사됨" : "계좌번호 복사"} style={{
+          ...iconBtnStyle(accent, copied ? accent : "transparent", copied ? "#fff" : accent),
           transition: "background 200ms ease-out, color 200ms ease-out, transform 200ms ease-out",
           transform: copied ? "scale(1.04)" : "scale(1)",
         }}>
-          {copied ? "✓ 복사됨" : "복사"}
+          {copied ? <Check size={16} /> : <Copy size={16} />}
         </button>
       </div>
     </div>
@@ -597,14 +651,12 @@ function ExtraAccountRow({ label, value, accent }: { label: string; value: strin
         <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 2 }}>{label}</div>
         <div style={{ fontSize: 13.5, whiteSpace: "pre-line" }}>{value}</div>
       </div>
-      <button onClick={copy} style={{
-        padding: "6px 12px", borderRadius: 7, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
-        border: `1px solid ${accent}`, background: copied ? accent : "transparent",
-        color: copied ? "#fff" : accent, fontSize: 12,
+      <button onClick={copy} aria-label={copied ? "복사됨" : "계좌번호 복사"} title={copied ? "복사됨" : "계좌번호 복사"} style={{
+        ...iconBtnStyle(accent, copied ? accent : "transparent", copied ? "#fff" : accent),
         transition: "background 200ms ease-out, color 200ms ease-out, transform 200ms ease-out",
         transform: copied ? "scale(1.04)" : "scale(1)",
       }}>
-        {copied ? "✓ 복사됨" : "복사"}
+        {copied ? <Check size={16} /> : <Copy size={16} />}
       </button>
     </div>
   )
@@ -642,21 +694,17 @@ function normalizeInstagramHandle(raw?: string): string | null {
 }
 
 function ContactRow({ label, name, phone, instagram, accent }: { label: string; name?: string; phone: string; instagram?: string; accent: string }) {
-  const linkStyle: React.CSSProperties = {
-    padding: "6px 12px", borderRadius: 7, whiteSpace: "nowrap", textDecoration: "none",
-    border: `1px solid ${accent}`, color: accent, fontSize: 12, display: "inline-flex", alignItems: "center",
-  }
+  const linkStyle = iconBtnStyle(accent, "transparent", accent)
   const handle = normalizeInstagramHandle(instagram)
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${soft(25)}`, gap: 8 }}>
       <div style={{ textAlign: "left", minWidth: 0 }}>
-        <div style={{ fontSize: 11, opacity: 0.6 }}>{name ? `${label} · ${name}` : label}</div>
-        <div style={{ fontSize: 13.5 }}>{phone}</div>
+        <div style={{ fontSize: 15.5, fontWeight: 500 }}>{name ? `${label} ${name}` : label}</div>
       </div>
       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-        <a href={`tel:${phone}`} style={linkStyle}>전화</a>
-        <a href={`sms:${phone}`} style={linkStyle}>문자</a>
-        {handle && <a href={`https://instagram.com/${handle}`} target="_blank" rel="noreferrer" style={linkStyle}>인스타</a>}
+        <a href={`tel:${phone}`} aria-label="전화 걸기" title="전화" style={{ ...linkStyle, textDecoration: "none" }}><Phone size={16} /></a>
+        <a href={`sms:${phone}`} aria-label="문자 보내기" title="문자" style={{ ...linkStyle, textDecoration: "none" }}><MessageSquare size={16} /></a>
+        {handle && <a href={`https://instagram.com/${handle}`} target="_blank" rel="noreferrer" aria-label="인스타그램" title="인스타그램" style={{ ...linkStyle, textDecoration: "none" }}><Instagram size={16} /></a>}
       </div>
     </div>
   )
@@ -981,7 +1029,7 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
               <button
                 onClick={() => cancelRsvp(phone)}
                 disabled={cancelBusy}
-                style={{ background: "none", border: "none", cursor: cancelBusy ? "wait" : "pointer", fontSize: 12, color: "#9ca3af", textDecoration: "underline", padding: 0 }}
+                style={{ background: "none", border: "none", cursor: cancelBusy ? "wait" : "pointer", fontSize: 12, color: "inherit", opacity: 0.6, textDecoration: "underline", padding: 0 }}
               >
                 {cancelBusy ? "취소 처리 중…" : "응답 취소하기"}
               </button>
@@ -1019,7 +1067,7 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
         <div style={{ marginTop: 10, textAlign: "center" }}>
           <button
             onClick={() => { setCancelOpen((v) => !v); setCancelError(null) }}
-            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11.5, color: "#9ca3af", textDecoration: "underline", padding: 0 }}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11.5, color: "inherit", opacity: 0.6, textDecoration: "underline", padding: 0 }}
           >
             이미 제출한 참석 응답을 취소할래요
           </button>
@@ -1394,6 +1442,22 @@ function useKakaoShare(): KakaoGlobal | null {
   return kakao
 }
 
+/** VOW SEOUL 로고타입 — currentColor로 채워 어떤 테마 배경 위에서도 본문 색을 그대로 따라간다 */
+function VowSeoulLogotype({ style }: { style: React.CSSProperties }) {
+  return (
+    <svg viewBox="0 0 289.75 36.73" fill="currentColor" role="img" aria-label="VOW SEOUL" style={style}>
+      <path d="M6.07.26l10.97,29.23L27.9.26h6.02l-14.23,36.22h-5.41L0,.26h6.07Z"/>
+      <path d="M51.98,36.73c-2.55,0-4.88-.51-6.99-1.53-2.11-1.02-3.94-2.41-5.48-4.16-1.55-1.75-2.74-3.72-3.57-5.92-.83-2.19-1.25-4.45-1.25-6.76s.44-4.72,1.33-6.91c.88-2.19,2.12-4.15,3.7-5.87,1.58-1.72,3.42-3.08,5.51-4.08,2.09-1,4.39-1.51,6.91-1.51s4.97.53,7.06,1.58c2.09,1.05,3.9,2.47,5.43,4.23,1.53,1.77,2.7,3.74,3.52,5.92s1.22,4.42,1.22,6.73-.43,4.67-1.28,6.86c-.85,2.19-2.07,4.15-3.65,5.87-1.58,1.72-3.42,3.07-5.51,4.06-2.09.99-4.41,1.48-6.96,1.48ZM40.55,18.36c0,1.73.26,3.39.79,4.97.53,1.58,1.29,2.99,2.3,4.23,1,1.24,2.21,2.22,3.62,2.93,1.41.71,3.02,1.07,4.82,1.07s3.47-.37,4.9-1.12c1.43-.75,2.63-1.76,3.62-3.04.99-1.28,1.73-2.69,2.24-4.26.51-1.56.77-3.16.77-4.79,0-1.73-.27-3.38-.82-4.95-.54-1.56-1.33-2.97-2.35-4.21-1.02-1.24-2.24-2.22-3.65-2.93-1.41-.71-2.98-1.07-4.72-1.07-1.87,0-3.51.37-4.92,1.12s-2.61,1.75-3.6,3.01c-.99,1.26-1.73,2.67-2.24,4.23-.51,1.57-.77,3.16-.77,4.8Z"/>
+      <path d="M86.82.41h5.36l4.49,12.34L101.16.41h5.41l-6.22,16.07,5.41,13.36L117.07.26h6.22l-14.79,36.22h-5l-6.78-16.22-6.84,16.22h-5L70.09.26h6.22l11.32,29.59,5.41-13.36L86.82.41Z"/>
+      <path d="M148.04,8.77c-.31-.37-.79-.77-1.45-1.2-.66-.42-1.43-.82-2.3-1.17-.87-.36-1.82-.66-2.86-.92-1.04-.25-2.1-.38-3.19-.38-2.38,0-4.15.44-5.31,1.32-1.16.88-1.73,2.1-1.73,3.66,0,1.15.32,2.06.97,2.74.65.68,1.64,1.23,2.98,1.65,1.34.42,3,.87,4.97,1.35,2.48.58,4.62,1.27,6.4,2.08,1.79.81,3.16,1.88,4.13,3.2.97,1.32,1.45,3.08,1.45,5.28,0,1.79-.35,3.35-1.05,4.67-.7,1.32-1.66,2.39-2.88,3.22-1.22.83-2.64,1.45-4.23,1.85-1.6.41-3.32.61-5.15.61s-3.6-.2-5.38-.59c-1.79-.39-3.49-.95-5.1-1.68-1.61-.73-3.12-1.62-4.51-2.68l2.65-4.9c.41.44,1.04.93,1.89,1.45.85.53,1.83,1.03,2.93,1.51,1.11.48,2.31.88,3.62,1.2s2.64.48,4,.48c2.28,0,4.02-.4,5.23-1.19,1.21-.79,1.81-1.95,1.81-3.46,0-1.19-.4-2.14-1.2-2.87-.8-.73-1.94-1.35-3.42-1.85-1.48-.51-3.26-1.02-5.33-1.52-2.38-.61-4.37-1.3-5.97-2.08-1.6-.78-2.79-1.76-3.57-2.95-.78-1.19-1.17-2.73-1.17-4.62,0-2.37.57-4.38,1.71-6.02,1.14-1.64,2.71-2.88,4.72-3.71s4.23-1.25,6.68-1.25c1.63,0,3.19.18,4.67.54,1.48.36,2.86.84,4.13,1.45,1.28.61,2.41,1.31,3.39,2.09l-2.55,4.69Z"/>
+      <path d="M182.62,31.42v5.05h-24.84V.26h24.38v5.05h-18.62v10.36h16.17v4.69h-16.17v11.07h19.08Z"/>
+      <path d="M202.87,36.73c-2.55,0-4.88-.51-6.99-1.53-2.11-1.02-3.94-2.41-5.48-4.16-1.55-1.75-2.74-3.72-3.57-5.92-.83-2.19-1.25-4.45-1.25-6.76s.44-4.72,1.33-6.91c.88-2.19,2.12-4.15,3.7-5.87,1.58-1.72,3.42-3.08,5.51-4.08,2.09-1,4.39-1.51,6.91-1.51s4.97.53,7.06,1.58c2.09,1.05,3.9,2.47,5.43,4.23,1.53,1.77,2.7,3.74,3.52,5.92s1.22,4.42,1.22,6.73-.43,4.67-1.28,6.86c-.85,2.19-2.07,4.15-3.65,5.87-1.58,1.72-3.42,3.07-5.51,4.06-2.09.99-4.41,1.48-6.96,1.48ZM191.45,18.36c0,1.73.26,3.39.79,4.97.53,1.58,1.29,2.99,2.3,4.23,1,1.24,2.21,2.22,3.62,2.93,1.41.71,3.02,1.07,4.82,1.07s3.47-.37,4.9-1.12c1.43-.75,2.63-1.76,3.62-3.04.99-1.28,1.73-2.69,2.24-4.26.51-1.56.77-3.16.77-4.79,0-1.73-.27-3.38-.82-4.95-.54-1.56-1.33-2.97-2.35-4.21-1.02-1.24-2.24-2.22-3.65-2.93-1.41-.71-2.98-1.07-4.72-1.07-1.87,0-3.51.37-4.92,1.12s-2.61,1.75-3.6,3.01c-.99,1.26-1.73,2.67-2.24,4.23-.51,1.57-.77,3.16-.77,4.8Z"/>
+      <path d="M241.34,36.73c-2.89,0-5.33-.49-7.32-1.48-1.99-.99-3.59-2.33-4.8-4.03s-2.09-3.64-2.65-5.82c-.56-2.18-.84-4.44-.84-6.78V.26h5.76v18.36c0,1.67.16,3.27.48,4.82.32,1.55.86,2.93,1.61,4.16.75,1.22,1.75,2.19,3.01,2.91,1.26.71,2.82,1.07,4.69,1.07s3.54-.36,4.79-1.07c1.26-.71,2.27-1.7,3.04-2.96.77-1.26,1.31-2.65,1.63-4.18.32-1.53.48-3.11.48-4.74V.26h5.76v18.36c0,2.48-.3,4.82-.89,7.01-.6,2.19-1.51,4.12-2.75,5.79-1.24,1.67-2.86,2.97-4.85,3.9-1.99.94-4.38,1.4-7.17,1.4Z"/>
+      <path d="M264.6,36.47V.26h5.76v31.17h19.38v5.05h-25.15Z"/>
+    </svg>
+  )
+}
+
 function ShareIsland({ accent, data }: SlotProps) {
   const [copied, setCopied] = useState(false)
   const kakao = useKakaoShare()
@@ -1434,15 +1498,18 @@ function ShareIsland({ accent, data }: SlotProps) {
   }
 
   return (
-    <div style={{ display: "inline-flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
-      {kakao && (
-        <button onClick={shareViaKakao} style={{ ...btnStyle, border: "1px solid #FFE300", background: "#FFE300", color: "#3C1E1E", opacity: 1 }}>
-          카카오톡 공유
+    <div style={{ paddingTop: 28 }}>
+      <div style={{ display: "inline-flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+        {kakao && (
+          <button onClick={shareViaKakao} style={{ ...btnStyle, border: "1px solid #FFE300", background: "#FFE300", color: "#3C1E1E", opacity: 1 }}>
+            카카오톡 공유
+          </button>
+        )}
+        <button onClick={handleShare} style={btnStyle}>
+          {copied ? "청첩장 주소가 복사되었습니다" : "청첩장 주소 공유하기"}
         </button>
-      )}
-      <button onClick={handleShare} style={btnStyle}>
-        {copied ? "청첩장 주소가 복사되었습니다" : "청첩장 주소 공유하기"}
-      </button>
+      </div>
+      <VowSeoulLogotype style={{ display: "block", width: 88, height: "auto", margin: "20px auto 0", opacity: 0.5 }} />
     </div>
   )
 }

@@ -170,6 +170,16 @@ export interface BlockOverride {
   googleCalendarButtonEnabled?: boolean
   /** calendar 블럭 전용: true 면 D-day 숫자가 처음 나타날 때 0에서 실제 값까지 굴러 올라간다 (미설정 시 꺼짐) */
   ddayRollingEnabled?: boolean
+  /** calendar 블럭 전용: 예식일 강조 표시 모양 (미설정 시 원형) */
+  calendarDayShape?: "circle" | "heart" | "custom"
+  /** calendar 블럭 전용: calendarDayShape가 'custom'일 때 사용할 업로드 이미지 URL */
+  calendarDayCustomShapeUrl?: string
+  /** calendar 블럭 전용: 강조 표시 크기(px). 미설정 시 32 */
+  calendarDayShapeSize?: number
+  /** calendar 블럭 전용: 강조된 날짜 숫자의 텍스트 색상(hex). 미설정 시 흰색 */
+  calendarDayTextColor?: string
+  /** calendar 블럭 전용: 업로드한 SVG 모양에 입힐 색상(hex). 미설정 시 테마 accent 색 */
+  calendarDaySvgColor?: string
 }
 
 /**
@@ -195,6 +205,11 @@ export function extractBlockOverrides(overrides: unknown): Record<string, BlockO
     if (typeof r.icsButtonEnabled === "boolean") entry.icsButtonEnabled = r.icsButtonEnabled
     if (typeof r.googleCalendarButtonEnabled === "boolean") entry.googleCalendarButtonEnabled = r.googleCalendarButtonEnabled
     if (typeof r.ddayRollingEnabled === "boolean") entry.ddayRollingEnabled = r.ddayRollingEnabled
+    if (r.calendarDayShape === "circle" || r.calendarDayShape === "heart" || r.calendarDayShape === "custom") entry.calendarDayShape = r.calendarDayShape
+    if (typeof r.calendarDayCustomShapeUrl === "string" && r.calendarDayCustomShapeUrl) entry.calendarDayCustomShapeUrl = r.calendarDayCustomShapeUrl
+    if (typeof r.calendarDayShapeSize === "number" && Number.isFinite(r.calendarDayShapeSize)) entry.calendarDayShapeSize = r.calendarDayShapeSize
+    if (typeof r.calendarDayTextColor === "string" && r.calendarDayTextColor) entry.calendarDayTextColor = r.calendarDayTextColor
+    if (typeof r.calendarDaySvgColor === "string" && r.calendarDaySvgColor) entry.calendarDaySvgColor = r.calendarDaySvgColor
     if (Object.keys(entry).length > 0) out[key] = entry
   }
   return out

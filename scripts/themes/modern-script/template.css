@@ -286,6 +286,14 @@
   height: auto;
 }
 
+/* 좌우로 꽉 채우기 — 섹션 좌우 패딩만큼 음수 마진으로 밀어내 화면 끝까지 채운다 */
+.ms-greeting__image.is-fill {
+  max-width: none;
+  margin-left: calc(-1 * var(--section-px, 32px));
+  margin-right: calc(-1 * var(--section-px, 32px));
+  width: calc(100% + var(--section-px, 32px) * 2);
+}
+
 .ms-parents {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -336,128 +344,9 @@
   opacity: 0.5;
 }
 
-/* Sequence Section */
-.ms-timeline {
-  position: relative;
-  max-width: 300px;
-  margin: 0 auto;
-  padding-left: 2rem;
-  text-align: left;
-}
-
-.ms-timeline__line {
-  position: absolute;
-  left: 3px;
-  top: 0.5rem;
-  bottom: 0.5rem;
-  width: 1px;
-  background-color: var(--accent);
-  opacity: 0.2;
-}
-
-.ms-timeline__item {
-  position: relative;
-  padding-bottom: 2rem;
-}
-
-.ms-timeline__item:last-child {
-  padding-bottom: 0;
-}
-
-.ms-timeline__dot {
-  position: absolute;
-  left: -2rem;
-  top: 0.4rem;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background-color: var(--accent);
-  border: 2px solid var(--bg);
-  box-shadow: 0 0 0 1px rgba(232, 168, 124, 0.4);
-}
-
-.ms-timeline__time {
-  font-family: var(--font-en);
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--accent);
-  margin-bottom: 0.2rem;
-}
-
-.ms-timeline__event {
-  font-size: 0.9rem;
-  font-weight: 400;
-}
-
-/* Calendar Section */
-.ms-dday {
-  font-size: 1.1rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  color: var(--accent);
-  margin-bottom: 1.2rem;
-}
-
-.ms-calendar__card {
-  max-width: 320px;
-  margin: 0 auto;
-  padding: 1.5rem 1rem;
-}
-
-.ms-calendar__header {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  margin-bottom: 1.5rem;
-}
-
-.ms-calendar__month {
-  font-family: var(--font-en);
-  font-size: 1.25rem;
-  font-weight: 600;
-  letter-spacing: 0.15em;
-  color: var(--accent);
-}
-
-.ms-calendar__year {
-  font-size: 0.75rem;
-  opacity: 0.45;
-}
-
-.ms-calendar__grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 0.5rem 0.25rem;
-  text-align: center;
-}
-
-.ms-calendar__day-name {
-  font-size: 0.7rem;
-  font-weight: 600;
-  opacity: 0.5;
-  padding-bottom: 0.5rem;
-}
-
-.ms-calendar__day {
-  font-size: 0.85rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 1.8rem;
-  width: 1.8rem;
-  margin: 0 auto;
-}
-
-.ms-calendar__day--empty {
-  pointer-events: none;
-}
-
-.ms-calendar__day--active {
-  background-color: var(--accent);
-  color: #fff;
-  border-radius: 50%;
-  font-weight: 600;
-  box-shadow: 0 2px 8px rgba(232, 168, 124, 0.3);
+/* Share Section — 앞 섹션(RSVP)과 바로 이어지도록 위 여백을 없앤다. 다른 테마와 동일한 패턴. */
+.ms-share-section {
+  padding-top: 0;
 }
 
 /* Location Section */

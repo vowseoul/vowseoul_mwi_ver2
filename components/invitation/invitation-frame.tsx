@@ -46,6 +46,11 @@ export interface BlockOverride {
   icsButtonEnabled?: boolean
   googleCalendarButtonEnabled?: boolean
   ddayRollingEnabled?: boolean
+  calendarDayShape?: "circle" | "heart" | "custom"
+  calendarDayCustomShapeUrl?: string
+  calendarDayShapeSize?: number
+  calendarDayTextColor?: string
+  calendarDaySvgColor?: string
 }
 export type BlockOverrideMap = Record<string, BlockOverride>
 /** 섹션(블럭) 사이에 끼워 넣는 이미지. lib/theme-template.ts 의 SectionImage 와 동일한 형태 */
@@ -245,6 +250,10 @@ export function InvitationFrame({
       if (!key) return
       el.style.display = data[key] ? "block" : "none"
     })
+    // 인사말 이미지 비율 선택(현재 비율 / 좌우로 꽉 채우기) — greeting_image_ratio 값에 따라
+    // 이미지 래퍼에 is-fill 클래스를 토글한다. CSS 쪽 규칙은 각 테마 template.css에 있다.
+    const greetingImageWrap = doc.querySelector<HTMLElement>('[data-field-when="greeting_image"]')
+    if (greetingImageWrap) greetingImageWrap.classList.toggle("is-fill", data.greeting_image_ratio === "fill")
   }, [doc, data])
 
   // 토큰 → CSS 변수 주입 (tokens 변경 시 실시간 반영, 리로드 없음)
