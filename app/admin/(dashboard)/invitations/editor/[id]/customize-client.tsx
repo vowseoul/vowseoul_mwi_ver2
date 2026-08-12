@@ -13,6 +13,7 @@ import {
   buildThemeTokens,
   extractBlockOverrides,
   extractDisabledSlots,
+  extractIntroEnabled,
   extractSectionImages,
   getBlockManifest,
   getFieldManifest,
@@ -337,6 +338,10 @@ export default function CustomizeClient({
   const [scrollMotion, setScrollMotion] = useState<ScrollMotionSettings>(
     () => extractScrollMotion(invitation.customization_overrides)
   )
+  /** 오프닝 인트로 — 진입 시 신랑·신부 이름이 잠깐 나타났다 사라지는 연출. 기본 꺼짐 */
+  const [introEnabled, setIntroEnabled] = useState<boolean>(
+    () => extractIntroEnabled(invitation.customization_overrides)
+  )
   const [isUploadingSectionImage, setIsUploadingSectionImage] = useState(false)
   const addSectionImage = async (file: File) => {
     setIsUploadingSectionImage(true)
@@ -552,8 +557,10 @@ export default function CustomizeClient({
       : {}
     const preservedOverrideKeys: Record<string, unknown> = {}
     // "blocks" 를 여기서 빠뜨리면 매번 옛 값이 되살아난다 — disabled_slots 때 겪은 실수의 반복,
-    // PLAN_DESIGN_CONTROLS.md §5.3. scrollMotion도 아래에서 명시적으로 다시 채워 넣으므로 동일하게 제외한다.
-    for (const [k, v] of Object.entries(existingOverrides)) if (!k.startsWith("--") && k !== "disabled_slots" && k !== "blocks" && k !== "sectionImages" && k !== "scrollMotion") preservedOverrideKeys[k] = v
+    // PLAN_DESIGN_CONTROLS.md §5.3. scrollMotion/introEnabled도 아래에서 명시적으로 다시 채워
+    // 넣으므로 동일하게 제외한다.
+    const MANAGED_OVERRIDE_KEYS = new Set(["disabled_slots", "blocks", "sectionImages", "scrollMotion", "introEnabled"])
+    for (const [k, v] of Object.entries(existingOverrides)) if (!k.startsWith("--") && !MANAGED_OVERRIDE_KEYS.has(k)) preservedOverrideKeys[k] = v
 
     const existingContentData = (invitation.content_data && typeof invitation.content_data === "object")
       ? invitation.content_data as Record<string, unknown>
@@ -584,7 +591,7 @@ export default function CustomizeClient({
       .from("invitations")
       .update({
         content_data: contentPayload,
-        customization_overrides: { ...preservedOverrideKeys, ...cleanTokens, disabled_slots: disabledSlots, blocks: blockOverrides, sectionImages, scrollMotion },
+        customization_overrides: { ...preservedOverrideKeys, ...cleanTokens, disabled_slots: disabledSlots, blocks: blockOverrides, sectionImages, scrollMotion, introEnabled },
         bgm_url: bgmUrl || null,
         theme_version_id: themeVersionId,
         og_meta: { ...existingOgMeta, title: ogTitle || null, description: ogDescription || null, image: ogImage || null },
@@ -1152,6 +1159,22 @@ export default function CustomizeClient({
 
             <Card>
               <CardHeader>
+                <CardTitle className="text-base font-medium">청첩장 열기 연출</CardTitle>
+                <CardDescription>
+                  하객이 링크에 처음 들어왔을 때 신랑·신부 이름이 잠깐 나타났다 사라집니다. 재방문 시에도
+                  매번 보이므로 취향이 갈릴 수 있어 기본은 꺼짐입니다.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">오프닝 인트로 사용</span>
+                  <Switch checked={introEnabled} onCheckedChange={setIntroEnabled} />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
                 <CardTitle className="text-base font-medium">색상</CardTitle>
                 <CardDescription>비워두면 테마 기본값이 사용됩니다.</CardDescription>
               </CardHeader>
@@ -1412,6 +1435,13 @@ export default function CustomizeClient({
                                     onCheckedChange={(c) => setBlockOverride(b.key, { googleCalendarButtonEnabled: c })}
                                   />
                                 </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm">D-day 숫자 굴러 올라오는 연출</span>
+                                  <Switch
+                                    checked={override?.ddayRollingEnabled === true}
+                                    onCheckedChange={(c) => setBlockOverride(b.key, { ddayRollingEnabled: c })}
+                                  />
+                                </div>
                               </>
                             )}
                           </AccordionContent>
@@ -1664,6 +1694,7 @@ export default function CustomizeClient({
               hiddenBlocks={hiddenBlocks}
               sectionImages={sectionImages}
               scrollMotion={scrollMotion}
+              introEnabled={introEnabled}
               focusBlock={focusBlock}
               width={380}
               height={680}

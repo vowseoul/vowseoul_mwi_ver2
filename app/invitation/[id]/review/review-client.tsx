@@ -30,6 +30,7 @@ export default function ReviewClient({
   hiddenBlocks = [],
   sectionImages = [],
   scrollMotion,
+  introEnabled,
   reviewStatus,
   initialRevisions,
 }: {
@@ -43,6 +44,7 @@ export default function ReviewClient({
   hiddenBlocks?: string[]
   sectionImages?: SectionImage[]
   scrollMotion?: ScrollMotionSettings
+  introEnabled?: boolean
   reviewStatus: string
   initialRevisions: Revision[]
 }) {
@@ -147,6 +149,7 @@ export default function ReviewClient({
           hiddenBlocks={hiddenBlocks}
           sectionImages={sectionImages}
           scrollMotion={scrollMotion}
+          introEnabled={introEnabled}
           width={Math.min(size.w, 480)}
           height={size.h - 44 - 60}
           onBlockClick={commentMode ? (key) => setActiveBlock(key) : undefined}

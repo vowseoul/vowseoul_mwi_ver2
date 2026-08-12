@@ -268,10 +268,45 @@ function buildGoogleCalendarHref(opts: { title: string; location: string; dateSt
   return `https://calendar.google.com/calendar/render?${params.toString()}`
 }
 
+/** D-day 숫자가 처음 나타날 때 0에서 실제 값까지 한 번 굴러 올라간다. 그 이후(매분 자동
+ * 갱신)는 애니메이션 없이 실제 값을 그대로 반영한다 — 매번 다시 구르면 산만해진다.
+ * OS "동작 줄이기" 설정을 켠 하객에게는 애니메이션 없이 바로 최종 값을 보여준다. */
+function RollingNumber({ value, enabled }: { value: number; enabled: boolean }) {
+  const [display, setDisplay] = useState(value)
+  const rolledRef = useRef(false)
+
+  useEffect(() => {
+    if (rolledRef.current) {
+      setDisplay(value)
+      return
+    }
+    rolledRef.current = true
+    const reduced = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    if (!enabled || reduced) {
+      setDisplay(value)
+      return
+    }
+    let raf: number
+    const duration = 700
+    const start = performance.now()
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration)
+      const eased = 1 - Math.pow(1 - t, 3)
+      setDisplay(Math.round(value * eased))
+      if (t < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value])
+
+  return <>{display}</>
+}
 function CalendarIsland({ accent, data, raw, blockOverrides }: SlotProps) {
   const dateStr = (typeof raw?.wedding_date === "string" ? raw.wedding_date : data.wedding_date) || ""
   const timeStr = (typeof raw?.wedding_time === "string" ? raw.wedding_time : data.wedding_time) || ""
   const ddayEnabled = blockOverrides?.calendar?.ddayEnabled !== false
+  const ddayRollingEnabled = blockOverrides?.calendar?.ddayRollingEnabled === true
   const [now, setNow] = useState(() => new Date())
 
   useEffect(() => {
@@ -352,7 +387,7 @@ function CalendarIsland({ accent, data, raw, blockOverrides }: SlotProps) {
             {[["DAYS", daysLeft], ["HOURS", hoursLeft], ["MINUTES", minutesLeft]].map(([label, value]) => (
               <div key={String(label)} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                 <p style={{ fontSize: 14, letterSpacing: ".05em", opacity: 0.6 }}>{label}</p>
-                <p style={{ fontSize: 36, marginTop: 4, lineHeight: 1 }}>{value}</p>
+                <p style={{ fontSize: 36, marginTop: 4, lineHeight: 1 }}><RollingNumber value={value as number} enabled={ddayRollingEnabled} /></p>
               </div>
             ))}
           </div>
@@ -377,6 +412,19 @@ const SAMPLE_GALLERY = [
   "https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?w=500&q=80",
   "https://images.unsplash.com/photo-1522673607200-164d1b6ce486?w=500&q=80",
 ]
+/** 로드 완료 시 서서히 나타나는 이미지 — 사진이 뚝뚝 튀어나오는 대신 부드럽게 채워진다.
+ * 캐시된 이미지도 브라우저가 load 이벤트를 다시 쏴 주므로 항상 정상 동작한다. */
+function FadeImage({ src, alt, style }: { src: string; alt: string; style?: React.CSSProperties }) {
+  const [loaded, setLoaded] = useState(false)
+  return (
+    <img
+      src={src}
+      alt={alt}
+      onLoad={() => setLoaded(true)}
+      style={{ ...style, opacity: loaded ? 1 : 0, transition: "opacity 400ms ease-out" }}
+    />
+  )
+}
 function GalleryIsland({ raw }: SlotProps) {
   const rawImages = raw?.gallery_images
   const images = Array.isArray(rawImages) && rawImages.length > 0
@@ -409,7 +457,7 @@ function GalleryIsland({ raw }: SlotProps) {
     <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, width: "100%" }}>
       {images.map((src, i) => (
         <div key={i} onClick={() => setLightboxIndex(i)} style={{ aspectRatio: "1/1", overflow: "hidden", cursor: "pointer" }}>
-          <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition }} />
+          <FadeImage src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition }} />
         </div>
       ))}
     </div>
@@ -421,7 +469,7 @@ function GalleryIsland({ raw }: SlotProps) {
           onClick={() => setLightboxIndex(i)}
           style={{ width: 220, height: 280, flexShrink: 0, scrollSnapAlign: "center", overflow: "hidden", cursor: "pointer" }}
         >
-          <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition }} />
+          <FadeImage src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition }} />
         </div>
       ))}
     </div>
@@ -523,8 +571,10 @@ function AccountRow({ label, value, accent }: { label: string; value: string; ac
           padding: "6px 12px", borderRadius: 7, cursor: "pointer", whiteSpace: "nowrap",
           border: `1px solid ${accent}`, background: copied ? accent : "transparent",
           color: copied ? "#fff" : accent, fontSize: 12,
+          transition: "background 200ms ease-out, color 200ms ease-out, transform 200ms ease-out",
+          transform: copied ? "scale(1.04)" : "scale(1)",
         }}>
-          {copied ? "복사됨" : "복사"}
+          {copied ? "✓ 복사됨" : "복사"}
         </button>
       </div>
     </div>
@@ -551,8 +601,10 @@ function ExtraAccountRow({ label, value, accent }: { label: string; value: strin
         padding: "6px 12px", borderRadius: 7, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
         border: `1px solid ${accent}`, background: copied ? accent : "transparent",
         color: copied ? "#fff" : accent, fontSize: 12,
+        transition: "background 200ms ease-out, color 200ms ease-out, transform 200ms ease-out",
+        transform: copied ? "scale(1.04)" : "scale(1)",
       }}>
-        {copied ? "복사됨" : "복사"}
+        {copied ? "✓ 복사됨" : "복사"}
       </button>
     </div>
   )
@@ -792,6 +844,36 @@ const MEAL_NONE = "__meal_none__"
  * 이전 버전 UX(트리거 버튼 → 모달 폼)를 이식하되, 저장은 새 스키마
  * rsvp_responses 테이블에 맞춰 구현. invitationId 가 없으면 미리보기 모드.
  * ------------------------------------------------------------------ */
+/** 제출 성공 시 그려지는 체크마크 — stroke-dashoffset을 마운트 직후 0으로 옮겨 "그려지는" 느낌을 준다.
+ * OS "동작 줄이기" 설정을 켠 하객에게는 애니메이션 없이 바로 완성된 상태로 보여준다. */
+function CheckmarkDraw({ color }: { color: string }) {
+  const [drawn, setDrawn] = useState(false)
+  const prefersReduced = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+  useEffect(() => {
+    if (prefersReduced) { setDrawn(true); return }
+    const raf = requestAnimationFrame(() => setDrawn(true))
+    return () => cancelAnimationFrame(raf)
+  }, [prefersReduced])
+  const pathLength = 34
+  return (
+    <svg width="44" height="44" viewBox="0 0 44 44" style={{ display: "block", margin: "0 auto 8px" }}>
+      <circle cx="22" cy="22" r="20" fill="none" stroke={color} strokeWidth="2" opacity="0.25" />
+      <path
+        d="M12 22 L19 29 L32 15"
+        fill="none"
+        stroke={color}
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{
+          strokeDasharray: pathLength,
+          strokeDashoffset: drawn ? 0 : pathLength,
+          transition: prefersReduced ? "none" : "stroke-dashoffset 500ms ease-out",
+        }}
+      />
+    </svg>
+  )
+}
 function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
   const [open, setOpen] = useState(false)
   const [done, setDone] = useState(false)
@@ -893,6 +975,7 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
           <>참석 응답이 취소되었습니다.</>
         ) : (
           <>
+            <CheckmarkDraw color={accent} />
             {name || "하객"}님, 참석 의사가 전달되었습니다. 감사합니다 ♥
             <div style={{ marginTop: 10 }}>
               <button

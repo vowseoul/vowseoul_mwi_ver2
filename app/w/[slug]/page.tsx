@@ -1,6 +1,6 @@
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import TemplateInvitationClient from "./template-invitation-client"
-import { buildInvitationTokens, extractBlockOverrides, extractDisabledSlots, extractSectionImages, getHiddenBlocks, type ThemeRow } from "@/lib/theme-template"
+import { buildInvitationTokens, extractBlockOverrides, extractDisabledSlots, extractIntroEnabled, extractSectionImages, getHiddenBlocks, type ThemeRow } from "@/lib/theme-template"
 import { extractScrollMotion } from "@/lib/scroll-motion"
 import { mergeInvitationRaw, type RawInvitationData } from "@/lib/invitation-data"
 import { fetchRegisteredFonts, resolveFontFaces } from "@/lib/fonts"
@@ -195,6 +195,7 @@ export default async function Page({ params }: PageProps) {
         hiddenBlocks={getHiddenBlocks(disabledSlots)}
         sectionImages={extractSectionImages(invitation.customization_overrides)}
         scrollMotion={extractScrollMotion(invitation.customization_overrides)}
+        introEnabled={extractIntroEnabled(invitation.customization_overrides)}
       />
     )
   }

@@ -25,6 +25,7 @@ export default function TemplateInvitationClient({
   hiddenBlocks = [],
   sectionImages = [],
   scrollMotion,
+  introEnabled,
 }: {
   themeRow: ThemeRow
   raw: RawInvitationData
@@ -41,6 +42,8 @@ export default function TemplateInvitationClient({
   sectionImages?: SectionImage[]
   /** 스크롤 시 섹션 진입 연출 (customization_overrides.scrollMotion) */
   scrollMotion?: ScrollMotionSettings
+  /** 진입 시 오프닝 인트로 연출 여부 (customization_overrides.introEnabled) */
+  introEnabled?: boolean
 }) {
   const template = toThemeTemplate(themeRow)
   // 실제 청첩장은 화면 전체를 채운다 (뷰포트 기준)
@@ -74,6 +77,7 @@ export default function TemplateInvitationClient({
         hiddenBlocks={hiddenBlocks}
         sectionImages={sectionImages}
         scrollMotion={scrollMotion}
+        introEnabled={introEnabled}
         width={size.w}
         height={size.h}
         preventZoom

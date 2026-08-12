@@ -168,6 +168,8 @@ export interface BlockOverride {
   icsButtonEnabled?: boolean
   /** calendar 블럭 전용: false 면 "구글 캘린더" 버튼을 숨긴다 (미설정 시 노출) */
   googleCalendarButtonEnabled?: boolean
+  /** calendar 블럭 전용: true 면 D-day 숫자가 처음 나타날 때 0에서 실제 값까지 굴러 올라간다 (미설정 시 꺼짐) */
+  ddayRollingEnabled?: boolean
 }
 
 /**
@@ -192,6 +194,7 @@ export function extractBlockOverrides(overrides: unknown): Record<string, BlockO
     if (typeof r.ddayEnabled === "boolean") entry.ddayEnabled = r.ddayEnabled
     if (typeof r.icsButtonEnabled === "boolean") entry.icsButtonEnabled = r.icsButtonEnabled
     if (typeof r.googleCalendarButtonEnabled === "boolean") entry.googleCalendarButtonEnabled = r.googleCalendarButtonEnabled
+    if (typeof r.ddayRollingEnabled === "boolean") entry.ddayRollingEnabled = r.ddayRollingEnabled
     if (Object.keys(entry).length > 0) out[key] = entry
   }
   return out
@@ -319,6 +322,16 @@ export function buildInvitationTokens(
  * 꺼둔 기능"을 나타낸다 — 예: 이 커플만 RSVP를 빼달라는 요청. '--' 토큰 오버라이드와
  * 같은 customization_overrides 컬럼을 공유하되 CSS 변수가 아닌 별도 키라 서로 간섭하지 않는다.
  */
+/**
+ * customization_overrides(jsonb)에서 introEnabled(오프닝 인트로 연출 여부)를 추출한다.
+ * 다른 boolean 최상위 키(scrollMotion 등)와 마찬가지로 별도 키를 써서 서로 간섭하지 않는다.
+ * 기본값은 false — 취향이 크게 갈리는 연출이라 담당자가 의식적으로 켜야 한다.
+ */
+export function extractIntroEnabled(overrides: unknown): boolean {
+  if (!overrides || typeof overrides !== "object") return false
+  return (overrides as Record<string, unknown>).introEnabled === true
+}
+
 export function extractDisabledSlots(overrides: unknown): string[] {
   if (!overrides || typeof overrides !== "object") return []
   const value = (overrides as Record<string, unknown>).disabled_slots

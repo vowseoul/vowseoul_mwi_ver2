@@ -45,6 +45,7 @@ export interface BlockOverride {
   ddayEnabled?: boolean
   icsButtonEnabled?: boolean
   googleCalendarButtonEnabled?: boolean
+  ddayRollingEnabled?: boolean
 }
 export type BlockOverrideMap = Record<string, BlockOverride>
 /** 섹션(블럭) 사이에 끼워 넣는 이미지. lib/theme-template.ts 의 SectionImage 와 동일한 형태 */
@@ -89,6 +90,8 @@ interface InvitationFrameProps {
   onBlockClick?: (blockKey: string) => void
   /** 하객이 스크롤할 때 섹션이 나타나는 방식. 없거나 preset이 'none'이면 정적으로 표시(기본값) */
   scrollMotion?: ScrollMotionSettings
+  /** true면 진입 시 신랑·신부 이름이 잠깐 나타났다 사라지는 오프닝 연출을 보여준다 (기본 꺼짐) */
+  introEnabled?: boolean
 }
 
 function buildSrcDoc(template: ThemeTemplate): string {
@@ -186,6 +189,7 @@ export function InvitationFrame({
   sectionImages = [],
   onBlockClick,
   scrollMotion,
+  introEnabled = false,
 }: InvitationFrameProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [doc, setDoc] = useState<Document | null>(null)
@@ -406,6 +410,112 @@ export function InvitationFrame({
     const target = doc.querySelector(`[data-block="${focusBlock}"]`)
     target?.scrollIntoView({ behavior: "smooth", block: "start" })
   }, [doc, focusBlock])
+
+  // 블럭 포커스 하이라이트 — "지금 이 섹션을 편집 중"임을 테두리 펄스 1회로 명확히 보여준다
+  // (Visibility). 편집기 전용이라 focusBlock을 넘기지 않는 발행/검수 화면에서는 아무 일도 없다.
+  useEffect(() => {
+    if (!doc || !focusBlock) return
+    const target = doc.querySelector(`[data-block="${focusBlock}"]`) as HTMLElement | null
+    if (!target) return
+    if (doc.defaultView?.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+
+    const styleId = "vs-focus-pulse-style"
+    if (!doc.getElementById(styleId)) {
+      const styleEl = doc.createElement("style")
+      styleEl.id = styleId
+      styleEl.textContent = `
+        .vs-focus-pulse { animation: vs-focus-pulse-ring 900ms ease-out; }
+        @keyframes vs-focus-pulse-ring {
+          0% { box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--accent, #d76c6c) 70%, transparent); }
+          100% { box-shadow: inset 0 0 0 3px transparent; }
+        }
+      `
+      doc.head.appendChild(styleEl)
+    }
+    target.classList.remove("vs-focus-pulse")
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    void target.offsetWidth // 리플로우를 강제해 같은 블럭을 다시 눌러도 애니메이션이 재생되게 한다
+    target.classList.add("vs-focus-pulse")
+    const timer = setTimeout(() => target.classList.remove("vs-focus-pulse"), 900)
+    return () => clearTimeout(timer)
+  }, [doc, focusBlock])
+
+  // 스크롤 유도 인디케이터 — 첫 화면(히어로) 하단에 은은한 화살표를 보여줘 "더 있다"는 걸
+  // 암시한다(Affordance). 스크롤 이벤트는 1회성·passive라 성능에 영향이 없다. 스크롤 모션
+  // 설정(scrollMotion)과 무관하게 항상 켜져 있다 — 이건 연출이 아니라 안내다.
+  useEffect(() => {
+    if (!doc) return
+    const blocks = doc.querySelectorAll("[data-block]")
+    if (blocks.length < 2) return // 스크롤할 다음 섹션이 없으면 힌트도 필요 없다
+
+    const styleId = "vs-scroll-hint-style"
+    if (!doc.getElementById(styleId)) {
+      const styleEl = doc.createElement("style")
+      styleEl.id = styleId
+      styleEl.textContent = `
+        .vs-scroll-hint { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+          opacity: 0.7; pointer-events: none; z-index: 40; transition: opacity 400ms ease-out;
+          animation: vs-scroll-hint-bounce 1.6s ease-in-out infinite; }
+        .vs-scroll-hint--hidden { opacity: 0; }
+        @keyframes vs-scroll-hint-bounce { 0%, 100% { transform: translateX(-50%) translateY(0); } 50% { transform: translateX(-50%) translateY(8px); } }
+        @media (prefers-reduced-motion: reduce) { .vs-scroll-hint { animation: none; } }
+      `
+      doc.head.appendChild(styleEl)
+    }
+
+    const hintId = "vs-scroll-hint"
+    if (doc.getElementById(hintId)) return
+    const hint = doc.createElement("div")
+    hint.id = hintId
+    hint.className = "vs-scroll-hint"
+    hint.innerHTML = `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`
+    hint.style.color = "var(--ink, #333)"
+    doc.body.appendChild(hint)
+
+    const view = doc.defaultView
+    const onFirstScroll = () => {
+      hint.classList.add("vs-scroll-hint--hidden")
+      setTimeout(() => hint.remove(), 450)
+    }
+    view?.addEventListener("scroll", onFirstScroll, { once: true, passive: true })
+    return () => view?.removeEventListener("scroll", onFirstScroll)
+  }, [doc])
+
+  // 오프닝 인트로 — 진입 시 신랑·신부 이름이 잠깐 나타났다 사라진다. doc이 바뀔 때(=이 iframe이
+  // 실제로 새로 그려질 때)만 한 번 재생되므로, 관리자가 설정을 만지작거릴 때마다 반복 재생되지
+  // 않는다. 콘텐츠 도달을 늦추지 않도록 1.2초 안에 끝나고, 탭하면 즉시 건너뛸 수 있다.
+  useEffect(() => {
+    if (!doc || !introEnabled) return
+    if (doc.getElementById("vs-intro-overlay")) return
+    if (doc.defaultView?.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+
+    const groom = data.groom_name || ""
+    const bride = data.bride_name || ""
+    if (!groom && !bride) return
+
+    const overlay = doc.createElement("div")
+    overlay.id = "vs-intro-overlay"
+    overlay.style.cssText =
+      "position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;" +
+      "background:var(--bg,#fff);color:var(--ink,#333);font-family:var(--font-kr,inherit);" +
+      "opacity:1;transition:opacity 500ms ease-out;"
+    overlay.innerHTML = `<div style="text-align:center;font-size:22px;letter-spacing:.05em;">${groom}<span style="opacity:.45;margin:0 10px;">&amp;</span>${bride}</div>`
+    doc.body.appendChild(overlay)
+
+    let dismissed = false
+    const dismiss = () => {
+      if (dismissed) return
+      dismissed = true
+      overlay.style.opacity = "0"
+      setTimeout(() => overlay.remove(), 500)
+    }
+    overlay.addEventListener("click", dismiss)
+    const timer = setTimeout(dismiss, 900)
+    return () => {
+      clearTimeout(timer)
+      overlay.removeEventListener("click", dismiss)
+    }
+  }, [doc, introEnabled, data.groom_name, data.bride_name])
 
   // 핀치줌·더블탭 확대 차단 (preventZoom=true 일 때만). 콘텐츠는 iframe 내부(별도 문서)에
   // 렌더되므로 터치 이벤트도 그 문서에 직접 등록해야 한다 — 부모 문서에 걸면 iframe 안의
