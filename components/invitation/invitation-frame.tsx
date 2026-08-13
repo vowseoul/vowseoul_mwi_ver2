@@ -4,6 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { buildFontFaceRule, joinFontFaceCss } from "@/lib/fonts"
 import { SCROLL_MOTION_INTENSITY_PARAMS, type ScrollMotionSettings } from "@/lib/scroll-motion"
+import type { BlockOverride, SectionImage } from "@/lib/theme-template"
+
+export type { BlockOverride, SectionImage }
 
 /**
  * InvitationFrame — B(하이브리드) + iframe 구조의 핵심 렌더러 프로토타입.
@@ -32,41 +35,7 @@ export interface ThemeTemplate {
 export type FieldData = Record<string, string>
 export type TokenMap = Record<string, string>
 export type SlotMap = Record<string, React.ReactNode>
-/** 블럭(섹션) 하나에 대한 여백/타이틀 오버라이드. lib/theme-template.ts 의 BlockOverride 와 동일한 형태 */
-export interface BlockOverride {
-  py?: number
-  title?: string
-  label?: string
-  /** rsvp 블럭 전용 서브옵션 (§slot-registry.tsx RsvpIsland) */
-  mealEnabled?: boolean
-  shuttleEnabled?: boolean
-  rsvpDeadline?: string
-  /** calendar 블럭 전용 서브옵션 (§slot-registry.tsx CalendarIsland) */
-  ddayEnabled?: boolean
-  icsButtonEnabled?: boolean
-  googleCalendarButtonEnabled?: boolean
-  ddayRollingEnabled?: boolean
-  calendarDayShape?: "circle" | "heart" | "custom"
-  calendarDayCustomShapeUrl?: string
-  calendarDayShapeSize?: number
-  calendarDayTextColor?: string
-  calendarDaySvgColor?: string
-  calendarDateText?: string
-  calendarTimeText?: string
-  /** greeting 블럭 전용 서브옵션 (§invitation-frame.tsx 인사말 아이콘 이펙트) */
-  greetingIconShape?: "heart" | "custom"
-  greetingIconCustomUrl?: string
-  greetingIconSize?: number
-  greetingIconColor?: string
-}
 export type BlockOverrideMap = Record<string, BlockOverride>
-/** 섹션(블럭) 사이에 끼워 넣는 이미지. lib/theme-template.ts 의 SectionImage 와 동일한 형태 */
-export interface SectionImage {
-  id: string
-  url: string
-  afterBlock: string
-  caption?: string
-}
 export interface FontFace {
   family: string
   /** 구글 폰트 등 @import 임베드 코드 */

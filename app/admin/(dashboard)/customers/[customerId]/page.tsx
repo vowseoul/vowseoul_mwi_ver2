@@ -50,7 +50,6 @@ import { toast } from 'sonner'
 
 export default function CustomerDetailPage({ params }: { params: Promise<{ customerId: string }> }) {
   const { customerId } = use(params)
-  const router = React.useRouter ? React.useRouter() : null // fallback in case useRouter isn't natively bound
 
   const { data: customer, isLoading, error } = useCustomerQuery(customerId)
   const updateMutation = useUpdateCustomerMutation()

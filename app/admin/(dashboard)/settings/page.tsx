@@ -20,6 +20,7 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
 import { Save, Globe, Mail, CreditCard, Bell, Shield, Image as ImageIcon, Upload, Loader2, Check, Users, Trash2, Plus } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { BUCKET_NAME } from "@/lib/storage"
 import { createClient } from "@supabase/supabase-js"
 import { DATA_RETENTION_SETTINGS_KEY, DEFAULT_RETENTION_DAYS, parseRetentionSettings } from "@/lib/data-retention"
 import { SELF_EDIT_SETTINGS_KEY, parseSelfEditSettings } from "@/lib/self-edit"
@@ -319,7 +320,7 @@ export default function AdminSettingsPage() {
 
   const fetchImages = async () => {
     setIsLoadingImages(true)
-    const { data, error } = await supabase.storage.from('vow-seoul-storage').list('main-images')
+    const { data, error } = await supabase.storage.from(BUCKET_NAME).list('main-images')
     if (data) {
       const validImages = data.filter(file => file.name !== '.emptyFolderPlaceholder' && file.name !== '.DS_Store')
       setImages(validImages)
@@ -338,7 +339,7 @@ export default function AdminSettingsPage() {
 
     try {
       const { error: uploadError } = await supabase.storage
-        .from('vow-seoul-storage')
+        .from(BUCKET_NAME)
         .upload(filePath, file)
       
       if (uploadError) throw uploadError
@@ -352,7 +353,7 @@ export default function AdminSettingsPage() {
 
       setLogoPath(filePath)
       // Force refresh cached logo url in localStorage
-      const publicUrl = supabase.storage.from('vow-seoul-storage').getPublicUrl(filePath).data.publicUrl
+      const publicUrl = supabase.storage.from(BUCKET_NAME).getPublicUrl(filePath).data.publicUrl
       if (typeof window !== 'undefined' && publicUrl) {
         localStorage.setItem('vow_seoul_custom_logo', publicUrl)
       }
@@ -376,7 +377,7 @@ export default function AdminSettingsPage() {
     const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`
     const filePath = `main-images/${fileName}`
 
-    const { error } = await supabase.storage.from('vow-seoul-storage').upload(filePath, file)
+    const { error } = await supabase.storage.from(BUCKET_NAME).upload(filePath, file)
     
     setIsUploading(false)
     if (error) {
@@ -430,7 +431,7 @@ export default function AdminSettingsPage() {
     return true
   }
 
-  const currentImageUrl = supabase.storage.from('vow-seoul-storage').getPublicUrl(currentMainImagePath).data.publicUrl
+  const currentImageUrl = supabase.storage.from(BUCKET_NAME).getPublicUrl(currentMainImagePath).data.publicUrl
 
 
   return (
@@ -491,7 +492,7 @@ export default function AdminSettingsPage() {
                     {logoPath ? (
                       /* eslint-disable-next-line @next/next/no-img-element */
                       <img 
-                        src={supabase.storage.from('vow-seoul-storage').getPublicUrl(logoPath).data.publicUrl} 
+                        src={supabase.storage.from(BUCKET_NAME).getPublicUrl(logoPath).data.publicUrl}
                         alt="Logo Preview" 
                         className="max-w-full max-h-full object-contain"
                       />
@@ -695,7 +696,7 @@ export default function AdminSettingsPage() {
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                         {images.map((img) => {
                           const imgPath = `main-images/${img.name}`
-                          const url = supabase.storage.from('vow-seoul-storage').getPublicUrl(imgPath).data.publicUrl
+                          const url = supabase.storage.from(BUCKET_NAME).getPublicUrl(imgPath).data.publicUrl
                           const isSelected = selectedImagePath === imgPath
 
                           return (
