@@ -1541,6 +1541,23 @@ export default function CustomizeClient({
                                 </div>
 
                                 <Field className="border-t pt-4">
+                                  <FieldLabel>달력 아래 날짜 문구</FieldLabel>
+                                  <Input
+                                    value={override?.calendarDateText ?? ""}
+                                    onChange={(e) => setBlockOverride(b.key, { calendarDateText: e.target.value })}
+                                    placeholder="비워두면 예식일로 자동 표시"
+                                  />
+                                </Field>
+                                <Field>
+                                  <FieldLabel>달력 아래 시간 문구</FieldLabel>
+                                  <Input
+                                    value={override?.calendarTimeText ?? ""}
+                                    onChange={(e) => setBlockOverride(b.key, { calendarTimeText: e.target.value })}
+                                    placeholder="비워두면 요일·예식 시간으로 자동 표시"
+                                  />
+                                </Field>
+
+                                <Field className="border-t pt-4">
                                   <FieldLabel>예식일 강조 표시 모양</FieldLabel>
                                   <RadioGroup
                                     value={override?.calendarDayShape || "circle"}

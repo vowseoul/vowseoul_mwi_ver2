@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Copy, Check, Phone, MessageSquare, MessageCircle, Send, Instagram } from "lucide-react"
+import { Copy, Check, Phone, MessageSquare, MessageCircle, Send, Instagram, Calendar as CalendarIcon } from "lucide-react"
 import type { FieldData, BlockOverrideMap } from "./invitation-frame"
 import type { RawInvitationData } from "@/lib/invitation-data"
 import { supabase } from "@/lib/supabase"
@@ -366,6 +366,12 @@ function CalendarIsland({ accent, data, raw, blockOverrides }: SlotProps) {
   const daySvgColor = blockOverrides?.calendar?.calendarDaySvgColor || accent
   const dayCustomUrl = blockOverrides?.calendar?.calendarDayCustomShapeUrl
   const [now, setNow] = useState(() => new Date())
+  // 폼 입력값(wedding_date/wedding_time) 기준 기본값 — 관리자가 편집기 "블럭" 카드에서 직접 문구로
+  // 덮어쓸 수 있다(§customize-client.tsx calendarDateText/calendarTimeText).
+  const defaultDateText = dateStr ? `${dateStr.slice(0, 4)}년 ${dateStr.slice(5, 7)}월 ${dateStr.slice(8, 10)}일` : ""
+  const defaultTimeText = [data.wedding_weekday, timeStr].filter(Boolean).join(" ")
+  const dateText = blockOverrides?.calendar?.calendarDateText || defaultDateText
+  const timeText = blockOverrides?.calendar?.calendarTimeText || defaultTimeText
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60_000) // 분 단위 갱신
@@ -410,6 +416,12 @@ function CalendarIsland({ accent, data, raw, blockOverrides }: SlotProps) {
             )
           })}
         </div>
+        {(dateText || timeText) && (
+          <div style={{ marginTop: 20, textAlign: "center" }}>
+            {dateText && <p style={{ fontSize: 13, fontWeight: 600 }}>{dateText}</p>}
+            {timeText && <p style={{ fontSize: 13, marginTop: 2, opacity: 0.7 }}>{timeText}</p>}
+          </div>
+        )}
       </div>
 
       {/* 캘린더 앱에 일정 추가 — iOS/macOS는 .ics 다운로드, 그 외엔 구글 캘린더 링크가 UX가 더 낫다.
@@ -1042,9 +1054,11 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
   return (
     <div style={{ maxWidth: 320, margin: "0 auto" }}>
       <button onClick={() => setOpen(true)} style={{
-        width: "100%", padding: "13px 0", borderRadius: 6, border: "none", cursor: "pointer",
+        width: "100%", padding: "10px 0", borderRadius: 6, border: "none", cursor: "pointer",
         background: accent, color: "#fff", fontSize: 14, letterSpacing: ".03em",
+        display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
       }}>
+        <CalendarIcon size={16} />
         참석 의사 전달하기
       </button>
       {deadlineLabel && (

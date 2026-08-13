@@ -120,7 +120,7 @@ export default function AdminLayout({
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
-      <aside className="hidden w-64 border-r border-border bg-background lg:block">
+      <aside className="hidden w-64 shrink-0 border-r border-border bg-background lg:block">
         <div className="flex h-16 items-center border-b border-border px-6 gap-2">
           <Link href="/admin" className="flex items-center">
             <Logo className="h-4.5 w-auto text-foreground" />
@@ -156,7 +156,7 @@ export default function AdminLayout({
       </aside>
 
       {/* Main Content */}
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         {/* Header */}
         <header className="flex h-16 items-center justify-between border-b border-border bg-background px-4 lg:px-6">
           <div className="flex items-center gap-4">

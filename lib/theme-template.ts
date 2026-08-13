@@ -199,6 +199,10 @@ export interface BlockOverride {
   calendarDayTextColor?: string
   /** calendar 블럭 전용: 업로드한 SVG 모양에 입힐 색상(hex). 미설정 시 테마 accent 색 */
   calendarDaySvgColor?: string
+  /** calendar 블럭 전용: 달력 그리드 아래 날짜 줄 텍스트. 미설정 시 wedding_date에서 "YYYY년 MM월 DD일"로 자동 계산 */
+  calendarDateText?: string
+  /** calendar 블럭 전용: 달력 그리드 아래 시간 줄 텍스트. 미설정 시 "요일 wedding_time"으로 자동 계산 */
+  calendarTimeText?: string
   /** greeting 블럭 전용: 인사말 아이콘 모양 (미설정 시 하트) */
   greetingIconShape?: "heart" | "custom"
   /** greeting 블럭 전용: greetingIconShape가 'custom'일 때 사용할 업로드 이미지 URL */
@@ -237,6 +241,8 @@ export function extractBlockOverrides(overrides: unknown): Record<string, BlockO
     if (typeof r.calendarDayShapeSize === "number" && Number.isFinite(r.calendarDayShapeSize)) entry.calendarDayShapeSize = r.calendarDayShapeSize
     if (typeof r.calendarDayTextColor === "string" && r.calendarDayTextColor) entry.calendarDayTextColor = r.calendarDayTextColor
     if (typeof r.calendarDaySvgColor === "string" && r.calendarDaySvgColor) entry.calendarDaySvgColor = r.calendarDaySvgColor
+    if (typeof r.calendarDateText === "string" && r.calendarDateText) entry.calendarDateText = r.calendarDateText
+    if (typeof r.calendarTimeText === "string" && r.calendarTimeText) entry.calendarTimeText = r.calendarTimeText
     if (r.greetingIconShape === "heart" || r.greetingIconShape === "custom") entry.greetingIconShape = r.greetingIconShape
     if (typeof r.greetingIconCustomUrl === "string" && r.greetingIconCustomUrl) entry.greetingIconCustomUrl = r.greetingIconCustomUrl
     if (typeof r.greetingIconSize === "number" && Number.isFinite(r.greetingIconSize)) entry.greetingIconSize = r.greetingIconSize

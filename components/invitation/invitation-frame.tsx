@@ -51,6 +51,8 @@ export interface BlockOverride {
   calendarDayShapeSize?: number
   calendarDayTextColor?: string
   calendarDaySvgColor?: string
+  calendarDateText?: string
+  calendarTimeText?: string
   /** greeting 블럭 전용 서브옵션 (§invitation-frame.tsx 인사말 아이콘 이펙트) */
   greetingIconShape?: "heart" | "custom"
   greetingIconCustomUrl?: string
