@@ -22,6 +22,7 @@ export default function TemplateInvitationClient({
   fontFaces = [],
   disabledSlots = [],
   blockOverrides = {},
+  blockOrder,
   hiddenBlocks = [],
   sectionImages = [],
   scrollMotion,
@@ -36,6 +37,8 @@ export default function TemplateInvitationClient({
   disabledSlots?: string[]
   /** 블럭별 여백/타이틀 오버라이드 (customization_overrides.blocks) */
   blockOverrides?: BlockOverrideMap
+  /** 블럭 노출 순서 (invitations.block_order). 없으면 테마 기본 순서 */
+  blockOrder?: string[]
   /** disabledSlots 중 섹션 전체를 감춰야 하는 블럭 키 (getHiddenBlocks) */
   hiddenBlocks?: string[]
   /** 섹션 사이 삽입 이미지 (customization_overrides.sectionImages) */
@@ -74,6 +77,7 @@ export default function TemplateInvitationClient({
         slots={slots}
         fontFaces={fontFaces}
         blockOverrides={blockOverrides}
+        blockOrder={blockOrder}
         hiddenBlocks={hiddenBlocks}
         sectionImages={sectionImages}
         scrollMotion={scrollMotion}

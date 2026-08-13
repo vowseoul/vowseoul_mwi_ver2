@@ -82,6 +82,9 @@ interface InvitationFrameProps {
   fontFaces?: FontFace[]
   /** 블럭별 여백/타이틀 오버라이드. [data-block="키"] 섹션에 스코프 CSS로 주입된다 */
   blockOverrides?: BlockOverrideMap
+  /** 블럭(섹션) 노출 순서. 없으면 테마 template.html의 기본 DOM 순서를 그대로 쓴다.
+   * share는 순서 배열에 뭐가 오든 항상 맨 마지막으로 강제된다(§재정렬 이펙트) */
+  blockOrder?: string[]
   /** 완전히 감춰야 하는 블럭 키 목록 (꺼진 슬롯의 빈 섹션 껍데기 제거용) */
   hiddenBlocks?: string[]
   /** 이 블럭 키로 미리보기를 스크롤한다. 편집기에서 블럭 아코디언을 펼칠 때 사용 */
@@ -195,6 +198,7 @@ export function InvitationFrame({
   slots = {},
   fontFaces = [],
   blockOverrides = {},
+  blockOrder = [],
   hiddenBlocks = [],
   focusBlock = null,
   width = 375,
@@ -324,12 +328,38 @@ export function InvitationFrame({
     styleEl.textContent = rules.join("\n")
   }, [doc, blockOverrides, hiddenBlocks])
 
-  // hiddenBlocks 만 바뀌고 문서는 다시 write() 되지 않는 경우(편집기에서 블럭을 껐다 켤 때)를
-  // 위한 재계산 — 문서를 새로 쓴 직후의 최초 적용은 위 write 이펙트가 동기적으로 처리한다.
+  // 블럭(섹션) 순서 재배치 — blockOrder가 가리키는 순서대로 [data-block] 형제 요소를
+  // appendChild로 다시 붙인다(이미 문서에 있는 노드에 appendChild를 부르면 "이동"이 된다).
+  // blockOrder에 없는 키(새로 추가된 블럭 등)는 원래 DOM 순서를 유지한 채 뒤에 붙인다.
+  // share는 사용자가 어떤 순서를 저장했든 항상 맨 마지막으로 강제한다 — 청첩장 주소 공유 +
+  // 로고 섹션은 항상 청첩장의 마지막이어야 하는 고정 블럭이라 순서 변경 대상에서 제외된다.
+  useEffect(() => {
+    if (!doc) return
+    const sections = Array.from(doc.querySelectorAll<HTMLElement>("[data-block]"))
+    if (sections.length === 0) return
+    const parent = sections[0].parentElement
+    if (!parent) return
+    const byKey = new Map(sections.map((el) => [el.getAttribute("data-block") as string, el] as const))
+    const domOrder = sections.map((el) => el.getAttribute("data-block") as string)
+    const source = blockOrder && blockOrder.length > 0 ? blockOrder : domOrder
+    const wanted = source.filter((k) => byKey.has(k) && k !== "share")
+    const missing = domOrder.filter((k) => !wanted.includes(k) && k !== "share")
+    const finalOrder = [...wanted, ...missing]
+    if (byKey.has("share")) finalOrder.push("share")
+    finalOrder.forEach((key) => {
+      const el = byKey.get(key)
+      if (el) parent.appendChild(el)
+    })
+  }, [doc, blockOrder])
+
+  // hiddenBlocks/blockOrder 가 바뀌고 문서는 다시 write() 되지 않는 경우(편집기에서 블럭을
+  // 껐다 켜거나 순서를 바꿀 때)를 위한 재계산 — 위 순서 재배치 이펙트 다음에 실행되어야
+  // 최종 시각적 순서를 기준으로 dark/light 교대가 맞는다. 문서를 새로 쓴 직후의 최초 적용은
+  // 위 write 이펙트가 동기적으로 처리한다.
   useEffect(() => {
     if (!doc) return
     applyAltClasses(doc, hiddenBlocks)
-  }, [doc, hiddenBlocks])
+  }, [doc, hiddenBlocks, blockOrder])
 
   // 블럭 타이틀/영문 소제목 바인딩 — 빈 값이면 템플릿 기본 텍스트로 되돌아간다. 공백만 입력한
   // 경우는 truthy라 그대로 빈칸처럼 보이는 값이 적용된다(의도적으로 구분되는 상태 — 완전히

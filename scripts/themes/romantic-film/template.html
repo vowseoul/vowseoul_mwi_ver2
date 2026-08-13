@@ -163,16 +163,16 @@
     <div data-slot="rsvp"></div>
   </section>
 
-  <!-- 8-1. SHARE (여백은 이 섹션 전용 클래스로 고정 — 인라인 style 금지, PLAN_DESIGN_CONTROLS.md §3.3) -->
-  <section class="sb-section sb-share-section" data-block="share">
-    <div data-slot="share"></div>
-  </section>
-
-  <!-- 8-2. GUESTBOOK SECTION -->
+  <!-- 8-1. GUESTBOOK SECTION -->
   <section class="sb-section sb-guestbook-section" data-block="guestbook">
     <h4 class="sb-section__subtitle" data-block-label>GUESTBOOK</h4>
     <h3 class="sb-section__title" data-block-title>방명록</h3>
     <div data-slot="guestbook"></div>
+  </section>
+
+  <!-- 8-2. SHARE — 항상 청첩장 맨 아래에 위치한다(고정 블럭, 순서 변경 대상 아님) -->
+  <section class="sb-section sb-share-section" data-block="share">
+    <div data-slot="share"></div>
   </section>
 
   <!-- 9. BGM (플로팅 플레이어) -->

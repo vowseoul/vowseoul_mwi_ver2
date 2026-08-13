@@ -13,12 +13,16 @@
       <!-- Groom & Bride Names -->
       <div class="ms-hero__names">
         <div class="ms-hero__name-block">
-          <p class="ms-hero__relation" data-field="groom_relationship">아들</p>
+          <p class="ms-hero__relation">
+            <span data-field="groom_father_name">박태수</span> · <span data-field="groom_mother_name">선우명희</span><span data-field="groom_relationship">의 아들</span>
+          </p>
           <h1 class="ms-hero__name" data-field="groom_name">박성훈</h1>
         </div>
         <div class="ms-hero__connector">&amp;</div>
         <div class="ms-hero__name-block">
-          <p class="ms-hero__relation" data-field="bride_relationship">딸</p>
+          <p class="ms-hero__relation">
+            <span data-field="bride_father_name">이훈</span> · <span data-field="bride_mother_name">최현숙</span><span data-field="bride_relationship">의 딸</span>
+          </p>
           <h1 class="ms-hero__name" data-field="bride_name">이지혜</h1>
         </div>
       </div>
@@ -61,43 +65,6 @@
     <!-- Greeting Image (선택) -->
     <div class="ms-greeting__image" data-field-when="greeting_image">
       <img data-field="greeting_image" alt="인사말 이미지" />
-    </div>
-
-    <!-- Spouses & Parents Info Grid -->
-    <div class="ms-parents">
-      <!-- Groom Parents -->
-      <div class="ms-parents__col">
-        <div class="ms-parents__role">신랑</div>
-        <div class="ms-parents__child" data-field="groom_name">박성훈</div>
-        <div class="ms-parents__divider"></div>
-        <div class="ms-parents__info">
-          <p class="ms-parents__parent">
-            <span class="ms-parents__label">아버지</span>
-            <span data-field="groom_father_name">박태수</span>
-          </p>
-          <p class="ms-parents__parent">
-            <span class="ms-parents__label">어머니</span>
-            <span data-field="groom_mother_name">선우명희</span>
-          </p>
-        </div>
-      </div>
-
-      <!-- Bride Parents -->
-      <div class="ms-parents__col">
-        <div class="ms-parents__role">신부</div>
-        <div class="ms-parents__child" data-field="bride_name">이지혜</div>
-        <div class="ms-parents__divider"></div>
-        <div class="ms-parents__info">
-          <p class="ms-parents__parent">
-            <span class="ms-parents__label">아버지</span>
-            <span data-field="bride_father_name">이훈</span>
-          </p>
-          <p class="ms-parents__parent">
-            <span class="ms-parents__label">어머니</span>
-            <span data-field="bride_mother_name">최현숙</span>
-          </p>
-        </div>
-      </div>
     </div>
   </section>
 
@@ -196,18 +163,18 @@
     <div class="ms-slot" data-slot="rsvp"></div>
   </section>
 
-  <!-- 9-1. SHARE -->
-  <section class="ms-section ms-share-section" data-block="share">
-    <div class="ms-slot" data-slot="share"></div>
-  </section>
-
-  <!-- 10. GUESTBOOK SECTION -->
+  <!-- 9-1. GUESTBOOK SECTION -->
   <section class="ms-section ms-guestbook" data-block="guestbook">
     <div class="ms-section__header">
       <span class="ms-section__subtitle" data-block-label>GUESTBOOK</span>
       <h2 class="ms-section__title" data-block-title>방명록</h2>
     </div>
     <div class="ms-slot" data-slot="guestbook"></div>
+  </section>
+
+  <!-- 10. SHARE — 항상 청첩장 맨 아래에 위치한다(고정 블럭, 순서 변경 대상 아님) -->
+  <section class="ms-section ms-share-section" data-block="share">
+    <div class="ms-slot" data-slot="share"></div>
   </section>
 
   <!-- 11. BGM -->

@@ -290,14 +290,6 @@
   font-family: var(--font-kr, 'Noto Serif KR', serif);
 }
 
-/* share 섹션은 위 여백을 없애 RSVP 섹션과 바로 이어지도록 한다. .sb-section 보다 반드시 뒤에 와야
-   동일 특정도에서 소스 순서로 이긴다 (원래 template.html의 인라인 style="padding-top:0"이었던 것을
-   클래스로 옮김 — 인라인 스타일은 블럭 여백 오버라이드 주입 CSS를 항상 이겨버리기 때문,
-   data-block 계약 문서 §2.3) */
-.sb-share-section {
-  padding-top: 0;
-}
-
 /* 4. ORDER / SEQUENCE TABLE */
 .sb-order-table {
   max-width: 280px;
@@ -450,8 +442,9 @@
 }
 
 .sb-location-card__hint {
-  font-size: var(--text-caption, 10px);
+  font-size: 9px;
   margin-top: 4px;
+  text-align: center;
   color: rgba(0, 0, 0, 0.4);
 }
 

@@ -11,6 +11,7 @@ import {
   BLOCK_KEYS,
   BLOCK_LABEL_FALLBACK,
   buildThemeTokens,
+  extractBlockOrder,
   extractBlockOverrides,
   extractDisabledSlots,
   extractIntroEnabled,
@@ -47,8 +48,11 @@ import { SaveButton } from "@/components/ui/save-button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Slider } from "@/components/ui/slider"
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Copy, ExternalLink, Image as ImageIcon, Loader2, Plus, X } from "lucide-react"
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Copy, ExternalLink, GripVertical, Image as ImageIcon, Loader2, Plus, X } from "lucide-react"
 import { toast } from "sonner"
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core"
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 
 /**
  * 템플릿 청첩장 커스터마이즈 편집기.
@@ -511,6 +515,37 @@ export default function CustomizeClient({
     [slots, blockManifest]
   )
 
+  /** 블럭 순서 — hero(항상 맨 앞)와 share(항상 맨 뒤, §요구사항)를 뺀 "드래그 가능한" 블럭 키만 담는다.
+   * 저장된 순서에 없는 키는 정렬 시 자동으로 원래(테마 기본) 위치를 유지한다(Array.sort는 안정 정렬). */
+  const [blockOrder, setBlockOrder] = useState<string[]>(
+    () => (extractBlockOrder(invitation.block_order) ?? []).filter((k) => k !== "hero" && k !== "share")
+  )
+  const shareBlock = useMemo(() => editableBlocks.find((b) => b.key === "share"), [editableBlocks])
+  const draggableBlocks = useMemo(() => {
+    const rest = editableBlocks.filter((b) => b.key !== "share" && b.key !== "hero")
+    const pos = new Map(blockOrder.map((k, i) => [k, i]))
+    return [...rest].sort((a, b) => {
+      const ai = pos.has(a.key) ? pos.get(a.key)! : Infinity
+      const bi = pos.has(b.key) ? pos.get(b.key)! : Infinity
+      return ai - bi
+    })
+  }, [editableBlocks, blockOrder])
+  /** 실제 렌더링(미리보기·저장)에 쓰는 전체 순서 — hero를 맨 앞에, share를 맨 뒤에 명시적으로 고정한다 */
+  const fullBlockOrder = useMemo(
+    () => ["hero", ...draggableBlocks.map((b) => b.key), "share"],
+    [draggableBlocks]
+  )
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
+  const handleBlockDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const keys = draggableBlocks.map((b) => b.key)
+    const oldIndex = keys.indexOf(String(active.id))
+    const newIndex = keys.indexOf(String(over.id))
+    if (oldIndex === -1 || newIndex === -1) return
+    setBlockOrder(arrayMove(keys, oldIndex, newIndex))
+  }
+
   const uploadImageField = async (key: string, file: File) => {
     setUploadingKey(key)
     try {
@@ -621,6 +656,7 @@ export default function CustomizeClient({
       .update({
         content_data: contentPayload,
         customization_overrides: { ...preservedOverrideKeys, ...cleanTokens, disabled_slots: disabledSlots, blocks: blockOverrides, sectionImages, scrollMotion, introEnabled },
+        block_order: fullBlockOrder,
         bgm_url: bgmUrl || null,
         theme_version_id: themeVersionId,
         og_meta: { ...existingOgMeta, title: ogTitle || null, description: ogDescription || null, image: ogImage || null },
@@ -1359,13 +1395,16 @@ export default function CustomizeClient({
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Accordion
-                    type="single"
-                    collapsible
-                    value={focusBlock ?? ""}
-                    onValueChange={(v) => setFocusBlock(v || null)}
-                  >
-                    {editableBlocks.map((b) => {
+                  <p className="mb-2 text-xs text-muted-foreground">왼쪽 손잡이를 드래그해서 블럭 순서를 바꿀 수 있습니다.</p>
+                  <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleBlockDragEnd}>
+                    <SortableContext items={draggableBlocks.map((b) => b.key)} strategy={verticalListSortingStrategy}>
+                      <Accordion
+                        type="single"
+                        collapsible
+                        value={focusBlock ?? ""}
+                        onValueChange={(v) => setFocusBlock(v || null)}
+                      >
+                        {draggableBlocks.map((b) => {
                       const hasToggle = slots.includes(b.key)
                       const hasExpandable = b.title || b.padding
                       const isOn = !disabledSlots.includes(b.key)
@@ -1373,17 +1412,27 @@ export default function CustomizeClient({
 
                       if (!hasExpandable) {
                         return (
-                          <div key={b.key} className="flex items-center justify-between border-b py-4 last:border-b-0">
-                            <span className={cn("text-sm font-medium", !isOn && "text-muted-foreground")}>{b.label}</span>
-                            {hasToggle && <Switch checked={isOn} onCheckedChange={(c) => toggleSlot(b.key, c)} />}
-                          </div>
+                          <SortableBlockRow key={b.key} id={b.key}>
+                            {(drag) => (
+                              <div className="flex items-center justify-between border-b py-4 last:border-b-0">
+                                <div className="flex min-w-0 flex-1 items-center gap-2">
+                                  <DragHandle {...drag} />
+                                  <span className={cn("text-sm font-medium", !isOn && "text-muted-foreground")}>{b.label}</span>
+                                </div>
+                                {hasToggle && <Switch checked={isOn} onCheckedChange={(c) => toggleSlot(b.key, c)} />}
+                              </div>
+                            )}
+                          </SortableBlockRow>
                         )
                       }
 
                       return (
-                        <AccordionItem key={b.key} value={b.key}>
+                        <SortableBlockRow key={b.key} id={b.key}>
+                          {(drag) => (
+                        <AccordionItem value={b.key}>
                           <div className="flex items-center gap-2">
-                            <AccordionTrigger className="flex-1">
+                            <DragHandle {...drag} />
+                            <AccordionTrigger className="flex-1 text-[15px] font-semibold">
                               <span className={cn(!isOn && "text-muted-foreground")}>{b.label}</span>
                             </AccordionTrigger>
                             {hasToggle && (
@@ -1394,7 +1443,7 @@ export default function CustomizeClient({
                               />
                             )}
                           </div>
-                          <AccordionContent className="space-y-4">
+                          <AccordionContent className="space-y-4 [&_[data-slot=field-label]]:text-xs [&_[data-slot=field-label]]:font-normal [&_[data-slot=field-label]]:text-muted-foreground">
                             {b.title && (
                               <>
                                 <Field>
@@ -1604,9 +1653,28 @@ export default function CustomizeClient({
                             )}
                           </AccordionContent>
                         </AccordionItem>
+                          )}
+                        </SortableBlockRow>
                       )
                     })}
-                  </Accordion>
+                      </Accordion>
+                    </SortableContext>
+                  </DndContext>
+
+                  {shareBlock && (
+                    <div className="flex items-center justify-between border-t py-4">
+                      <div className="flex items-center gap-2">
+                        <span className={cn("text-sm font-medium", disabledSlots.includes("share") && "text-muted-foreground")}>{shareBlock.label}</span>
+                        <span className="text-xs text-muted-foreground">항상 맨 아래에 위치합니다</span>
+                      </div>
+                      {slots.includes("share") && (
+                        <Switch
+                          checked={!disabledSlots.includes("share")}
+                          onCheckedChange={(c) => toggleSlot("share", c)}
+                        />
+                      )}
+                    </div>
+                  )}
 
                   {standaloneToggleSlots.length > 0 && (
                     <div className={cn("space-y-1", editableBlocks.length > 0 && "mt-2 border-t pt-3")}>
@@ -1849,6 +1917,7 @@ export default function CustomizeClient({
               slots={previewSlots}
               fontFaces={fontFaces}
               blockOverrides={blockOverrides}
+              blockOrder={fullBlockOrder}
               hiddenBlocks={hiddenBlocks}
               sectionImages={sectionImages}
               scrollMotion={scrollMotion}
@@ -1868,6 +1937,38 @@ export default function CustomizeClient({
         </div>
       </div>
     </div>
+  )
+}
+
+/** 블럭 아코디언 한 행을 드래그 정렬 가능하게 감싼다. render-prop으로 드래그 손잡이(attributes/listeners)를
+ * 넘겨줘서 호출부가 원하는 위치(트리거 왼쪽)에 손잡이 아이콘을 꽂을 수 있게 한다. */
+function SortableBlockRow({ id, children }: {
+  id: string
+  children: (drag: Pick<ReturnType<typeof useSortable>, "attributes" | "listeners">) => React.ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, position: "relative", zIndex: isDragging ? 1 : "auto" }}
+    >
+      {children({ attributes, listeners })}
+    </div>
+  )
+}
+
+function DragHandle({ attributes, listeners }: Pick<ReturnType<typeof useSortable>, "attributes" | "listeners">) {
+  return (
+    <button
+      type="button"
+      {...attributes}
+      {...listeners}
+      className="shrink-0 touch-none cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
+      aria-label="드래그해서 순서 변경"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <GripVertical className="h-4 w-4" />
+    </button>
   )
 }
 

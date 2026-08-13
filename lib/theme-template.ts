@@ -139,6 +139,25 @@ export interface BlockManifestEntry {
   padding: boolean
 }
 
+/** invitations.block_order(jsonb) 를 안전한 블럭 키 배열로 정규화. 알 수 없는 키(레거시
+ * 흔적 등)는 버리고, 유효한 키가 하나도 없으면 undefined를 돌려줘 호출부가 테마의 기본
+ * 순서(template.html의 DOM 순서)를 그대로 쓰게 한다. share는 항상 맨 마지막에 고정되는
+ * 블럭이라 여기서 걸러내지 않아도 되지만(§invitation-frame.tsx 재정렬 이펙트가 강제),
+ * 순서 배열 자체에는 포함시켜 저장/복원 왕복이 정확하게 유지되도록 한다. */
+export function extractBlockOrder(raw: unknown): BlockKey[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const seen = new Set<string>()
+  const out: BlockKey[] = []
+  for (const v of raw) {
+    if (typeof v !== "string") continue
+    if (!(BLOCK_KEYS as readonly string[]).includes(v)) continue
+    if (seen.has(v)) continue
+    seen.add(v)
+    out.push(v as BlockKey)
+  }
+  return out.length > 0 ? out : undefined
+}
+
 /** themes.block_manifest(jsonb) 를 안전하게 배열로 정규화 */
 export function getBlockManifest(row: ThemeRow | null | undefined): BlockManifestEntry[] {
   const value = row?.block_manifest

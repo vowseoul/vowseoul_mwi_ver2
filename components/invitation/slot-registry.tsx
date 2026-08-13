@@ -699,7 +699,14 @@ function ContactRow({ label, name, phone, instagram, accent }: { label: string; 
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${soft(25)}`, gap: 8 }}>
       <div style={{ textAlign: "left", minWidth: 0 }}>
-        <div style={{ fontSize: 15.5, fontWeight: 500 }}>{name ? `${label} ${name}` : label}</div>
+        {name ? (
+          <>
+            <div style={{ fontSize: 11, opacity: 0.55 }}>{label}</div>
+            <div style={{ fontSize: 15.5, fontWeight: 600 }}>{name}</div>
+          </>
+        ) : (
+          <div style={{ fontSize: 15.5, fontWeight: 600 }}>{label}</div>
+        )}
       </div>
       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
         <a href={`tel:${phone}`} aria-label="전화 걸기" title="전화" style={{ ...linkStyle, textDecoration: "none" }}><Phone size={16} /></a>
