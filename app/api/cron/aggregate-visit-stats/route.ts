@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
+import { notifyCronFailure } from "@/lib/cron-alert"
 
 /**
  * visit_logs(방문 1건당 1행)를 하루 단위로 집계해 visit_daily_stats에 저장한다.
@@ -25,6 +26,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
+  try {
+    return await runAggregate()
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    await notifyCronFailure("aggregate-visit-stats", `예외 발생: ${detail}`)
+    return NextResponse.json({ error: "처리 중 예외가 발생했습니다." }, { status: 500 })
+  }
+}
+
+async function runAggregate() {
   const admin = createSupabaseAdminClient()
 
   const now = new Date()
@@ -39,7 +50,7 @@ export async function GET(request: Request) {
     .lt("visited_at", dayEnd.toISOString())
 
   if (error) {
-    console.error("aggregate-visit-stats: visit_logs 조회 실패:", error.message)
+    await notifyCronFailure("aggregate-visit-stats", `visit_logs 조회 실패: ${error.message}`)
     return NextResponse.json({ error: "조회에 실패했습니다." }, { status: 500 })
   }
 
@@ -64,7 +75,7 @@ export async function GET(request: Request) {
       .from("visit_daily_stats")
       .upsert(rows, { onConflict: "invitation_id,visit_date" })
     if (upsertError) {
-      console.error("aggregate-visit-stats: upsert 실패:", upsertError.message)
+      await notifyCronFailure("aggregate-visit-stats", `upsert 실패: ${upsertError.message}`)
       return NextResponse.json({ error: "집계 저장에 실패했습니다." }, { status: 500 })
     }
   }

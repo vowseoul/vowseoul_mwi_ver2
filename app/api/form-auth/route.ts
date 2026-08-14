@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { passwordMatches } from "@/lib/dashboard-session"
 import { verifyPassword, isHashedDashboardPassword } from "@/lib/dashboard-password"
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit"
 
 /**
  * 정보 수집 폼(/form/[slug]) 비밀번호 검증.
@@ -27,6 +28,11 @@ export async function POST(request: Request) {
   const { slug, password } = body
   if (typeof slug !== "string" || !slug || typeof password !== "string") {
     return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 })
+  }
+
+  const allowed = await checkRateLimit("form-auth", getClientIp(request))
+  if (!allowed) {
+    return NextResponse.json({ error: "너무 많은 시도가 있었습니다. 잠시 후 다시 시도해주세요." }, { status: 429 })
   }
 
   const supabase = createSupabaseAdminClient()

@@ -4,6 +4,7 @@ import { mergeInvitationRaw } from "@/lib/invitation-data"
 import { DATA_RETENTION_SETTINGS_KEY, GUEST_DATA_PURGE_DAYS, HARD_DELETE_GRACE_DAYS, computeExpiryDate, parseRetentionSettings } from "@/lib/data-retention"
 import { purgeGuestData } from "@/lib/guest-data-purge"
 import { deleteInvitationUploads } from "@/lib/storage-cleanup"
+import { notifyCronFailure } from "@/lib/cron-alert"
 
 /**
  * 데이터 자동 파기 — 하루 한 번 도는 크론이 3단계를 수행한다.
@@ -36,6 +37,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
+  try {
+    return await runPurge()
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    await notifyCronFailure("purge-expired-invitations", `예외 발생: ${detail}`)
+    return NextResponse.json({ error: "처리 중 예외가 발생했습니다." }, { status: 500 })
+  }
+}
+
+async function runPurge() {
   const admin = createSupabaseAdminClient()
 
   const { data: retentionRow } = await admin
@@ -55,7 +66,7 @@ export async function GET(request: Request) {
     .eq("is_sample", false)
 
   if (error) {
-    console.error("purge-expired-invitations: invitations 조회 실패:", error.message)
+    await notifyCronFailure("purge-expired-invitations", `invitations 조회 실패: ${error.message}`)
     return NextResponse.json({ error: "조회에 실패했습니다." }, { status: 500 })
   }
 
@@ -101,7 +112,7 @@ export async function GET(request: Request) {
       .update({ deleted_at: now.toISOString(), status: "expired" })
       .in("id", purgedIds)
     if (updateError) {
-      console.error("purge-expired-invitations: 소프트 삭제 실패:", updateError.message)
+      await notifyCronFailure("purge-expired-invitations", `소프트 삭제 실패: ${updateError.message}`)
       return NextResponse.json({ error: "삭제 처리에 실패했습니다." }, { status: 500 })
     }
   }
@@ -141,7 +152,7 @@ export async function GET(request: Request) {
     .lt("deleted_at", hardDeleteCutoff.toISOString())
     .eq("is_sample", false)
 
-  if (staleError) console.error("purge-expired-invitations: 하드삭제 대상 조회 실패:", staleError.message)
+  if (staleError) await notifyCronFailure("purge-expired-invitations", `하드삭제 대상 조회 실패: ${staleError.message}`)
 
   const hardDeletedInvitationIds: string[] = []
   const hardDeletedCustomerIds: string[] = []

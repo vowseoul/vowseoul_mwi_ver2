@@ -215,6 +215,11 @@ export default function CustomizeClient({
   invitation: Record<string, unknown>
   customer: Record<string, unknown> | null
 }) {
+  // 마지막으로 이 화면이 읽은 updated_at — save()가 그 사이 다른 관리자가 먼저
+  // 저장했는지 판별하는 기준선. 저장 성공 시마다 갱신한다(§save 함수 하단).
+  const lastKnownUpdatedAtRef = useRef<string | null>(
+    typeof invitation.updated_at === "string" ? invitation.updated_at : null
+  )
   const [activeThemeRow, setActiveThemeRow] = useState<ThemeRow>(themeRow)
   const [themeVersionId, setThemeVersionId] = useState<string | null>(
     typeof invitation.theme_version_id === "string" ? invitation.theme_version_id : null
@@ -610,6 +615,22 @@ export default function CustomizeClient({
     setGalleryImages((cur) => moveArrayItem(cur, index, direction))
 
   const save = async (): Promise<boolean> => {
+    // 동시 편집 충돌 감지 — 이 화면이 마지막으로 읽은 updated_at 이후 다른 관리자가
+    // 먼저 저장했다면 그대로 덮어쓰지 않고 먼저 확인을 받는다(last-write-wins 방지).
+    if (lastKnownUpdatedAtRef.current) {
+      const { data: current } = await supabase
+        .from("invitations")
+        .select("updated_at")
+        .eq("id", invitationId)
+        .maybeSingle()
+      if (current && current.updated_at !== lastKnownUpdatedAtRef.current) {
+        const overwrite = confirm(
+          "다른 관리자가 그 사이 이 청첩장을 먼저 저장했습니다. 계속 저장하면 그 변경사항이 덮어써집니다. 계속하시겠습니까?"
+        )
+        if (!overwrite) return false
+      }
+    }
+
     const cleanTokens: Record<string, string | number> = {}
     for (const [k, v] of Object.entries(overrides)) {
       if (typeof v === "number") cleanTokens[k] = v
@@ -651,6 +672,7 @@ export default function CustomizeClient({
       ? invitation.og_meta as Record<string, unknown>
       : {}
 
+    const nextUpdatedAt = new Date().toISOString()
     const { error } = await supabase
       .from("invitations")
       .update({
@@ -660,13 +682,14 @@ export default function CustomizeClient({
         bgm_url: bgmUrl || null,
         theme_version_id: themeVersionId,
         og_meta: { ...existingOgMeta, title: ogTitle || null, description: ogDescription || null, image: ogImage || null },
-        updated_at: new Date().toISOString(),
+        updated_at: nextUpdatedAt,
       })
       .eq("id", invitationId)
     if (error) {
       toast.error(`저장 실패: ${error.message}`)
       return false
     }
+    lastKnownUpdatedAtRef.current = nextUpdatedAt
     toast.success("저장되었습니다.")
     const { data: userData } = await supabase.auth.getUser()
     logAuditEvent(supabase, {

@@ -5,6 +5,7 @@ import {
   dashboardCookieName,
 } from "@/lib/dashboard-session"
 import { verifyDashboardPassword } from "@/lib/dashboard-password"
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit"
 
 /**
  * 신랑신부 대시보드 비밀번호 인증.
@@ -27,6 +28,11 @@ export async function POST(request: Request) {
 
   if (typeof slug !== "string" || typeof password !== "string" || !slug || !password) {
     return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 })
+  }
+
+  const allowed = await checkRateLimit("dashboard-auth", getClientIp(request))
+  if (!allowed) {
+    return NextResponse.json({ error: "너무 많은 시도가 있었습니다. 잠시 후 다시 시도해주세요." }, { status: 429 })
   }
 
   // 신랑신부는 Supabase 계정이 없는 익명 사용자라, invitations 를 읽으려면

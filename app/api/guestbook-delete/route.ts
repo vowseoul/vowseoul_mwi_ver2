@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { verifyPassword } from "@/lib/dashboard-password"
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit"
 
 /**
  * 방명록 본인 삭제 — 개인정보 보호법 제36조(정보주체의 삭제 요구권) 대응.
@@ -22,6 +23,11 @@ export async function POST(request: Request) {
   const { entryId, password } = body
   if (typeof entryId !== "string" || !entryId || typeof password !== "string" || !password) {
     return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 })
+  }
+
+  const allowed = await checkRateLimit("guestbook-delete", getClientIp(request))
+  if (!allowed) {
+    return NextResponse.json({ error: "너무 많은 시도가 있었습니다. 잠시 후 다시 시도해주세요." }, { status: 429 })
   }
 
   const supabase = createSupabaseAdminClient()

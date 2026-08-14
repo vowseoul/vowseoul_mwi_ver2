@@ -1,4 +1,5 @@
 import type { ThemeTemplate, TokenMap } from "@/components/invitation/invitation-frame"
+import { z } from "zod"
 
 /**
  * DB(themes 행) ↔ 렌더러(InvitationFrame) 사이의 브릿지.
@@ -167,54 +168,65 @@ export function getBlockManifest(row: ThemeRow | null | undefined): BlockManifes
   )
 }
 
-/** 블럭 하나에 대한 개별 오버라이드 — customization_overrides.blocks[key] */
-export interface BlockOverride {
+const nonEmptyString = z.string().min(1)
+const finiteNumber = z.number().finite()
+
+/**
+ * 블럭 하나에 대한 개별 오버라이드 — customization_overrides.blocks[key].
+ * 스키마 하나가 타입(BlockOverride)과 런타임 검증(extractBlockOverrides) 양쪽의
+ * 단일 출처다 — 필드를 여기 하나에만 추가하면 타입과 가드가 함께 따라온다.
+ */
+const BlockOverrideSchema = z.object({
   /** 위/아래 여백(px). 없으면 테마 기본값 */
-  py?: number
+  py: finiteNumber,
   /** 한글 타이틀. 빈 문자열/미설정이면 템플릿 기본 텍스트를 그대로 둔다 */
-  title?: string
+  title: z.string(),
   /** 영문 소제목. 빈 문자열/미설정이면 템플릿 기본 텍스트를 그대로 둔다 */
-  label?: string
+  label: z.string(),
   /** rsvp 블럭 전용: false 면 식사 여부 질문을 숨긴다 (미설정 시 노출) */
-  mealEnabled?: boolean
+  mealEnabled: z.boolean(),
   /** rsvp 블럭 전용: false 면 셔틀버스 이용 질문을 숨긴다 (미설정 시 노출) */
-  shuttleEnabled?: boolean
+  shuttleEnabled: z.boolean(),
   /** rsvp 블럭 전용: 응답 마감일("YYYY-MM-DD"). 없으면 마감 없이 상시 접수 */
-  rsvpDeadline?: string
+  rsvpDeadline: nonEmptyString,
   /** calendar 블럭 전용: false 면 D-day 카운트다운을 숨긴다 (미설정 시 노출) */
-  ddayEnabled?: boolean
+  ddayEnabled: z.boolean(),
   /** calendar 블럭 전용: false 면 ".ics 캘린더 앱에 추가" 버튼을 숨긴다 (미설정 시 노출) */
-  icsButtonEnabled?: boolean
+  icsButtonEnabled: z.boolean(),
   /** calendar 블럭 전용: false 면 "구글 캘린더" 버튼을 숨긴다 (미설정 시 노출) */
-  googleCalendarButtonEnabled?: boolean
+  googleCalendarButtonEnabled: z.boolean(),
   /** calendar 블럭 전용: true 면 D-day 숫자가 처음 나타날 때 0에서 실제 값까지 굴러 올라간다 (미설정 시 꺼짐) */
-  ddayRollingEnabled?: boolean
+  ddayRollingEnabled: z.boolean(),
   /** calendar 블럭 전용: 예식일 강조 표시 모양 (미설정 시 원형) */
-  calendarDayShape?: "circle" | "heart" | "custom"
+  calendarDayShape: z.enum(["circle", "heart", "custom"]),
   /** calendar 블럭 전용: calendarDayShape가 'custom'일 때 사용할 업로드 이미지 URL */
-  calendarDayCustomShapeUrl?: string
+  calendarDayCustomShapeUrl: nonEmptyString,
   /** calendar 블럭 전용: 강조 표시 크기(px). 미설정 시 32 */
-  calendarDayShapeSize?: number
+  calendarDayShapeSize: finiteNumber,
   /** calendar 블럭 전용: 강조된 날짜 숫자의 텍스트 색상(hex). 미설정 시 흰색 */
-  calendarDayTextColor?: string
+  calendarDayTextColor: nonEmptyString,
   /** calendar 블럭 전용: 업로드한 SVG 모양에 입힐 색상(hex). 미설정 시 테마 accent 색 */
-  calendarDaySvgColor?: string
+  calendarDaySvgColor: nonEmptyString,
   /** calendar 블럭 전용: 달력 그리드 아래 날짜 줄 텍스트. 미설정 시 wedding_date에서 "YYYY년 MM월 DD일"로 자동 계산 */
-  calendarDateText?: string
+  calendarDateText: nonEmptyString,
   /** calendar 블럭 전용: 달력 그리드 아래 시간 줄 텍스트. 미설정 시 "요일 wedding_time"으로 자동 계산 */
-  calendarTimeText?: string
+  calendarTimeText: nonEmptyString,
   /** greeting 블럭 전용: 인사말 아이콘 모양 (미설정 시 하트) */
-  greetingIconShape?: "heart" | "custom"
+  greetingIconShape: z.enum(["heart", "custom"]),
   /** greeting 블럭 전용: greetingIconShape가 'custom'일 때 사용할 업로드 이미지 URL */
-  greetingIconCustomUrl?: string
+  greetingIconCustomUrl: nonEmptyString,
   /** greeting 블럭 전용: 아이콘 크기(px). 미설정 시 24 */
-  greetingIconSize?: number
+  greetingIconSize: finiteNumber,
   /** greeting 블럭 전용: 아이콘 색상(hex). 하트/커스텀 SVG 모두 적용. 미설정 시 테마 accent 색 */
-  greetingIconColor?: string
-}
+  greetingIconColor: nonEmptyString,
+}).partial()
+
+export type BlockOverride = z.infer<typeof BlockOverrideSchema>
 
 /**
  * customization_overrides(jsonb) 에서 blocks(블럭별 오버라이드 맵)를 추출한다.
+ * 필드 단위로 개별 검증한다(객체 전체를 한 번에 parse하지 않음) — 한 필드가
+ * 깨져 있어도 나머지 정상 필드는 그대로 살리는 기존 관용 동작을 유지하기 위함.
  * disabled_slots/'--' 토큰과 같은 customization_overrides 컬럼을 공유하되 별도 키라 서로 간섭하지 않는다.
  */
 export function extractBlockOverrides(overrides: unknown): Record<string, BlockOverride> {
@@ -222,32 +234,17 @@ export function extractBlockOverrides(overrides: unknown): Record<string, BlockO
   if (!overrides || typeof overrides !== "object") return out
   const blocks = (overrides as Record<string, unknown>).blocks
   if (!blocks || typeof blocks !== "object") return out
+  const fieldSchemas = BlockOverrideSchema.shape
   for (const [key, raw] of Object.entries(blocks as Record<string, unknown>)) {
     if (!raw || typeof raw !== "object") continue
     const r = raw as Record<string, unknown>
-    const entry: BlockOverride = {}
-    if (typeof r.py === "number" && Number.isFinite(r.py)) entry.py = r.py
-    if (typeof r.title === "string") entry.title = r.title
-    if (typeof r.label === "string") entry.label = r.label
-    if (typeof r.mealEnabled === "boolean") entry.mealEnabled = r.mealEnabled
-    if (typeof r.shuttleEnabled === "boolean") entry.shuttleEnabled = r.shuttleEnabled
-    if (typeof r.rsvpDeadline === "string" && r.rsvpDeadline) entry.rsvpDeadline = r.rsvpDeadline
-    if (typeof r.ddayEnabled === "boolean") entry.ddayEnabled = r.ddayEnabled
-    if (typeof r.icsButtonEnabled === "boolean") entry.icsButtonEnabled = r.icsButtonEnabled
-    if (typeof r.googleCalendarButtonEnabled === "boolean") entry.googleCalendarButtonEnabled = r.googleCalendarButtonEnabled
-    if (typeof r.ddayRollingEnabled === "boolean") entry.ddayRollingEnabled = r.ddayRollingEnabled
-    if (r.calendarDayShape === "circle" || r.calendarDayShape === "heart" || r.calendarDayShape === "custom") entry.calendarDayShape = r.calendarDayShape
-    if (typeof r.calendarDayCustomShapeUrl === "string" && r.calendarDayCustomShapeUrl) entry.calendarDayCustomShapeUrl = r.calendarDayCustomShapeUrl
-    if (typeof r.calendarDayShapeSize === "number" && Number.isFinite(r.calendarDayShapeSize)) entry.calendarDayShapeSize = r.calendarDayShapeSize
-    if (typeof r.calendarDayTextColor === "string" && r.calendarDayTextColor) entry.calendarDayTextColor = r.calendarDayTextColor
-    if (typeof r.calendarDaySvgColor === "string" && r.calendarDaySvgColor) entry.calendarDaySvgColor = r.calendarDaySvgColor
-    if (typeof r.calendarDateText === "string" && r.calendarDateText) entry.calendarDateText = r.calendarDateText
-    if (typeof r.calendarTimeText === "string" && r.calendarTimeText) entry.calendarTimeText = r.calendarTimeText
-    if (r.greetingIconShape === "heart" || r.greetingIconShape === "custom") entry.greetingIconShape = r.greetingIconShape
-    if (typeof r.greetingIconCustomUrl === "string" && r.greetingIconCustomUrl) entry.greetingIconCustomUrl = r.greetingIconCustomUrl
-    if (typeof r.greetingIconSize === "number" && Number.isFinite(r.greetingIconSize)) entry.greetingIconSize = r.greetingIconSize
-    if (typeof r.greetingIconColor === "string" && r.greetingIconColor) entry.greetingIconColor = r.greetingIconColor
-    if (Object.keys(entry).length > 0) out[key] = entry
+    const entry: Record<string, unknown> = {}
+    for (const field of Object.keys(fieldSchemas) as (keyof typeof fieldSchemas)[]) {
+      if (r[field] === undefined) continue
+      const parsed = fieldSchemas[field].safeParse(r[field])
+      if (parsed.success) entry[field] = parsed.data
+    }
+    if (Object.keys(entry).length > 0) out[key] = entry as BlockOverride
   }
   return out
 }
@@ -258,14 +255,16 @@ export function extractBlockOverrides(overrides: unknown): Record<string, BlockO
  * 연속 배치된다. 삭제 후 재업로드 없이 afterBlock 드롭다운만 바꾸면 위치를 옮길 수 있고,
  * 배열 순서는 위/아래 버튼으로 바꾼다 (편집기 UI, §customize-client.tsx).
  */
-export interface SectionImage {
+const SectionImageSchema = z.object({
   /** 클라이언트에서 생성하는 안정적인 key (React key 및 DOM 매칭용) */
-  id: string
-  url: string
+  id: z.string(),
+  url: nonEmptyString,
   /** 이 블럭 키의 섹션 바로 뒤에 삽입된다 */
-  afterBlock: string
-  caption?: string
-}
+  afterBlock: z.string(),
+  caption: z.string().optional(),
+})
+
+export type SectionImage = z.infer<typeof SectionImageSchema>
 
 /** customization_overrides.sectionImages 를 안전하게 SectionImage[] 로 정규화 */
 export function extractSectionImages(overrides: unknown): SectionImage[] {
@@ -274,13 +273,10 @@ export function extractSectionImages(overrides: unknown): SectionImage[] {
   if (!Array.isArray(raw)) return []
   const out: SectionImage[] = []
   for (const item of raw) {
-    if (!item || typeof item !== "object") continue
-    const r = item as Record<string, unknown>
-    if (typeof r.id !== "string" || typeof r.url !== "string" || typeof r.afterBlock !== "string") continue
-    if (!r.url) continue
-    const entry: SectionImage = { id: r.id, url: r.url, afterBlock: r.afterBlock }
-    if (typeof r.caption === "string" && r.caption) entry.caption = r.caption
-    out.push(entry)
+    const parsed = SectionImageSchema.safeParse(item)
+    if (!parsed.success) continue
+    // 빈 문자열 caption은 "설정 안 함"과 동일하게 취급한다(기존 관용 동작 유지).
+    out.push(parsed.data.caption ? parsed.data : { ...parsed.data, caption: undefined })
   }
   return out
 }

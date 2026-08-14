@@ -32,12 +32,27 @@ export async function POST(request: Request) {
 
   const { data: instance, error: instanceError } = await supabase
     .from("form_instances")
-    .select("id, customer_id")
+    .select("id, customer_id, expires_at")
     .eq("id", instanceId)
     .single()
 
   if (instanceError || !instance || instance.customer_id !== customerId) {
     return NextResponse.json({ error: "권한이 없습니다." }, { status: 403 })
+  }
+  // 만료된 링크로는 더 이상 고객 레코드를 갱신할 수 없다. (form_instances.status는
+  // 이 라우트가 불리기 직전에 클라이언트가 이미 'completed'로 바꿔놓으므로 여기서
+  // 참조할 수 없다 — 대신 customers.status로 "이 라우트가 이미 성공했는가"를 본다.)
+  if (instance.expires_at && new Date(instance.expires_at).getTime() < Date.now()) {
+    return NextResponse.json({ error: "만료된 폼입니다." }, { status: 410 })
+  }
+
+  const { data: existingCustomer } = await supabase
+    .from("customers")
+    .select("status")
+    .eq("id", customerId)
+    .maybeSingle()
+  if (existingCustomer?.status === "form_completed") {
+    return NextResponse.json({ error: "이미 제출이 완료된 폼입니다." }, { status: 409 })
   }
 
   const customerUpdates: Record<string, unknown> = { status: "form_completed" }
