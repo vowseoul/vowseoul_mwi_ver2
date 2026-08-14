@@ -18,6 +18,7 @@ import { resolveThemeSwatch } from '@/lib/theme-template'
 import { fontPreviewStyle, fontFileFormatLabel, extractGoogleFontFamily, type RegisteredFont } from '@/lib/fonts'
 import { useInjectFontFaces } from '@/lib/use-font-faces'
 import { Plus, Play, Pause, Trash2, Upload, Loader2, CheckCircle2 } from 'lucide-react'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 import { uploadFile, deleteFile } from '@/lib/storage'
 import { uploadImage } from '@/lib/image-upload'
 import Link from 'next/link'
@@ -152,7 +153,7 @@ export default function AssetsPage() {
   }
 
   const handleDeleteFont = async (id: string) => {
-    if (!confirm('정말로 이 폰트를 삭제하시겠습니까?')) return
+    if (!(await confirmDialog({ title: '이 폰트를 삭제하시겠습니까?', destructive: true, confirmText: '삭제' }))) return
     try {
       const fontToDelete = fonts.find(f => f.id === id)
       if (fontToDelete && fontToDelete.type === 'file' && fontToDelete.fileUrl) {
@@ -285,7 +286,7 @@ export default function AssetsPage() {
   }
 
   const handleDeleteBgm = async (id: string) => {
-    if (!confirm('정말로 이 BGM을 삭제하시겠습니까?')) return
+    if (!(await confirmDialog({ title: '이 BGM을 삭제하시겠습니까?', destructive: true, confirmText: '삭제' }))) return
     const { error } = await supabase.from('bgms').delete().eq('id', id)
     if (error) {
       alert('BGM 삭제에 실패했습니다.')
@@ -472,7 +473,7 @@ export default function AssetsPage() {
                       </Badge>
                       <p className="whitespace-pre-line text-sm">{phrase.text}</p>
                     </div>
-                    <Button variant="ghost" size="icon" className="text-destructive">
+                    <Button variant="ghost" size="icon" className="text-destructive" aria-label="삭제">
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -600,7 +601,7 @@ export default function AssetsPage() {
                     <Button variant="ghost" size="sm" onClick={() => openBgmEditDialog(bgm)}>
                       수정
                     </Button>
-                    <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDeleteBgm(bgm.id)}>
+                    <Button variant="ghost" size="icon" className="text-destructive" aria-label="삭제" onClick={() => handleDeleteBgm(bgm.id)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -730,7 +731,7 @@ export default function AssetsPage() {
                           </Badge>
                         </div>
                       </div>
-                      <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDeleteFont(font.id)}>
+                      <Button variant="ghost" size="icon" className="text-destructive" aria-label="삭제" onClick={() => handleDeleteFont(font.id)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>

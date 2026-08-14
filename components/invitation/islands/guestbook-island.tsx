@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase"
 import { ConsentNotice } from "../consent-notice"
 import { CONSENT_VERSION, GUESTBOOK_CONSENT_COPY } from "@/lib/privacy-consent"
 import { hashPassword } from "@/lib/dashboard-password"
-import { popupOverlay, popupCard, rsvpInput, RsvpField, type SlotProps } from "./shared"
+import { popupOverlay, popupCard, rsvpInput, RsvpField, useModalA11y, type SlotProps } from "./shared"
 
 /* ---------------------------- Guestbook ---------------------------- */
 /**
@@ -18,6 +18,7 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
   const [entries, setEntries] = useState<{ id: string; name: string; msg: string }[]>([])
   const [loading, setLoading] = useState(!!invitationId)
   const [open, setOpen] = useState(false)
+  const modalRef = useModalA11y(open, () => setOpen(false))
   const [name, setName] = useState("")
   const [msg, setMsg] = useState("")
   const [composePassword, setComposePassword] = useState("")
@@ -174,8 +175,16 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
 
       {open && (
         <div onClick={() => setOpen(false)} style={popupOverlay}>
-          <div className="vs-popup" onClick={(e) => e.stopPropagation()} style={popupCard}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>축하 메시지 남기기</h3>
+          <div
+            ref={modalRef}
+            className="vs-popup"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="vs-guestbook-title"
+            onClick={(e) => e.stopPropagation()}
+            style={popupCard}
+          >
+            <h3 id="vs-guestbook-title" style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>축하 메시지 남기기</h3>
             <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 16 }}>신랑 신부에게 축하의 메시지를 남겨주세요</p>
 
             <RsvpField label="이름">

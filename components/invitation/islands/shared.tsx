@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react"
 import type { FieldData, BlockOverrideMap } from "../invitation-frame"
 import type { RawInvitationData } from "@/lib/invitation-data"
 
@@ -54,4 +55,49 @@ export function RsvpField({ label, children }: { label: string; children: React.
       {children}
     </div>
   )
+}
+
+/** RSVP·방명록 팝업의 ESC 닫기 + 포커스 트랩. 아일랜드는 iframe(§invitation-frame.tsx)
+ * 안으로 portal 되므로, 이 훅이 붙는 카드의 ownerDocument(= iframe 문서)에 리스너를
+ * 걸어야 한다 — 최상위 window의 document에 걸면 iframe 안 포커스에서 발생하는 키
+ * 이벤트를 전혀 받지 못한다(별도 브라우징 컨텍스트라 버블링되지 않음). 폼이 열릴 때
+ * 카드 안 첫 포커스 가능 요소로 포커스를 옮기고, 닫히면 팝업을 열었던 요소로 되돌린다. */
+export function useModalA11y(open: boolean, onClose: () => void) {
+  const cardRef = useRef<HTMLDivElement>(null)
+  const onCloseRef = useRef(onClose)
+  useEffect(() => { onCloseRef.current = onClose })
+
+  useEffect(() => {
+    if (!open) return
+    const card = cardRef.current
+    const ownerDoc = card?.ownerDocument
+    if (!card || !ownerDoc) return
+
+    const previouslyFocused = ownerDoc.activeElement as HTMLElement | null
+    const getFocusable = () =>
+      Array.from(
+        card.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      )
+    getFocusable()[0]?.focus()
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { onCloseRef.current(); return }
+      if (e.key !== "Tab") return
+      const focusable = getFocusable()
+      if (focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (e.shiftKey && ownerDoc.activeElement === first) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && ownerDoc.activeElement === last) { e.preventDefault(); first.focus() }
+    }
+    ownerDoc.addEventListener("keydown", onKeyDown)
+    return () => {
+      ownerDoc.removeEventListener("keydown", onKeyDown)
+      previouslyFocused?.focus()
+    }
+  }, [open])
+
+  return cardRef
 }

@@ -465,6 +465,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                    aria-label="항목 삭제"
                     onClick={() => {
                       const newItems = items.filter((_, i) => i !== idx)
                       handleInputChange(field.field_key, newItems)
@@ -649,7 +650,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
     <div className="space-y-6 font-sans max-w-4xl mx-auto">
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}>
+          <Button variant="ghost" size="icon" onClick={() => router.back()} aria-label="뒤로가기">
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>

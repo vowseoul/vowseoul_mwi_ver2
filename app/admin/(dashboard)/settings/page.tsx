@@ -37,6 +37,7 @@ import {
 import { useProfilesQuery } from "@/hooks/queries/useCustomers"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
+import { confirmDialog } from "@/components/ui/confirm-dialog"
 import PaperTypesCard from "./paper-types-card"
 
 export default function AdminSettingsPage() {
@@ -127,7 +128,7 @@ export default function AdminSettingsPage() {
       return
     }
 
-    if (!confirm("이 직원 계정을 정말 삭제하시겠습니까? 관련 담당자 매핑이 해제될 수 있습니다.")) {
+    if (!(await confirmDialog({ title: "이 직원 계정을 삭제하시겠습니까?", description: "관련 담당자 매핑이 해제될 수 있습니다.", destructive: true, confirmText: "삭제" }))) {
       return
     }
 
@@ -1356,6 +1357,7 @@ export default function AdminSettingsPage() {
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7 shrink-0 text-destructive hover:bg-destructive/10"
+                            aria-label="삭제"
                             onClick={() => handleDeleteStaff(profile.id, profile.email)}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -1395,6 +1397,7 @@ export default function AdminSettingsPage() {
                                   variant="ghost"
                                   size="icon"
                                   className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                                  aria-label="삭제"
                                   onClick={() => handleDeleteStaff(profile.id, profile.email)}
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />

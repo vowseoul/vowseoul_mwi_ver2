@@ -49,6 +49,7 @@ import {
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
 import { logAuditEvent } from '@/lib/audit-log'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 
 export default function CustomersPage() {
   const [page, setPage] = useState(1)
@@ -59,7 +60,7 @@ export default function CustomersPage() {
   const deleteMutation = useDeleteCustomerMutation()
 
   const handleDelete = async (id: string) => {
-    if (!confirm('정말로 이 고객을 삭제하시겠습니까? (Soft delete 처리되어 복구 가능합니다)')) return
+    if (!(await confirmDialog({ title: '이 고객을 삭제하시겠습니까?', description: 'Soft delete 처리되어 복구 가능합니다.', destructive: true, confirmText: '삭제' }))) return
 
     try {
       await deleteMutation.mutateAsync(id)
@@ -137,7 +138,7 @@ export default function CustomersPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">전체 고객</CardTitle>
@@ -255,7 +256,7 @@ export default function CustomersPage() {
                   </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label="더보기">
                         <MoreHorizontal className="w-4 h-4" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -334,7 +335,7 @@ export default function CustomersPage() {
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="더보기">
                             <MoreHorizontal className="w-4 h-4" />
                           </Button>
                         </DropdownMenuTrigger>

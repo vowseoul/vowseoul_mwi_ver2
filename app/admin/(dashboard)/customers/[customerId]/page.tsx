@@ -48,6 +48,7 @@ import {
 } from '@/components/ui/dialog'
 import { ArrowLeft, Save, Copy, Check, ExternalLink, Loader2, Calendar, RefreshCw, FileCheck, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 
 export default function CustomerDetailPage({ params }: { params: Promise<{ customerId: string }> }) {
   const { customerId } = use(params)
@@ -128,7 +129,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
 
   const handleDeleteOrder = async () => {
     if (!order) return
-    if (!confirm('정말로 이 주문과 연결된 청첩장을 삭제하시겠습니까? 삭제 후에는 복구할 수 없습니다.')) return
+    if (!(await confirmDialog({ title: '주문과 청첩장을 삭제하시겠습니까?', description: '삭제 후에는 복구할 수 없습니다.', destructive: true, confirmText: '삭제' }))) return
     try {
       await deleteOrderMutation.mutateAsync({ orderId: order.id, invitationId: order.invitation_id, customerId })
       toast.success('주문과 청첩장이 삭제되었습니다.')
@@ -174,7 +175,11 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
   const handleUpdateFormVersion = async () => {
     if (!formInstance || !latestFields || latestFields.length === 0) return
     
-    const ok = confirm('선택하신 템플릿의 최신 필드 구성으로 정보 수집 폼을 업데이트하시겠습니까? 고객이 이전에 입력했던 답변들은 그대로 유지되며, 신규 필드만 추가/조정됩니다.')
+    const ok = await confirmDialog({
+      title: '정보 수집 폼을 최신 버전으로 업데이트하시겠습니까?',
+      description: '고객이 이전에 입력했던 답변들은 그대로 유지되며, 신규 필드만 추가/조정됩니다.',
+      confirmText: '업데이트',
+    })
     if (!ok) return
 
     setIsUpdatingVersion(true)
@@ -527,7 +532,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
   return (
     <div className="space-y-6 font-sans max-w-5xl mx-auto">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" asChild>
+        <Button variant="ghost" size="icon" asChild aria-label="뒤로가기">
           <Link href="/admin/customers">
             <ArrowLeft className="w-5 h-5" />
           </Link>
@@ -847,6 +852,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                         variant="outline"
                         size="icon"
                         className="h-9 w-9 shrink-0"
+                        aria-label="주소 복사"
                         onClick={() => handleCopy(`${baseUrl}/form/${formInstance.unique_url_slug}`, 'form')}
                       >
                         {isCopied('form') ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
@@ -937,6 +943,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                         variant="outline"
                         size="icon"
                         className="h-9 w-9 shrink-0"
+                        aria-label="주소 복사"
                         onClick={() => handleCopy(`${baseUrl}/w/${invitation.public_slug}`, 'public')}
                       >
                         {isCopied('public') ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
@@ -957,6 +964,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                         variant="outline"
                         size="icon"
                         className="h-9 w-9 shrink-0"
+                        aria-label="주소 복사"
                         onClick={() => handleCopy(`${baseUrl}/dashboard/${invitation.public_slug}`, 'dashboard')}
                       >
                         {isCopied('dashboard') ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}

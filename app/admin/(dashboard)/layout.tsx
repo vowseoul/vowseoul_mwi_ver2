@@ -163,7 +163,7 @@ export default function AdminLayout({
             {/* Mobile Menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild className="lg:hidden">
-                <Button variant="ghost" size="icon">
+                <Button variant="ghost" size="icon" aria-label="메뉴 열기">
                   <Menu className="h-5 w-5" />
                 </Button>
               </DropdownMenuTrigger>

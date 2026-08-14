@@ -7,6 +7,7 @@ import { InvitationFrame, type TokenMap } from "@/components/invitation/invitati
 import { ScaledPreview } from "@/components/ui/scaled-preview"
 import { buildSlots } from "@/components/invitation/slot-registry"
 import { buildFieldData, mergeInvitationRaw, normalizeSequence, isToggledOff, type SequenceEvent } from "@/lib/invitation-data"
+import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes-warning"
 import {
   REVIEW_STATUS_LABEL,
   CONTENT_FIELD_DEFS,
@@ -65,6 +66,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Slider } from "@/components/ui/slider"
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Copy, ExternalLink, Loader2, Plus, X } from "lucide-react"
 import { toast } from "sonner"
+import { confirmDialog } from "@/components/ui/confirm-dialog"
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core"
 import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable"
 
@@ -492,6 +494,18 @@ export default function CustomizeClient({
   const moveGalleryImage = (index: number, direction: -1 | 1) =>
     setGalleryImages((cur) => moveArrayItem(cur, index, direction))
 
+  // 이탈 경고 — save()가 실제로 보내는 값들과 같은 필드 집합의 지문을 비교해 저장 안 한
+  // 변경사항이 있으면 새로고침/탭 닫기 시 브라우저 확인을 받는다(§useUnsavedChangesWarning).
+  const dirtyFingerprint = JSON.stringify({
+    overrides, disabledSlots, blockOverrides, sectionImages, scrollMotion, introEnabled,
+    content, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign,
+    greetingImageRatio, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone,
+    bgmUrl, themeVersionId, blockOrder, ogTitle, ogDescription, ogImage,
+  })
+  const [initialFingerprint, setInitialFingerprint] = useState(dirtyFingerprint)
+  const isDirty = dirtyFingerprint !== initialFingerprint
+  useUnsavedChangesWarning(isDirty)
+
   const save = async (): Promise<boolean> => {
     // 동시 편집 충돌 감지 — 이 화면이 마지막으로 읽은 updated_at 이후 다른 관리자가
     // 먼저 저장했다면 그대로 덮어쓰지 않고 먼저 확인을 받는다(last-write-wins 방지).
@@ -502,9 +516,12 @@ export default function CustomizeClient({
         .eq("id", invitationId)
         .maybeSingle()
       if (current && current.updated_at !== lastKnownUpdatedAtRef.current) {
-        const overwrite = confirm(
-          "다른 관리자가 그 사이 이 청첩장을 먼저 저장했습니다. 계속 저장하면 그 변경사항이 덮어써집니다. 계속하시겠습니까?"
-        )
+        const overwrite = await confirmDialog({
+          title: "다른 관리자가 먼저 저장한 변경사항이 있습니다",
+          description: "계속 저장하면 그 변경사항이 덮어써집니다. 계속하시겠습니까?",
+          destructive: true,
+          confirmText: "덮어쓰고 저장",
+        })
         if (!overwrite) return false
       }
     }
@@ -568,6 +585,7 @@ export default function CustomizeClient({
       return false
     }
     lastKnownUpdatedAtRef.current = nextUpdatedAt
+    setInitialFingerprint(dirtyFingerprint)
     toast.success("저장되었습니다.")
     const { data: userData } = await supabase.auth.getUser()
     logAuditEvent(supabase, {

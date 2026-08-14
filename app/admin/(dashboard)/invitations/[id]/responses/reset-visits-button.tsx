@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { RotateCcw, Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import { confirmDialog } from "@/components/ui/confirm-dialog"
 
 /** "누적 방문" StatCard 옆에 놓는 초기화 버튼. 테스트 트래픽 제거 등 운영 편의용. */
 export function ResetVisitsButton({ invitationId }: { invitationId: string }) {
@@ -12,7 +13,7 @@ export function ResetVisitsButton({ invitationId }: { invitationId: string }) {
   const [isResetting, setIsResetting] = useState(false)
 
   const handleReset = async () => {
-    if (!confirm("정말로 이 청첩장의 누적 방문수를 초기화하시겠습니까? 이 동작은 되돌릴 수 없습니다.")) return
+    if (!(await confirmDialog({ title: "누적 방문수를 초기화하시겠습니까?", description: "이 동작은 되돌릴 수 없습니다.", destructive: true, confirmText: "초기화" }))) return
     setIsResetting(true)
     try {
       const res = await fetch("/api/admin/reset-visits", {

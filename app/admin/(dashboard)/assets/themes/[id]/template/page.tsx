@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes-warning"
 import { useParams } from "next/navigation"
 import JSZip from "jszip"
 import { supabase, logSupabaseError } from "@/lib/supabase"
@@ -67,6 +68,12 @@ export default function TemplateThemeEditor() {
   // 미리보기에 반영된 값 (적용 버튼으로 갱신 → 키입력마다 iframe 재작성 방지)
   const [applied, setApplied] = useState<{ html: string; css: string; slots: string[] }>({ html: "", css: "", slots: [] })
 
+  // 이탈 경고 — 로드 직후(§아래 useEffect)와 저장 성공 직후 스냅샷을 다시 찍어 비교한다.
+  const [initialFingerprint, setInitialFingerprint] = useState<string | null>(null)
+  const dirtyFingerprint = JSON.stringify({ name, renderEngine, html, css, slotManifest, fieldManifest, blockManifest, tokenValues, otherStyles })
+  const isDirty = initialFingerprint !== null && dirtyFingerprint !== initialFingerprint
+  useUnsavedChangesWarning(isDirty)
+
   useEffect(() => {
     let active = true
     ;(async () => {
@@ -96,6 +103,17 @@ export default function TemplateThemeEditor() {
           css: data.template_css || "",
           slots: Array.isArray(data.slot_manifest) ? data.slot_manifest : [],
         })
+        setInitialFingerprint(JSON.stringify({
+          name: data.name || "",
+          renderEngine: data.render_engine === "template" ? "template" : "legacy",
+          html: data.template_html || "",
+          css: data.template_css || "",
+          slotManifest: Array.isArray(data.slot_manifest) ? data.slot_manifest : [],
+          fieldManifest: Array.isArray(data.field_manifest) ? data.field_manifest : [],
+          blockManifest: Array.isArray(data.block_manifest) ? data.block_manifest : [],
+          tokenValues: resolved,
+          otherStyles: rest,
+        }))
       }
       setLoading(false)
     })()
@@ -209,6 +227,7 @@ export default function TemplateThemeEditor() {
       toast.error(`저장 실패: ${error.message}`)
       return false
     }
+    setInitialFingerprint(dirtyFingerprint)
     toast.success("저장되었습니다.")
     return true
   }

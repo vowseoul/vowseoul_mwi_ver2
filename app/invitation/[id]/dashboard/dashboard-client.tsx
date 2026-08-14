@@ -31,6 +31,7 @@ import {
   Pencil
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 
 export interface RSVP {
   id: string
@@ -188,7 +189,7 @@ export default function CustomerDashboardClient({
 
   const handleBulkDelete = async () => {
     const ids = Array.from(selectedGuestbookIds)
-    if (!confirm(`선택한 방명록 ${ids.length}건을 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return
+    if (!(await confirmDialog({ title: `선택한 방명록 ${ids.length}건을 삭제하시겠습니까?`, description: '되돌릴 수 없습니다.', destructive: true, confirmText: '삭제' }))) return
     const results = await Promise.all(
       ids.map(id => postDashboardAction({ action: 'delete', invitationId, id, target: 'guestbook' }))
     )
@@ -520,8 +521,9 @@ export default function CustomerDashboardClient({
                                 variant="ghost"
                                 size="icon"
                                 className="w-7 h-7 text-muted-foreground hover:text-destructive"
-                                onClick={() => {
-                                  if (confirm('해당 하객 참석 정보를 삭제하시겠습니까?')) {
+                                aria-label="삭제"
+                                onClick={async () => {
+                                  if (await confirmDialog({ title: '해당 하객 참석 정보를 삭제하시겠습니까?', destructive: true, confirmText: '삭제' })) {
                                     handleDeleteItem(rsvp.id, 'rsvp')
                                   }
                                 }}
@@ -620,8 +622,9 @@ export default function CustomerDashboardClient({
                                 variant="ghost"
                                 size="icon"
                                 className="w-7 h-7 text-muted-foreground hover:text-destructive"
-                                onClick={() => {
-                                  if (confirm('해당 방명록 글을 삭제하시겠습니까?')) {
+                                aria-label="삭제"
+                                onClick={async () => {
+                                  if (await confirmDialog({ title: '해당 방명록 글을 삭제하시겠습니까?', destructive: true, confirmText: '삭제' })) {
                                     handleDeleteItem(msg.id, 'guestbook')
                                   }
                                 }}

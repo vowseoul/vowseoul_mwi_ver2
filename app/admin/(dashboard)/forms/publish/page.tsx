@@ -21,6 +21,7 @@ import {
 } from '@/hooks/queries/useForms'
 import { ArrowLeft, Send, Copy, Check, ExternalLink, Loader2, Link as LinkIcon, ShieldAlert } from 'lucide-react'
 import { toast } from 'sonner'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 import { v4 as uuidv4 } from 'uuid'
 import { hashPassword } from '@/lib/dashboard-password'
 import { useCopyFeedback } from '@/lib/use-copy-feedback'
@@ -90,7 +91,11 @@ function FormPublishContent() {
     }
 
     if (isMobileRequested && !templateIncludesMobile) {
-      const ok = confirm('이 고객은 모바일 청첩장 제작 대상(O)이나, 선택한 양식은 모바일 필드가 없는 [지류 단독형]입니다. 그래도 발행하시겠습니까?')
+      const ok = await confirmDialog({
+        title: '모바일 필드가 없는 양식입니다',
+        description: '이 고객은 모바일 청첩장 제작 대상(O)이나, 선택한 양식은 모바일 필드가 없는 [지류 단독형]입니다. 그래도 발행하시겠습니까?',
+        confirmText: '발행',
+      })
       if (!ok) {
         return
       }
@@ -166,7 +171,7 @@ function FormPublishContent() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-700">정보 수집 폼 공유 주소</label>
+              <label className="text-xs font-semibold text-foreground">정보 수집 폼 공유 주소</label>
               <div className="flex gap-2">
                 <Input value={formUrl} readOnly className="bg-white border-green-200 text-sm h-10" />
                 <Button onClick={handleCopy} className="h-10 px-4 shrink-0 bg-green-600 hover:bg-green-700">
@@ -199,7 +204,7 @@ function FormPublishContent() {
   return (
     <div className="space-y-6 font-sans max-w-2xl mx-auto">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" asChild>
+        <Button variant="ghost" size="icon" asChild aria-label="뒤로가기">
           <Link href="/admin/forms">
             <ArrowLeft className="w-5 h-5" />
           </Link>
@@ -272,7 +277,7 @@ function FormPublishContent() {
               {/* Fields Preview */}
               {templateId && templateId !== 'none' && (
                 <div className="bg-muted/10 border border-border rounded-xl p-4 space-y-2.5">
-                  <span className="text-xs font-semibold text-slate-700 block">수집할 정보 필드 목록 미리보기</span>
+                  <span className="text-xs font-semibold text-foreground block">수집할 정보 필드 목록 미리보기</span>
                   {isLoadingFields ? (
                     <div className="flex items-center text-xs text-muted-foreground py-2">
                       <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> 불러오는 중...

@@ -85,7 +85,7 @@ export default function NewCustomerPage() {
   return (
     <div className="space-y-6 font-sans max-w-3xl mx-auto">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" asChild>
+        <Button variant="ghost" size="icon" asChild aria-label="뒤로가기">
           <Link href="/admin/customers">
             <ArrowLeft className="w-5 h-5" />
           </Link>

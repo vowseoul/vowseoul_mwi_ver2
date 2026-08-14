@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, use } from 'react'
+import { useUnsavedChangesWarning } from '@/lib/use-unsaved-changes-warning'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -42,6 +43,7 @@ import {
   Search
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 import { cn } from '@/lib/utils'
 
 const getDefaultFieldBlocks = () => [
@@ -125,6 +127,13 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
   const [dragOverSection, setDragOverSection] = useState<{ page: string; section: string } | null>(null)
   const [dragOverFieldOriginalIndex, setDragOverFieldOriginalIndex] = useState<number | null>(null)
 
+  // 이탈 경고 — handleSave가 실제로 저장하는 필드 배치(selectedFields)만 비교한다.
+  // emptyPages/emptySections는 저장되지 않는 화면 전용 상태라 지문에서 제외한다.
+  const [initialFieldsFingerprint, setInitialFieldsFingerprint] = useState<string | null>(null)
+  const fieldsFingerprint = JSON.stringify(selectedFields)
+  const isDirty = initialFieldsFingerprint !== null && fieldsFingerprint !== initialFieldsFingerprint
+  useUnsavedChangesWarning(isDirty)
+
   // Populate state on load
   useEffect(() => {
     if (templateFields && templateFields.length > 0) {
@@ -157,10 +166,12 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
       setSelectedFields(fields)
       setEmptyPages([])
       setEmptySections({})
+      setInitialFieldsFingerprint(JSON.stringify(fields))
     } else {
       setSelectedFields([])
       setEmptyPages([])
       setEmptySections({})
+      setInitialFieldsFingerprint(JSON.stringify([]))
     }
   }, [templateFields])
 
@@ -429,8 +440,8 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
     )
   }
 
-  const handleDeletePage = (pageTitle: string) => {
-    if (!confirm(`"${pageTitle}" 단계에 포함된 모든 필드가 해제됩니다. 정말로 삭제하시겠습니까?`)) {
+  const handleDeletePage = async (pageTitle: string) => {
+    if (!(await confirmDialog({ title: `"${pageTitle}" 단계를 삭제하시겠습니까?`, description: '포함된 모든 필드가 해제됩니다.', destructive: true, confirmText: '삭제' }))) {
       return
     }
     
@@ -444,8 +455,8 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
     setSelectedFields(prev => prev.filter(f => (f.options?.page_title?.trim() || '기본 페이지') !== pageTitle))
   }
 
-  const handleDeleteSection = (pageTitle: string, sectionTitle: string) => {
-    if (!confirm(`"${sectionTitle}" 섹션에 포함된 모든 필드가 해제됩니다. 정말로 삭제하시겠습니까?`)) {
+  const handleDeleteSection = async (pageTitle: string, sectionTitle: string) => {
+    if (!(await confirmDialog({ title: `"${sectionTitle}" 섹션을 삭제하시겠습니까?`, description: '포함된 모든 필드가 해제됩니다.', destructive: true, confirmText: '삭제' }))) {
       return
     }
     
@@ -596,7 +607,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
     <div className="space-y-6 font-sans">
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-border pb-4">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" asChild>
+          <Button variant="ghost" size="icon" asChild aria-label="뒤로가기">
             <Link href="/admin/forms">
               <ArrowLeft className="w-5 h-5" />
             </Link>
@@ -674,6 +685,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                       variant="ghost"
                       size="icon"
                       className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 text-muted-foreground hover:text-foreground text-xs"
+                      aria-label="검색어 지우기"
                       onClick={() => setSearchQuery('')}
                     >
                       ×
@@ -716,6 +728,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                               className="h-8 w-8 shrink-0 transition-transform active:scale-95"
                               onClick={() => handleAddField(field)}
                               disabled={isAdded}
+                              aria-label={isAdded ? "추가됨" : "필드 추가"}
                             >
                               {isAdded ? <Check className="w-4 h-4 text-green-600" /> : <Plus className="w-4 h-4" />}
                             </Button>
@@ -840,6 +853,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                           size="icon"
                           onClick={() => handleDeletePage(page.title)}
                           className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                          aria-label="단계 삭제"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
@@ -909,6 +923,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                 size="icon"
                                 onClick={() => handleDeleteSection(page.title, section.title)}
                                 className="h-6 w-6 text-destructive hover:bg-destructive/10"
+                                aria-label="섹션 삭제"
                               >
                                 <Trash2 className="w-3 h-3" />
                               </Button>
@@ -995,6 +1010,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                         size="icon"
                                         className={cn("h-7 w-7", isExpanded && "bg-primary/10 text-primary")}
                                         onClick={() => setExpandedFieldId(isExpanded ? null : field.field_library_id)}
+                                        aria-label="필드 설정"
                                       >
                                         <Settings className="w-3.5 h-3.5" />
                                       </Button>
@@ -1004,6 +1020,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                         size="icon"
                                         className="h-7 w-7 text-destructive hover:bg-destructive/10"
                                         onClick={() => handleRemoveField(field.field_library_id)}
+                                        aria-label="필드 제거"
                                       >
                                         <Trash2 className="w-3.5 h-3.5" />
                                       </Button>
@@ -1123,6 +1140,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                                     variant="ghost"
                                                     size="icon"
                                                     className="h-6 w-6 text-destructive shrink-0 mt-1 hover:bg-destructive/10"
+                                                    aria-label="선택지 삭제"
                                                     onClick={() => {
                                                       const currentOpts = typeof field.options === 'string' ? JSON.parse(field.options || '{}') : (field.options || {});
                                                       const choices = Array.isArray(currentOpts.choices) ? currentOpts.choices.filter((_: any, i: number) => i !== idx) : [];

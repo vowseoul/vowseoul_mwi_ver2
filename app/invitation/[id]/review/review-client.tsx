@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
+import { confirmDialog } from "@/components/ui/confirm-dialog"
 import { MessageSquarePlus, X, ListChecks, Check } from "lucide-react"
 import { InvitationFrame, type BlockOverrideMap, type FontFace, type SectionImage, type TokenMap } from "@/components/invitation/invitation-frame"
 import { buildSlots } from "@/components/invitation/slot-registry"
@@ -106,7 +107,7 @@ export default function ReviewClient({
   }
 
   const confirmApprove = async () => {
-    if (!confirm("이 상태로 청첩장 제작을 확정하시겠습니까?")) return
+    if (!(await confirmDialog({ title: "이 상태로 청첩장 제작을 확정하시겠습니까?", confirmText: "확정" }))) return
     try {
       const res = await fetch("/api/review-submit", {
         method: "POST",

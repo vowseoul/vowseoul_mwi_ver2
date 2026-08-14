@@ -43,6 +43,7 @@ import {
 } from '@/hooks/queries/useForms'
 import { FileText, Plus, Search, Edit2, Copy, Trash2, ArrowLeft, Settings, LayoutGrid, Eye, Edit, Loader2, ZoomIn } from 'lucide-react'
 import { toast } from 'sonner'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
@@ -88,7 +89,7 @@ export default function FormTemplatesPage() {
 
 
   const handleCopyTemplate = async (template: any) => {
-    if (!confirm(`"${template.name}" 템플릿을 복사하시겠습니까?`)) {
+    if (!(await confirmDialog({ title: `"${template.name}" 템플릿을 복사하시겠습니까?`, confirmText: '복사' }))) {
       return
     }
 
@@ -395,6 +396,7 @@ export default function FormTemplatesPage() {
                     variant="ghost"
                     size="icon"
                     className="h-9 w-9 text-muted-foreground hover:text-destructive shrink-0"
+                    aria-label="항목 삭제"
                     onClick={() => {
                       const newItems = items.filter((_: any, i: number) => i !== idx)
                       handlePreviewInputChange(field.field_key, newItems)
@@ -857,7 +859,7 @@ export default function FormTemplatesPage() {
   }
 
   const handleDeleteTemplate = async (templateId: string) => {
-    if (!confirm('이 폼 템플릿을 정말로 삭제하시겠습니까? 삭제 후에는 복구할 수 없습니다.')) {
+    if (!(await confirmDialog({ title: '이 폼 템플릿을 삭제하시겠습니까?', description: '삭제 후에는 복구할 수 없습니다.', destructive: true, confirmText: '삭제' }))) {
       return
     }
 
@@ -879,7 +881,7 @@ export default function FormTemplatesPage() {
     <div className="space-y-6 font-sans">
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" asChild>
+          <Button variant="ghost" size="icon" asChild aria-label="뒤로가기">
             <Link href="/admin">
               <ArrowLeft className="w-5 h-5" />
             </Link>
@@ -1064,6 +1066,7 @@ export default function FormTemplatesPage() {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      aria-label="삭제"
                       onClick={() => handleDeleteTemplate(template.id)}
                     >
                       <Trash2 className="w-4 h-4" />
@@ -1190,6 +1193,7 @@ export default function FormTemplatesPage() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive shrink-0"
+                          aria-label="삭제"
                           onClick={() => handleDeleteTemplate(template.id)}
                         >
                           <Trash2 className="w-4 h-4" />

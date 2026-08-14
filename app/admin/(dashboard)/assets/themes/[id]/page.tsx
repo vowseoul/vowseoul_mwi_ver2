@@ -600,7 +600,7 @@ export default function ThemeEditorPage() {
       <div className="flex-1 flex flex-col overflow-hidden bg-background border rounded-lg shadow-sm">
         <div className="flex items-center justify-between p-4 border-b">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={() => router.push('/admin/assets')}>
+            <Button variant="ghost" size="icon" onClick={() => router.push('/admin/assets')} aria-label="뒤로가기">
               <ChevronLeft className="w-5 h-5" />
             </Button>
             <h2 className="text-lg font-semibold">{isNew ? '새 테마 등록' : '테마 상세 설정'}</h2>
@@ -1072,10 +1072,10 @@ export default function ThemeEditorPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-[10px]" onClick={() => handleMoveUp(index)} disabled={index === 0}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-[10px]" onClick={() => handleMoveUp(index)} disabled={index === 0} aria-label="위로 이동">
                             ▲
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-[10px]" onClick={() => handleMoveDown(index)} disabled={index === theme.sectionOrder.length - 1}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-[10px]" onClick={() => handleMoveDown(index)} disabled={index === theme.sectionOrder.length - 1} aria-label="아래로 이동">
                             ▼
                           </Button>
                         </div>

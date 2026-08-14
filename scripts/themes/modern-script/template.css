@@ -18,7 +18,7 @@
   margin: 0 auto;
   background-color: var(--bg);
   color: var(--ink);
-  font-family: var(--font-kr);
+  font-family: var(--font-kr, 'Noto Serif KR', serif);
   line-height: 1.6;
   position: relative;
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
@@ -66,7 +66,7 @@
 }
 
 .ms-section__subtitle {
-  font-family: var(--font-en);
+  font-family: var(--font-en, 'Cormorant Garamond', serif);
   font-size: var(--text-label, 13.6px);
   letter-spacing: 0.3em;
   color: var(--accent);
@@ -174,7 +174,7 @@
 }
 
 .ms-hero__sub {
-  font-family: var(--font-en);
+  font-family: var(--font-en, 'Cormorant Garamond', serif);
   font-size: var(--text-label, 14.4px);
   letter-spacing: 0.4em;
   opacity: 0.6;
@@ -205,7 +205,7 @@
 }
 
 .ms-hero__connector {
-  font-family: var(--font-en);
+  font-family: var(--font-en, 'Cormorant Garamond', serif);
   font-size: 1.5rem;
   font-style: italic;
   color: var(--accent);

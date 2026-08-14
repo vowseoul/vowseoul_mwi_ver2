@@ -5,7 +5,7 @@ import { Calendar as CalendarIcon } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { ConsentNotice } from "../consent-notice"
 import { CONSENT_VERSION, RSVP_CONSENT_COPY } from "@/lib/privacy-consent"
-import { popupOverlay, popupCard, rsvpInput, RsvpField, type SlotProps } from "./shared"
+import { popupOverlay, popupCard, rsvpInput, RsvpField, useModalA11y, type SlotProps } from "./shared"
 
 /** 관리자가 rsvp_meal_menu에 입력한 자유 텍스트("한식, 양식, 어린이 메뉴" 등)를
  * 콤마/세미콜론/줄바꿈 기준으로 나눠 커스텀 식사 옵션 목록을 만든다.
@@ -54,6 +54,7 @@ function CheckmarkDraw({ color }: { color: string }) {
 }
 function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
   const [open, setOpen] = useState(false)
+  const modalRef = useModalA11y(open, () => setOpen(false))
   const [done, setDone] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -233,8 +234,16 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
 
       {open && (
         <div onClick={() => setOpen(false)} style={popupOverlay}>
-          <div className="vs-popup" onClick={(e) => e.stopPropagation()} style={popupCard}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>참석 여부 전달</h3>
+          <div
+            ref={modalRef}
+            className="vs-popup"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="vs-rsvp-title"
+            onClick={(e) => e.stopPropagation()}
+            style={popupCard}
+          >
+            <h3 id="vs-rsvp-title" style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>참석 여부 전달</h3>
             <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 16 }}>참석 여부와 인원을 알려주세요</p>
 
             <RsvpField label="성함">

@@ -893,6 +893,7 @@ function PublicFormContent({ slug }: { slug: string }) {
                       className="h-10 w-10 text-muted-foreground hover:text-red-500 hover:bg-red-50 shrink-0 rounded-lg"
                       onClick={() => removeRow(idx)}
                       title="삭제"
+                      aria-label="삭제"
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
