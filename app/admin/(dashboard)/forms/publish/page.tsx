@@ -343,7 +343,7 @@ function FormPublishContent() {
               <Button type="button" variant="outline" asChild disabled={isSubmitting}>
                 <Link href="/admin/forms">취소</Link>
               </Button>
-              <Button type="submit" className="gap-2" disabled={isSubmitting || (templateId && templateFields?.length === 0)}>
+              <Button type="submit" className="gap-2" disabled={isSubmitting || !!(templateId && templateFields?.length === 0)}>
                 {isSubmitting ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (

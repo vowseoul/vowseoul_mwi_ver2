@@ -7,6 +7,7 @@ export interface FieldLibraryItem {
   label: string
   help_text: string | null
   field_type: 'text' | 'date' | 'time' | 'select' | 'address' | 'phone' | 'image' | 'textarea' | 'number'
+    | 'rselect' | 'toggle' | 'images' | 'music' | 'select_text' | 'timentext' | 'imageselect' | 'mselect' | 'slug'
   validation_rules: any
   category: '신랑 정보' | '신부 정보' | '예식 정보' | '혼주 정보' | '계좌 정보' | '이미지' | 'BGM' | 'RSVP 설정' | '카카오 공유' | '영상' | '지류 전용'
   is_system: boolean
@@ -181,7 +182,7 @@ export function useFormTemplateQuery(templateId: string) {
 export function useCreateFormTemplateMutation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (newTemplate: Omit<FormTemplate, 'id' | 'created_at' | 'updated_at' | 'deleted_at' | 'current_version'>) => {
+    mutationFn: async (newTemplate: Omit<FormTemplate, 'id' | 'created_at' | 'updated_at' | 'deleted_at' | 'current_version' | 'created_by'>) => {
       const { data: { user } } = await supabase.auth.getUser()
       const { data, error } = await supabase
         .from('form_templates')

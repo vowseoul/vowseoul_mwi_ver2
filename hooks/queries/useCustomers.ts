@@ -103,7 +103,7 @@ export function useCreateCustomerMutation() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (newCustomer: Omit<Customer, 'id' | 'created_at' | 'updated_at' | 'deleted_at'>) => {
+    mutationFn: async (newCustomer: Omit<Customer, 'id' | 'created_at' | 'updated_at' | 'deleted_at' | 'created_by'>) => {
       // Get current logged-in user to map created_by
       const { data: { user } } = await supabase.auth.getUser()
       const created_by = user?.id || null

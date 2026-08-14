@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/select'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
-import { useFieldsQuery, useCreateFieldMutation, useUpdateFieldMutation, useDeleteFieldMutation } from '@/hooks/queries/useForms'
+import { useFieldsQuery, useCreateFieldMutation, useUpdateFieldMutation, useDeleteFieldMutation, type FieldLibraryItem } from '@/hooks/queries/useForms'
 import { Plus, Search, ArrowLeft, Shield, FileCode2, Loader2, Save, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Settings, Sparkles, Link2, X, ChevronsUpDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
@@ -159,6 +159,10 @@ const getDefaultFieldBlocks = () => [
       { field_key: 'wedding_hall_phone', label_override: '예식장 연락처', is_required: false, section_title: '예식 장소', page_title: '2단계: 예식 정보' }
     ]
   }
+]
+
+const ALL_CATEGORIES: FieldLibraryItem['category'][] = [
+  '신랑 정보', '신부 정보', '예식 정보', '혼주 정보', '계좌 정보', '이미지', 'BGM', 'RSVP 설정', '카카오 공유', '영상', '지류 전용',
 ]
 
 export default function FieldLibraryPage() {
@@ -347,9 +351,8 @@ export default function FieldLibraryPage() {
 
   // Dynamic available categories from current data
   const availableCategories = React.useMemo(() => {
-    if (!fields) return ['신랑 정보', '신부 정보', '예식 정보', '혼주 정보', '계좌 정보', '이미지', 'BGM', 'RSVP 설정', '카카오 공유', '영상', '지류 전용']
-    const cats = new Set(fields.map((f) => f.category).filter(Boolean))
-    ;['신랑 정보', '신부 정보', '예식 정보', '혼주 정보', '계좌 정보', '이미지', 'BGM', 'RSVP 설정', '카카오 공유', '영상', '지류 전용'].forEach((c) => cats.add(c))
+    const cats = new Set<FieldLibraryItem['category']>(ALL_CATEGORIES)
+    fields?.forEach((f) => { if (f.category) cats.add(f.category) })
     return Array.from(cats)
   }, [fields])
 

@@ -4,3 +4,11 @@ allowBuilds:
   unrs-resolver: false
 onlyBuiltDependencies:
   - sharp
+
+# eslint 툴체인 내부 전이 의존성의 알려진 취약점 패치 — 분기별 의존성 감사(§DEPENDENCY_AUDIT.md)로 발견.
+# 이 3개는 개발용 빌드 도구 내부 leaf 패키지라 강제로 올려도 런타임/빌드 결과에 영향이 없다.
+overrides:
+  'brace-expansion@1': '>=1.1.18'
+  'brace-expansion@5': '>=5.0.9'
+  js-yaml: '>=4.3.1'
+  nanoid: '>=3.3.18'

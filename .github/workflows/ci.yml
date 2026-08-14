@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main, beta]
+  pull_request:
+
+jobs:
+  test-and-typecheck:
+    name: Test & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm typecheck
+
+  # eslint 은 현재 레거시 오류(주로 React Compiler의 react-hooks/set-state-in-effect,
+  # react-hooks/preserve-manual-memoization)가 남아있어 병합을 막지 않는 정보성
+  # 체크로만 돈다. 그 정리가 끝나면 continue-on-error 를 지우고 필수 체크로 승격한다.
+  lint:
+    name: Lint (non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
