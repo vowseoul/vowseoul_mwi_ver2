@@ -1257,18 +1257,17 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
     if (!invitationId) { setLoading(false); return }
     let active = true
     ;(async () => {
-      const { data, error: err } = await supabase
-        .from("guestbook_entries")
-        .select("id, author_name, message")
-        .eq("invitation_id", invitationId)
-        .eq("is_visible", true)
-        .order("created_at", { ascending: false })
-        .limit(50)
-      if (!active) return
-      if (!err && data) {
-        setEntries(data.map((r) => ({ id: r.id, name: r.author_name, msg: r.message })))
+      try {
+        const res = await fetch(`/api/guestbook?invitationId=${encodeURIComponent(invitationId)}`)
+        const json = await res.json()
+        if (!active) return
+        if (res.ok && Array.isArray(json.entries)) {
+          setEntries(json.entries.map((r: { id: string; author_name: string; message: string }) => ({ id: r.id, name: r.author_name, msg: r.message })))
+        }
+      } catch {
+        // 조용히 실패 — 방명록 목록만 비어 보인다
       }
-      setLoading(false)
+      if (active) setLoading(false)
     })()
     return () => { active = false }
   }, [invitationId])

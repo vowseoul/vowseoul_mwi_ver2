@@ -599,7 +599,15 @@ export function InvitationFrame({
       "position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;" +
       "background:var(--bg,#fff);color:var(--ink,#333);font-family:var(--font-kr,inherit);" +
       "opacity:1;transition:opacity 500ms ease-out;"
-    overlay.innerHTML = `<div style="text-align:center;font-size:22px;letter-spacing:.05em;">${groom}<span style="opacity:.45;margin:0 10px;">&amp;</span>${bride}</div>`
+    const names = doc.createElement("div")
+    names.style.cssText = "text-align:center;font-size:22px;letter-spacing:.05em;"
+    names.appendChild(doc.createTextNode(groom))
+    const amp = doc.createElement("span")
+    amp.style.cssText = "opacity:.45;margin:0 10px;"
+    amp.textContent = "&"
+    names.appendChild(amp)
+    names.appendChild(doc.createTextNode(bride))
+    overlay.appendChild(names)
     doc.body.appendChild(overlay)
 
     let dismissed = false

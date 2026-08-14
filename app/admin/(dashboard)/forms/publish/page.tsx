@@ -22,6 +22,7 @@ import {
 import { ArrowLeft, Send, Copy, Check, ExternalLink, Loader2, Link as LinkIcon, ShieldAlert } from 'lucide-react'
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
+import { hashPassword } from '@/lib/dashboard-password'
 
 function FormPublishContent() {
   const router = useRouter()
@@ -112,13 +113,14 @@ function FormPublishContent() {
       }))
 
       // 3. Create Form Instance
+      const trimmedPassword = accessPassword.trim()
       await createInstanceMutation.mutateAsync({
         customer_id: customerId,
         template_id: templateId,
         fields_snapshot: fieldsSnapshot,
         unique_url_slug: slug,
         status: 'active',
-        access_password: accessPassword.trim() || null,
+        access_password: trimmedPassword ? await hashPassword(trimmedPassword) : null,
         expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
       })
 

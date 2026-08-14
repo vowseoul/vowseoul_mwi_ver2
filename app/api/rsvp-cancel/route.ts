@@ -33,14 +33,14 @@ export async function POST(request: Request) {
     .eq("invitation_id", invitationId)
 
   const match = rows?.find((r) => String(r.phone ?? "").replace(/[^0-9]/g, "") === digitsOnly)
-  if (!match) {
-    return NextResponse.json({ error: "해당 연락처로 제출된 참석 응답을 찾을 수 없습니다." }, { status: 404 })
-  }
-
-  const { error: deleteError } = await supabase.from("rsvp_responses").delete().eq("id", match.id)
-  if (deleteError) {
-    console.error("rsvp-cancel failed:", deleteError.message)
-    return NextResponse.json({ error: "취소 처리에 실패했습니다." }, { status: 500 })
+  // invitationId + 전화번호 조합이 실제로 존재하는지를 응답 코드 차이(404 vs 200)로
+  // 노출하지 않는다 — 그 자체가 "이 사람이 참석 응답을 했는가"를 알려주는 오라클이 된다.
+  if (match) {
+    const { error: deleteError } = await supabase.from("rsvp_responses").delete().eq("id", match.id)
+    if (deleteError) {
+      console.error("rsvp-cancel failed:", deleteError.message)
+      return NextResponse.json({ error: "취소 처리에 실패했습니다." }, { status: 500 })
+    }
   }
 
   return NextResponse.json({ ok: true })
