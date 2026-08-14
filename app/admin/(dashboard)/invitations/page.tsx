@@ -38,6 +38,7 @@ import {
 } from '@/hooks/queries/useInvitations'
 import { useCustomersQuery } from '@/hooks/queries/useCustomers'
 import { useThemesQuery } from '@/hooks/queries/useThemes'
+import { useCopyFeedback } from '@/lib/use-copy-feedback'
 import { 
   Plus, 
   Search, 
@@ -75,7 +76,7 @@ export default function InvitationsListPage() {
   const [publicSlug, setPublicSlug] = useState('')
   const [isCreating, setIsCreating] = useState(false)
 
-  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const { isCopied, copy: copyText } = useCopyFeedback()
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
@@ -175,10 +176,8 @@ export default function InvitationsListPage() {
 
   const handleCopyLink = (slug: string, id: string) => {
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
-    navigator.clipboard.writeText(`${baseUrl}/w/${slug}`)
-    setCopiedId(id)
+    copyText(`${baseUrl}/w/${slug}`, id)
     toast.success('하객용 청첩장 주소가 클립보드에 복사되었습니다.')
-    setTimeout(() => setCopiedId(null), 2000)
   }
 
   const filteredInvitations = invitations?.filter((inv) => {
@@ -367,7 +366,7 @@ export default function InvitationsListPage() {
                       className="h-8 text-[11px]"
                       onClick={() => handleCopyLink(inv.public_slug, inv.id)}
                     >
-                      {copiedId === inv.id ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Link2 className="w-3.5 h-3.5" />}
+                      {isCopied(inv.id) ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Link2 className="w-3.5 h-3.5" />}
                       <span className="ml-1">복사</span>
                     </Button>
                     <Button variant="outline" size="sm" asChild className="h-8 text-[11px] gap-1">
@@ -509,7 +508,7 @@ export default function InvitationsListPage() {
                         className="h-8"
                         onClick={() => handleCopyLink(inv.public_slug, inv.id)}
                       >
-                        {copiedId === inv.id ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Link2 className="w-3.5 h-3.5" />}
+                        {isCopied(inv.id) ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Link2 className="w-3.5 h-3.5" />}
                         <span className="ml-1 text-[11px]">복사</span>
                       </Button>
                     </TableCell>

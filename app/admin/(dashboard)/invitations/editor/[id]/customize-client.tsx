@@ -6,7 +6,22 @@ import { uploadImage } from "@/lib/image-upload"
 import { InvitationFrame, type TokenMap } from "@/components/invitation/invitation-frame"
 import { ScaledPreview } from "@/components/ui/scaled-preview"
 import { buildSlots } from "@/components/invitation/slot-registry"
-import { buildFieldData, mergeInvitationRaw } from "@/lib/invitation-data"
+import { buildFieldData, mergeInvitationRaw, normalizeSequence, isToggledOff, type SequenceEvent } from "@/lib/invitation-data"
+import {
+  REVIEW_STATUS_LABEL,
+  CONTENT_FIELD_DEFS,
+  ACCOUNT_FIELD_DEFS,
+  DECEASED_KEY_BY_NAME_FIELD,
+  DECEASED_KEYS,
+  CONTACT_FIELD_DEFS,
+  SLOT_LABELS,
+  ALL_TEXT_FIELD_DEFS,
+  MANAGED_CONTENT_KEYS,
+  moveArrayItem,
+  extractTokenDefault,
+  type FieldDef,
+} from "./field-defs"
+import { SortableBlockRow, DragHandle, SizeSliderField, BlockColorField, TextField, ImageField, GalleryUploadButton } from "./fields"
 import {
   BLOCK_KEYS,
   BLOCK_LABEL_FALLBACK,
@@ -48,11 +63,10 @@ import { SaveButton } from "@/components/ui/save-button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Slider } from "@/components/ui/slider"
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Copy, ExternalLink, GripVertical, Image as ImageIcon, Loader2, Plus, X } from "lucide-react"
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Copy, ExternalLink, Loader2, Plus, X } from "lucide-react"
 import { toast } from "sonner"
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core"
-import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
-import { CSS } from "@dnd-kit/utilities"
+import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable"
 
 /**
  * 템플릿 청첩장 커스터마이즈 편집기.
@@ -63,144 +77,8 @@ import { CSS } from "@dnd-kit/utilities"
  * "여기서 보이는 것 = 발행 결과" 가 보장된다.
  */
 
-type FieldType = "text" | "textarea" | "tel" | "image"
-interface FieldDef { key: string; label: string; type: FieldType }
-
-const REVIEW_STATUS_LABEL: Record<string, string> = {
-  none: "검수 전",
-  in_review: "검수 요청됨",
-  changes_requested: "수정 요청 있음",
-  approved: "확정됨",
-}
-
-/** field_manifest 에 있을 때만 노출되는 필드 (테마가 실제로 쓰는 것만 보여준다) */
-const CONTENT_FIELD_DEFS: FieldDef[] = [
-  { key: "groom_name", label: "신랑 이름", type: "text" },
-  { key: "bride_name", label: "신부 이름", type: "text" },
-  { key: "groom_name_en", label: "신랑 영문 이름", type: "text" },
-  { key: "bride_name_en", label: "신부 영문 이름", type: "text" },
-  { key: "groom_relationship", label: "신랑측 호칭", type: "text" },
-  { key: "bride_relationship", label: "신부측 호칭", type: "text" },
-  { key: "groom_father_name", label: "신랑 아버지 성함", type: "text" },
-  { key: "groom_mother_name", label: "신랑 어머니 성함", type: "text" },
-  { key: "bride_father_name", label: "신부 아버지 성함", type: "text" },
-  { key: "bride_mother_name", label: "신부 어머니 성함", type: "text" },
-  { key: "groom_phone", label: "신랑 연락처", type: "tel" },
-  { key: "bride_phone", label: "신부 연락처", type: "tel" },
-  { key: "groom_father_phone", label: "신랑 아버지 연락처", type: "tel" },
-  { key: "groom_mother_phone", label: "신랑 어머니 연락처", type: "tel" },
-  { key: "bride_father_phone", label: "신부 아버지 연락처", type: "tel" },
-  { key: "bride_mother_phone", label: "신부 어머니 연락처", type: "tel" },
-  { key: "groom_sns_instagram", label: "신랑 인스타그램", type: "text" },
-  { key: "bride_sns_instagram", label: "신부 인스타그램", type: "text" },
-  { key: "venue_name", label: "예식장명", type: "text" },
-  { key: "venue_hall", label: "홀 이름", type: "text" },
-  { key: "venue_address", label: "예식장 주소", type: "text" },
-  { key: "traffic_info", label: "교통 안내", type: "textarea" },
-  { key: "parking_info", label: "주차 안내", type: "textarea" },
-  { key: "shuttle_info", label: "셔틀버스 안내", type: "textarea" },
-  { key: "greeting_message", label: "인사말", type: "textarea" },
-  { key: "main_image", label: "메인 이미지", type: "image" },
-  { key: "groom_photo", label: "신랑 사진", type: "image" },
-  { key: "bride_photo", label: "신부 사진", type: "image" },
-  { key: "greeting_image", label: "인사말 이미지 (선택)", type: "image" },
-  { key: "rsvp_meal_menu", label: "식사 종류 (쉼표로 구분, 비우면 한식/양식 기본)", type: "text" },
-]
-
-/** slot_manifest 에 'account' 가 있을 때만 노출 (필드키 마커가 아니라 슬롯 데이터라 field_manifest 에 없음) */
-const ACCOUNT_FIELD_DEFS: FieldDef[] = [
-  { key: "account_groom_bank", label: "은행", type: "text" },
-  { key: "account_groom_number", label: "계좌번호", type: "text" },
-  { key: "account_groom_holder", label: "예금주", type: "text" },
-  { key: "account_bride_bank", label: "은행", type: "text" },
-  { key: "account_bride_number", label: "계좌번호", type: "text" },
-  { key: "account_bride_holder", label: "예금주", type: "text" },
-  { key: "extra_account_groom", label: "신랑측 혼주 계좌 (자유 입력)", type: "textarea" },
-  { key: "extra_account_bride", label: "신부측 혼주 계좌 (자유 입력)", type: "textarea" },
-]
-
-/** 부모 이름 필드 → 고인(故) 표시 플래그 필드키. buildFieldData 가 이 값을 보고 이름 앞에 '故 '를 붙인다 */
-const DECEASED_KEY_BY_NAME_FIELD: Record<string, string> = {
-  groom_father_name: "groom_father_deceased",
-  groom_mother_name: "groom_mother_deceased",
-  bride_father_name: "bride_father_deceased",
-  bride_mother_name: "bride_mother_deceased",
-}
-const DECEASED_KEYS = Object.values(DECEASED_KEY_BY_NAME_FIELD)
-
-/** slot_manifest 에 'contact' 가 있을 때만 노출 (연락처 표시 여부 토글에 쓰는 이름 라벨용) */
-const CONTACT_FIELD_DEFS: FieldDef[] = [
-  { key: "groom_phone", label: "신랑 연락처", type: "tel" },
-  { key: "groom_father_phone", label: "신랑 아버지 연락처", type: "tel" },
-  { key: "groom_mother_phone", label: "신랑 어머니 연락처", type: "tel" },
-  { key: "bride_phone", label: "신부 연락처", type: "tel" },
-  { key: "bride_father_phone", label: "신부 아버지 연락처", type: "tel" },
-  { key: "bride_mother_phone", label: "신부 어머니 연락처", type: "tel" },
-]
-
-/** 슬롯 키 → 관리 화면에 보여줄 한글 이름. 테마가 지원하는 기능 중 이 청첩장만 끄고 싶을 때 쓴다 */
-const SLOT_LABELS: Record<string, string> = {
-  bgm: "배경음악",
-  gallery: "갤러리",
-  sequence: "식순",
-  calendar: "캘린더 · D-day",
-  account: "마음 전하실 곳 (계좌)",
-  contact: "연락처",
-  map: "오시는 길 (지도)",
-  rsvp: "참석 의사 전달",
-  guestbook: "방명록",
-  share: "청첩장 공유",
-}
-
-const ALL_TEXT_FIELD_DEFS = [...CONTENT_FIELD_DEFS, ...ACCOUNT_FIELD_DEFS]
-const MANAGED_CONTENT_KEYS = new Set([
-  ...ALL_TEXT_FIELD_DEFS.map((f) => f.key),
-  "wedding_date", "wedding_time", "gallery_images", "gallery_view_type", "gallery_align", "greeting_image_ratio", "wedding_programs", "show_wedding_program",
-  "phone_expose", "groom_show_phone", "bride_show_phone",
-  ...DECEASED_KEYS,
-])
-
-type SequenceRow = { time: string; title: string }
-
-/** raw.wedding_programs 를 편집 가능한 {time,title}[] 로 정규화 (slot-registry 의 normalizeSequence 와 동일 규칙) */
-function normalizeSequenceRows(value: unknown): SequenceRow[] {
-  if (!Array.isArray(value)) return []
-  const out: SequenceRow[] = []
-  for (const item of value) {
-    if (item && typeof item === "object") {
-      const o = item as Record<string, unknown>
-      const time = typeof o.time === "string" ? o.time : ""
-      const title = typeof o.title === "string" ? o.title : typeof o.text === "string" ? o.text : ""
-      out.push({ time, title })
-    }
-  }
-  return out
-}
-
-/** '아니오'/false/'off' 가 아니면 표시로 간주 (미설정은 항상 표시) — 식순 노출, 연락처 노출 토글에 공용으로 쓴다 */
-function isShown(value: unknown): boolean {
-  return !(value === false || value === "false" || value === "아니오" || value === "아니요" || value === "off")
-}
-
-/** 목록 항목을 인접한 위치와 맞바꾼다 — 갤러리 사진 순서, 섹션 삽입 이미지 순서 재정렬에 공용으로 쓴다 */
-function moveArrayItem<T>(arr: T[], index: number, direction: -1 | 1): T[] {
-  const target = index + direction
-  if (index < 0 || target < 0 || target >= arr.length) return arr
-  const next = [...arr]
-  ;[next[index], next[target]] = [next[target], next[index]]
-  return next
-}
-
-/**
- * 테마 CSS에서 사이즈 토큰의 실제 폴백 값을 읽는다 (예: `var(--text-title, 18px)` → 18).
- * 사이즈 토큰은 themes.styles 에 기본값을 따로 저장하지 않고 CSS 폴백을 유일한 기본값 출처로
- * 삼기로 했으므로(THEME_TOKEN_GUIDE.md §1.2), 슬라이더에 보여줄 "테마 기본값"은 여기서 파싱한다.
- */
-function extractTokenDefault(css: string, tokenName: string): number | null {
-  const escaped = tokenName.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")
-  const match = new RegExp(`var\\(${escaped}\\s*,\\s*(\\d+(?:\\.\\d+)?)px\\)`).exec(css)
-  return match ? Number(match[1]) : null
-}
+// FieldType/FieldDef 및 필드 정의·라벨 상수, moveArrayItem/extractTokenDefault 헬퍼는
+// ./field-defs.ts 로 이동했다(아래 import). 로직 변경 없음.
 
 export default function CustomizeClient({
   invitationId,
@@ -404,12 +282,12 @@ export default function CustomizeClient({
   const [greetingImageRatio, setGreetingImageRatio] = useState<"natural" | "fill">(
     () => (initialRaw.greeting_image_ratio === "fill" ? "fill" : "natural")
   )
-  const [sequenceRows, setSequenceRows] = useState<SequenceRow[]>(() => normalizeSequenceRows(initialRaw.wedding_programs))
-  const [showProgram, setShowProgram] = useState(() => isShown(initialRaw.show_wedding_program))
-  const [phoneExpose, setPhoneExpose] = useState(() => isShown(initialRaw.phone_expose))
+  const [sequenceRows, setSequenceRows] = useState<SequenceEvent[]>(() => normalizeSequence(initialRaw.wedding_programs))
+  const [showProgram, setShowProgram] = useState(() => !isToggledOff(initialRaw.show_wedding_program))
+  const [phoneExpose, setPhoneExpose] = useState(() => !isToggledOff(initialRaw.phone_expose))
   // 연락처 표시가 켜져 있어도 신랑/신부 본인만 개별로 숨길 수 있다 (혼주 연락처는 전체 스위치만 따른다)
-  const [groomShowPhone, setGroomShowPhone] = useState(() => isShown(initialRaw.groom_show_phone))
-  const [brideShowPhone, setBrideShowPhone] = useState(() => isShown(initialRaw.bride_show_phone))
+  const [groomShowPhone, setGroomShowPhone] = useState(() => !isToggledOff(initialRaw.groom_show_phone))
+  const [brideShowPhone, setBrideShowPhone] = useState(() => !isToggledOff(initialRaw.bride_show_phone))
   const [bgmUrl, setBgmUrl] = useState(String(invitation.bgm_url ?? ""))
   const [bgms, setBgms] = useState<{ id: string; name: string; url: string }[]>([])
   const [fonts, setFonts] = useState<RegisteredFont[]>([])
@@ -1980,183 +1858,5 @@ export default function CustomizeClient({
   )
 }
 
-/** 블럭 아코디언 한 행을 드래그 정렬 가능하게 감싼다. render-prop으로 드래그 손잡이(attributes/listeners)를
- * 넘겨줘서 호출부가 원하는 위치(트리거 왼쪽)에 손잡이 아이콘을 꽂을 수 있게 한다. */
-function SortableBlockRow({ id, children }: {
-  id: string
-  children: (drag: Pick<ReturnType<typeof useSortable>, "attributes" | "listeners">) => React.ReactNode
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
-  return (
-    <div
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, position: "relative", zIndex: isDragging ? 1 : "auto" }}
-    >
-      {children({ attributes, listeners })}
-    </div>
-  )
-}
-
-function DragHandle({ attributes, listeners }: Pick<ReturnType<typeof useSortable>, "attributes" | "listeners">) {
-  return (
-    <button
-      type="button"
-      {...attributes}
-      {...listeners}
-      className="shrink-0 touch-none cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
-      aria-label="드래그해서 순서 변경"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <GripVertical className="h-4 w-4" />
-    </button>
-  )
-}
-
-/** 사이즈 토큰 슬라이더 — 색 토큰 UI와 동일한 "미설정=테마 기본값, 값 있으면 되돌리기 버튼" 규칙을 따른다 */
-function SizeSliderField({ label, value, defaultValue, min, max, onChange, onReset }: {
-  label: string
-  value: number | undefined
-  defaultValue: number
-  min: number
-  max: number
-  onChange: (v: number) => void
-  onReset: () => void
-}) {
-  const isSet = value != null
-  const current = value ?? defaultValue
-  return (
-    <Field>
-      <div className="flex items-center justify-between">
-        <FieldLabel>{label}</FieldLabel>
-        <span className={cn("text-xs tabular-nums", isSet ? "text-foreground" : "text-muted-foreground")}>
-          {current}px{!isSet && " · 기본값"}
-        </span>
-      </div>
-      <div className="flex items-center gap-2">
-        <Slider value={[current]} min={min} max={max} step={1} onValueChange={([v]) => onChange(v)} className="flex-1" />
-        {isSet && (
-          <Button type="button" variant="ghost" size="icon-sm" title="테마 기본값으로" onClick={onReset}>
-            <X className="h-3.5 w-3.5" />
-          </Button>
-        )}
-      </div>
-    </Field>
-  )
-}
-
-/** 블럭 오버라이드용 색상 필드 — "색상" 카드의 테마 토큰 피커와 동일한 모양(스와치+hex+되돌리기)을 따른다 */
-function BlockColorField({ label, value, defaultValue, onChange, onReset }: {
-  label: string
-  value: string | undefined
-  defaultValue: string
-  onChange: (v: string) => void
-  onReset: () => void
-}) {
-  const displayValue = value || defaultValue
-  return (
-    <Field>
-      <FieldLabel>{label}</FieldLabel>
-      <div className="flex items-start gap-2">
-        <input
-          type="color"
-          value={/^#[0-9a-fA-F]{6}$/.test(displayValue) ? displayValue : "#ffffff"}
-          onChange={(e) => onChange(e.target.value)}
-          className="h-9 w-10 shrink-0 cursor-pointer rounded-md border border-input bg-transparent p-1"
-        />
-        <Input value={displayValue} onChange={(e) => onChange(e.target.value)} placeholder="기본값" className="min-w-0 flex-1" />
-        {value && (
-          <Button type="button" variant="ghost" size="icon-sm" title="기본값으로" onClick={onReset}>
-            <X className="h-3.5 w-3.5" />
-          </Button>
-        )}
-      </div>
-    </Field>
-  )
-}
-
-function TextField({ def, value, onChange }: { def: FieldDef; value: string; onChange: (v: string) => void }) {
-  return (
-    <Field>
-      <FieldLabel htmlFor={def.key}>{def.label}</FieldLabel>
-      {def.type === "textarea" ? (
-        <Textarea id={def.key} value={value} onChange={(e) => onChange(e.target.value)} rows={4} />
-      ) : (
-        <Input id={def.key} type={def.type === "tel" ? "tel" : "text"} value={value} onChange={(e) => onChange(e.target.value)} />
-      )}
-    </Field>
-  )
-}
-
-function ImageField({ def, value, uploading, onUpload, onClear }: {
-  def: FieldDef; value: string; uploading: boolean; onUpload: (file: File) => void; onClear: () => void
-}) {
-  const inputRef = useRef<HTMLInputElement>(null)
-  return (
-    <Field>
-      <FieldLabel>{def.label}</FieldLabel>
-      <div className="flex items-center gap-3">
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted">
-          {value ? (
-            <img src={value} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <ImageIcon className="h-5 w-5 text-muted-foreground" />
-          )}
-        </div>
-        <div className="flex flex-col items-start gap-1.5">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={uploading}
-            onClick={() => inputRef.current?.click()}
-            className="gap-1.5"
-          >
-            {uploading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {uploading ? "업로드 중…" : "이미지 선택"}
-          </Button>
-          {value && (
-            <Button type="button" variant="ghost" size="sm" onClick={onClear} className="h-auto px-1 py-0 text-xs text-muted-foreground">
-              제거
-            </Button>
-          )}
-        </div>
-      </div>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        disabled={uploading}
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f); e.target.value = "" }}
-      />
-    </Field>
-  )
-}
-
-function GalleryUploadButton({ uploading, onSelect }: { uploading: boolean; onSelect: (files: FileList) => void }) {
-  const inputRef = useRef<HTMLInputElement>(null)
-  return (
-    <div>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={uploading}
-        onClick={() => inputRef.current?.click()}
-        className="gap-1.5"
-      >
-        {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-        {uploading ? "업로드 중…" : "이미지 추가"}
-      </Button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        className="hidden"
-        disabled={uploading}
-        onChange={(e) => { if (e.target.files?.length) onSelect(e.target.files); e.target.value = "" }}
-      />
-    </div>
-  )
-}
+// SortableBlockRow, DragHandle, SizeSliderField, BlockColorField, TextField, ImageField,
+// GalleryUploadButton — 프레젠테이션 전용 하위 컴포넌트는 ./fields.tsx 로 이동했다.

@@ -284,3 +284,42 @@ export function buildFieldData(rawInput: RawInvitationData, now = new Date()): F
 
   return data
 }
+
+/* ===================================================================== *
+ * 식순(wedding_programs) 정규화 — 발행 렌더러(slot-registry.tsx)와 편집기
+ * (customize-client.tsx)가 각자 다른 규칙으로 이 값을 정규화하고 있었다.
+ * 편집기 쪽은 레거시 "12:00 | 입장" 문자열 형식을 아예 걸러내 편집기에 빈
+ * 목록으로 보였고, 그 상태로 저장하면 원본 데이터가 통째로 사라졌다 —
+ * 두 화면이 반드시 같은 함수를 써야 이 드리프트가 다시 생기지 않는다.
+ * ===================================================================== */
+export type SequenceEvent = { time: string; title: string }
+
+/** 다양한 입력 형태를 {time,title}[] 로 정규화 ("12:00 | 입장" 문자열, {title}/{desc}/{text} 객체 모두 지원) */
+export function normalizeSequence(value: unknown): SequenceEvent[] {
+  if (!Array.isArray(value)) return []
+  const out: SequenceEvent[] = []
+  for (const item of value) {
+    if (typeof item === "string") {
+      const [time, ...rest] = item.split("|")
+      if (rest.length) out.push({ time: time.trim(), title: rest.join("|").trim() })
+    } else if (item && typeof item === "object") {
+      const o = item as Record<string, unknown>
+      const time = typeof o.time === "string" ? o.time : ""
+      const title = typeof o.title === "string" ? o.title
+        : typeof o.desc === "string" ? o.desc
+        : typeof o.text === "string" ? o.text : ""
+      if (time || title) out.push({ time, title })
+    }
+  }
+  return out
+}
+
+/**
+ * 토글 필드 값 판정 ('예'/'아니오' 문자열 또는 boolean). 미설정(null/undefined)은
+ * '표시'로 간주한다. 폼 필드 카탈로그의 토글 선택지가 "아니오"/"아니요"로
+ * 통일돼 있지 않아 둘 다 받는다(예: show_direction 필드는 "아니요"로 등록돼 있음).
+ */
+export function isToggledOff(value: unknown): boolean {
+  if (value == null) return false
+  return value === false || value === "false" || value === "아니오" || value === "아니요" || value === "off"
+}

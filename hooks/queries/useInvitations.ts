@@ -154,9 +154,11 @@ export function useCreateInvitationMutation() {
       const { daysAfterWedding } = parseRetentionSettings(retentionRow?.value)
       const expiresAt = computeExpiryDate(weddingDate, daysAfterWedding)
 
-      const blockOrder = latestVersion?.default_block_order || [
-        "cover", "greeting", "couple-info", "event-info", "gallery", "map", "account", "rsvp", "guestbook"
-      ]
+      // 테마 버전에 기본 순서가 없으면 null로 둔다 — 렌더러가 테마 template.html의 DOM
+      // 순서를 그대로 쓴다(§extractBlockOrder). 예전엔 여기서 실제 BLOCK_KEYS와 다른
+      // 키("cover"/"couple-info" 등)로 채워 넣어, 렌더링 시 전부 걸러지고 결국 테마
+      // 기본 순서로 대체되긴 했지만 DB엔 무의미한 값이 영구히 쌓이는 상태였다.
+      const blockOrder = latestVersion?.default_block_order || null
 
       // '미지정'/빈값 정리 헬퍼
       const clean = (v?: string | null) => (v && v !== '미지정' ? v : '')

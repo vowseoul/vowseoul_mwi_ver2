@@ -23,6 +23,7 @@ import { ArrowLeft, Send, Copy, Check, ExternalLink, Loader2, Link as LinkIcon, 
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
 import { hashPassword } from '@/lib/dashboard-password'
+import { useCopyFeedback } from '@/lib/use-copy-feedback'
 
 function FormPublishContent() {
   const router = useRouter()
@@ -40,7 +41,8 @@ function FormPublishContent() {
   
   // Publish Output State
   const [publishedSlug, setPublishedSlug] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
+  const { isCopied, copy: copyText } = useCopyFeedback()
+  const copied = isCopied()
 
   // Queries
   const { data: customerData } = useCustomersQuery({ status: 'all' }, 1, 100)
@@ -144,10 +146,8 @@ function FormPublishContent() {
   const formUrl = publishedSlug ? `${baseUrl}/form/${publishedSlug}` : ''
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(formUrl)
-    setCopied(true)
+    copyText(formUrl)
     toast.success('폼 주소가 복사되었습니다. 고객에게 메신저나 이메일로 전송하세요.')
-    setTimeout(() => setCopied(false), 2000)
   }
 
   // If already published

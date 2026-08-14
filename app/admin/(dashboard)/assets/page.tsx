@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
-import { sampleThemes, sampleBGMs, Theme, samplePhrases } from '@/lib/store'
+import { sampleThemes, sampleBGMs, MockTheme, samplePhrases } from '@/lib/store'
 import { supabase, logSupabaseError } from '@/lib/supabase'
 import { resolveThemeSwatch } from '@/lib/theme-template'
 import { fontPreviewStyle, fontFileFormatLabel, extractGoogleFontFamily, type RegisteredFont } from '@/lib/fonts'
@@ -33,7 +33,7 @@ export default function AssetsPage() {
     'elegant-navy': false,
     'sunset-warmth': true,
   })
-  const [themes, setThemes] = useState<Theme[]>([])
+  const [themes, setThemes] = useState<MockTheme[]>([])
   const [isLoadingThemes, setIsLoadingThemes] = useState(true)
   const [bgms, setBgms] = useState<any[]>([])
   const [isLoadingBgms, setIsLoadingBgms] = useState(true)

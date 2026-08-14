@@ -631,7 +631,11 @@ export function InvitationFrame({
   // 일부 브라우저·인앱 웹뷰(카카오톡 등)가 더블탭 확대를 막지 않아 JS로 보강한다.
   useEffect(() => {
     if (!doc || !preventZoom) return
-    doc.body.style.touchAction = "manipulation"
+    // doc.body.style.x = y 형태의 직접 대입은 useState로 들고 있는 doc을 "변경"하는
+    // 것으로 컴파일러가 오인한다(react-hooks/immutability) — 같은 파일의 다른 doc.head/
+    // body 조작은 appendChild처럼 메서드 호출이라 걸리지 않는 것과 같은 이유로,
+    // setProperty 메서드 호출로 바꿔 동일한 결과를 낸다.
+    doc.body.style.setProperty("touch-action", "manipulation")
 
     const handleTouchStart = (e: TouchEvent) => {
       if (e.touches.length > 1) e.preventDefault()

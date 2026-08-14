@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/select'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { buildContentDataFromForm, deriveOgMetaFromForm, deriveOverridesFromForm, resolveBgmUrlFromSnapshot } from '@/lib/invitation-data'
+import { useCopyFeedback } from '@/lib/use-copy-feedback'
 import {
   useCustomerQuery,
   useUpdateCustomerMutation,
@@ -217,7 +218,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
   const [status, setStatus] = useState('registered')
   const [memo, setMemo] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [copiedLink, setCopiedLink] = useState<string | null>(null)
+  const { isCopied, copy: copyText } = useCopyFeedback()
 
   const { data: themes } = useThemesQuery()
   const createInviteMutation = useCreateInvitationMutation()
@@ -261,10 +262,8 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
 
   // Copy helper
   const handleCopy = (text: string, type: string) => {
-    navigator.clipboard.writeText(text)
-    setCopiedLink(type)
+    copyText(text, type)
     toast.success('클립보드에 복사되었습니다.')
-    setTimeout(() => setCopiedLink(null), 2000)
   }
 
   // Populate form when data loaded
@@ -850,7 +849,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                         className="h-9 w-9 shrink-0"
                         onClick={() => handleCopy(`${baseUrl}/form/${formInstance.unique_url_slug}`, 'form')}
                       >
-                        {copiedLink === 'form' ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                        {isCopied('form') ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
                       </Button>
                     </div>
                   </div>
@@ -940,7 +939,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                         className="h-9 w-9 shrink-0"
                         onClick={() => handleCopy(`${baseUrl}/w/${invitation.public_slug}`, 'public')}
                       >
-                        {copiedLink === 'public' ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                        {isCopied('public') ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
                       </Button>
                     </div>
                   </div>
@@ -960,7 +959,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                         className="h-9 w-9 shrink-0"
                         onClick={() => handleCopy(`${baseUrl}/dashboard/${invitation.public_slug}`, 'dashboard')}
                       >
-                        {copiedLink === 'dashboard' ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                        {isCopied('dashboard') ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
                       </Button>
                     </div>
                   </div>
