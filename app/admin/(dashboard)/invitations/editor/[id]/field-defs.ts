@@ -99,6 +99,7 @@ export const MANAGED_CONTENT_KEYS = new Set([
   ...ALL_TEXT_FIELD_DEFS.map((f) => f.key),
   "wedding_date", "wedding_time", "gallery_images", "gallery_view_type", "gallery_align", "greeting_image_ratio", "wedding_programs", "show_wedding_program",
   "phone_expose", "groom_show_phone", "bride_show_phone",
+  "gallery_zoom_block", "account_collapsed", "bgm_autoplay",
   ...DECEASED_KEYS,
 ])
 

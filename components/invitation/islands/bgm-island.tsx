@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { isToggledOn } from "@/lib/invitation-data"
 import type { SlotProps } from "./shared"
 
 /* ------------------------------- BGM ------------------------------- *
@@ -22,7 +23,11 @@ function stopCurrentBgm() {
 
 function BgmIsland({ accent, data, raw }: SlotProps) {
   const bgmUrl = (typeof raw?.bgm_url === "string" ? raw.bgm_url : undefined) || data.bgm_url || ""
-  const [isPlaying, setIsPlaying] = useState(true)
+  // 자동재생은 관리자가 켠 청첩장에서만 시도한다 — 청첩장을 열자마자 예고 없이 음악이 나오면
+  // 조용한 자리에서 열어본 하객이 당황한다. 미설정(기존 청첩장 전부)은 꺼짐이므로 하객이
+  // 우측 상단 ♪ 버튼을 눌러야 재생된다(§isToggledOn: 미설정=꺼짐).
+  const autoplay = isToggledOn(raw?.bgm_autoplay)
+  const [isPlaying, setIsPlaying] = useState(autoplay)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const anchorRef = useRef<HTMLButtonElement | null>(null)
 
@@ -75,6 +80,28 @@ function BgmIsland({ accent, data, raw }: SlotProps) {
       }
     }
   }, [bgmUrl, isPlaying])
+
+  // 화면을 실제로 보고 있을 때만 재생 — 하객이 청첩장 탭을 닫지 않은 채 다른 앱/탭으로
+  // 넘어가거나 화면을 끄면 음악만 계속 흐르는 문제가 있었다. 재생 의사(isPlaying)는 그대로
+  // 두고 오디오만 멈췄다가, 다시 돌아오면 이어서 재생한다(사용자가 ❚❚ 로 끈 경우는 건드리지 않음).
+  // iframe 문서의 visibilityState 는 최상위 탭 상태를 따라가지만 환경에 따라 부모 문서에만
+  // 이벤트가 오는 경우가 있어 양쪽 문서 모두에 리스너를 건다(§위 재생 폴백과 동일한 이유).
+  useEffect(() => {
+    const own = anchorRef.current?.ownerDocument
+    const docs: Document[] = []
+    if (own) docs.push(own)
+    if (typeof document !== "undefined" && own !== document) docs.push(document)
+    if (docs.length === 0) return
+
+    const onVisibilityChange = () => {
+      const audio = audioRef.current
+      if (!audio) return
+      if (docs.some((d) => d.visibilityState === "hidden")) audio.pause()
+      else if (isPlaying) audio.play().catch(() => { /* 복귀 직후 재생 차단은 무시 */ })
+    }
+    docs.forEach((d) => d.addEventListener("visibilitychange", onVisibilityChange))
+    return () => docs.forEach((d) => d.removeEventListener("visibilitychange", onVisibilityChange))
+  }, [isPlaying])
 
   if (!bgmUrl) return <button ref={anchorRef} style={{ display: "none" }} aria-hidden />
 

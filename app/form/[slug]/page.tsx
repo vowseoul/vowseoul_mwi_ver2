@@ -667,6 +667,21 @@ function PublicFormContent({ slug }: { slug: string }) {
         const hoursList = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
         const minutesList = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'))
 
+        // 예식 시간은 대부분 11~13시대인데 시(hour) 목록이 00시부터 시작해, 열 때마다 한참
+        // 스크롤을 내려야 예식 시간대가 보였다. 팝오버가 열리는 순간(=이 ref 콜백이 붙는 순간)
+        // 선택값(없으면 12시)이 목록 한가운데 오도록 스크롤 뷰포트만 움직인다.
+        // scrollIntoView 는 조상 스크롤 컨테이너(=폼 페이지 전체)까지 같이 스크롤해 화면이
+        // 튀므로 쓰지 않고, 뷰포트의 scrollTop 을 직접 계산해 넣는다.
+        const focusHour = h || '12'
+        const centerHourInView = (el: HTMLButtonElement | null) => {
+          if (!el) return
+          const viewport = el.closest('[data-slot="scroll-area-viewport"]') as HTMLElement | null
+          if (!viewport) return
+          const vRect = viewport.getBoundingClientRect()
+          const eRect = el.getBoundingClientRect()
+          viewport.scrollTop += (eRect.top - vRect.top) - (vRect.height - eRect.height) / 2
+        }
+
         return (
           <Popover>
             <PopoverTrigger asChild>
@@ -692,6 +707,7 @@ function PublicFormContent({ slug }: { slug: string }) {
                         <button
                           key={hr}
                           type="button"
+                          ref={hr === focusHour ? centerHourInView : undefined}
                           className={cn(
                             "w-full py-1.5 text-xs hover:bg-muted text-center transition-colors",
                             h === hr && "bg-primary text-primary-foreground font-semibold hover:bg-primary"

@@ -166,8 +166,11 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
       <button
         onClick={() => setOpen(true)}
         style={{
+          // 섹션 배경 위에 바로 놓이는 버튼이라 accent 를 직접 쓰면 배경이 --accent 로 교대되는
+          // 테마(color-atelier vs-alt-a)에서 버튼이 통째로 사라진다 — currentColor 로 조상 섹션의
+          // 실제 글자색을 따라간다. (팝업 안 버튼은 항상 흰 배경이라 accent 를 그대로 쓴다)
           width: "100%", marginTop: 12, padding: "12px 0", borderRadius: 6, cursor: "pointer",
-          border: `1px solid ${accent}`, background: "transparent", color: accent, fontSize: 13.5,
+          border: "1px solid currentColor", background: "transparent", color: "inherit", fontSize: 13.5,
         }}
       >
         축하 메시지 남기기

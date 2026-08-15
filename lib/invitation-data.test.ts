@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildFieldData, mergeInvitationRaw, normalizeLegacyKeys, normalizeSequence, isToggledOff } from './invitation-data'
+import { buildFieldData, mergeInvitationRaw, normalizeLegacyKeys, normalizeSequence, isToggledOff, isToggledOn } from './invitation-data'
 
 describe('normalizeLegacyKeys', () => {
   it('레거시 camelCase 키를 필드키로 매핑한다', () => {
@@ -172,5 +172,32 @@ describe('isToggledOff', () => {
     expect(isToggledOff('예')).toBe(false)
     expect(isToggledOff('on')).toBe(false)
     expect(isToggledOff('')).toBe(false)
+  })
+})
+
+describe('isToggledOn', () => {
+  it('미설정(null/undefined)은 꺼짐 — 기존 청첩장이 새 옵트인 기능에 자동 편입되면 안 된다', () => {
+    expect(isToggledOn(null)).toBe(false)
+    expect(isToggledOn(undefined)).toBe(false)
+  })
+
+  it('true, "true", "예", "on"만 켜짐이다', () => {
+    expect(isToggledOn(true)).toBe(true)
+    expect(isToggledOn('true')).toBe(true)
+    expect(isToggledOn('예')).toBe(true)
+    expect(isToggledOn('on')).toBe(true)
+  })
+
+  it('꺼짐 값들과 빈 문자열은 켜짐이 아니다', () => {
+    expect(isToggledOn(false)).toBe(false)
+    expect(isToggledOn('아니오')).toBe(false)
+    expect(isToggledOn('아니요')).toBe(false)
+    expect(isToggledOn('off')).toBe(false)
+    expect(isToggledOn('')).toBe(false)
+  })
+
+  it('isToggledOff 와 서로 반대가 아니다 — 미설정일 때 둘 다 false 다', () => {
+    expect(isToggledOff(undefined)).toBe(false)
+    expect(isToggledOn(undefined)).toBe(false)
   })
 })

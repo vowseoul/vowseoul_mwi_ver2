@@ -323,3 +323,14 @@ export function isToggledOff(value: unknown): boolean {
   if (value == null) return false
   return value === false || value === "false" || value === "아니오" || value === "아니요" || value === "off"
 }
+
+/**
+ * 토글 필드가 "명시적으로 켜져 있는가" 판정 — isToggledOff 와 정반대로 미설정(null/undefined)을
+ * **꺼짐**으로 본다. 기존 필드들(연락처 표시, 식순 안내 등)은 "미설정이면 보여준다"가 맞지만,
+ * 나중에 추가된 옵트인 설정(BGM 자동재생, 갤러리 확대방지, 계좌 접기)은 기존 청첩장이 조용히
+ * 새 동작으로 바뀌면 안 되므로 미설정을 꺼짐으로 취급해야 한다.
+ */
+export function isToggledOn(value: unknown): boolean {
+  if (value == null) return false
+  return value === true || value === "true" || value === "예" || value === "on"
+}

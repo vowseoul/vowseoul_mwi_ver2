@@ -152,12 +152,15 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
 
   if (done) {
     return (
-      <div style={{ maxWidth: 320, margin: "0 auto", padding: "14px 0", fontSize: 14, lineHeight: 1.7, color: accent, textAlign: "center" }}>
+      // accent 를 직접 쓰지 않는다 — 섹션 배경이 --accent 로 교대되는 테마(color-atelier
+      // vs-alt-a)에서 글자·체크마크가 배경과 같은 색이 되어 안 보인다. currentColor(inherit)
+      // 는 조상 섹션이 그 순간 실제로 쓰는 글자색을 따라가 항상 대비가 보장된다.
+      <div style={{ maxWidth: 320, margin: "0 auto", padding: "14px 0", fontSize: 14, lineHeight: 1.7, color: "inherit", textAlign: "center" }}>
         {cancelDone ? (
           <>참석 응답이 취소되었습니다.</>
         ) : (
           <>
-            <CheckmarkDraw color={accent} />
+            <CheckmarkDraw color="currentColor" />
             {name || "하객"}님, 참석 의사가 전달되었습니다. 감사합니다 ♥
             <div style={{ marginTop: 10 }}>
               <button
@@ -185,9 +188,12 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
 
   return (
     <div style={{ maxWidth: 320, margin: "0 auto" }}>
+      {/* 채워진 배경(background: accent)은 색을 직접 지정해야 해서 섹션 배경이 --accent 로
+          교대되는 테마에서 버튼이 배경에 파묻힐 위험이 있다 — guestbook의 "축하 메시지
+          남기기" 버튼과 같은 톤(테두리+투명 배경, currentColor)으로 맞춰 항상 대비를 보장한다. */}
       <button onClick={() => setOpen(true)} style={{
-        width: "100%", padding: "10px 0", borderRadius: 6, border: "none", cursor: "pointer",
-        background: accent, color: "#fff", fontSize: 14, letterSpacing: ".03em",
+        width: "100%", padding: "10px 0", borderRadius: 6, cursor: "pointer",
+        border: "1px solid currentColor", background: "transparent", color: "inherit", fontSize: 14, letterSpacing: ".03em",
         display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
       }}>
         <CalendarIcon size={16} />
@@ -229,7 +235,7 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
         </div>
       )}
       {cancelDone && (
-        <p style={{ marginTop: 10, textAlign: "center", fontSize: 12.5, color: accent }}>참석 응답이 취소되었습니다.</p>
+        <p style={{ marginTop: 10, textAlign: "center", fontSize: 12.5, color: "inherit" }}>참석 응답이 취소되었습니다.</p>
       )}
 
       {open && (

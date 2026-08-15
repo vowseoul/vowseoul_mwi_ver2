@@ -6,7 +6,7 @@ import { uploadImage } from "@/lib/image-upload"
 import { InvitationFrame, type TokenMap } from "@/components/invitation/invitation-frame"
 import { ScaledPreview } from "@/components/ui/scaled-preview"
 import { buildSlots } from "@/components/invitation/slot-registry"
-import { buildFieldData, mergeInvitationRaw, normalizeSequence, isToggledOff, type SequenceEvent } from "@/lib/invitation-data"
+import { buildFieldData, mergeInvitationRaw, normalizeSequence, isToggledOff, isToggledOn, type SequenceEvent } from "@/lib/invitation-data"
 import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes-warning"
 import {
   REVIEW_STATUS_LABEL,
@@ -290,6 +290,11 @@ export default function CustomizeClient({
   // 연락처 표시가 켜져 있어도 신랑/신부 본인만 개별로 숨길 수 있다 (혼주 연락처는 전체 스위치만 따른다)
   const [groomShowPhone, setGroomShowPhone] = useState(() => !isToggledOff(initialRaw.groom_show_phone))
   const [brideShowPhone, setBrideShowPhone] = useState(() => !isToggledOff(initialRaw.bride_show_phone))
+  // 나중에 추가된 옵트인 설정 3종 — 미설정(기존 청첩장)은 모두 꺼짐이어야 하므로
+  // isToggledOff(미설정=켜짐) 가 아니라 isToggledOn(미설정=꺼짐) 으로 읽는다.
+  const [galleryZoomBlock, setGalleryZoomBlock] = useState(() => isToggledOn(initialRaw.gallery_zoom_block))
+  const [accountCollapsed, setAccountCollapsed] = useState(() => isToggledOn(initialRaw.account_collapsed))
+  const [bgmAutoplay, setBgmAutoplay] = useState(() => isToggledOn(initialRaw.bgm_autoplay))
   const [bgmUrl, setBgmUrl] = useState(String(invitation.bgm_url ?? ""))
   const [bgms, setBgms] = useState<{ id: string; name: string; url: string }[]>([])
   const [fonts, setFonts] = useState<RegisteredFont[]>([])
@@ -332,8 +337,11 @@ export default function CustomizeClient({
     phone_expose: phoneExpose ? "예" : "아니오",
     groom_show_phone: groomShowPhone ? "예" : "아니오",
     bride_show_phone: brideShowPhone ? "예" : "아니오",
+    gallery_zoom_block: galleryZoomBlock ? "예" : "아니오",
+    account_collapsed: accountCollapsed ? "예" : "아니오",
+    bgm_autoplay: bgmAutoplay ? "예" : "아니오",
     bgm_url: bgmUrl,
-  }), [initialRaw, content, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign, greetingImageRatio, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone, bgmUrl])
+  }), [initialRaw, content, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign, greetingImageRatio, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone, galleryZoomBlock, accountCollapsed, bgmAutoplay, bgmUrl])
 
   const data = useMemo(() => buildFieldData(liveRaw), [liveRaw])
 
@@ -500,6 +508,7 @@ export default function CustomizeClient({
     overrides, disabledSlots, blockOverrides, sectionImages, scrollMotion, introEnabled,
     content, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign,
     greetingImageRatio, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone,
+    galleryZoomBlock, accountCollapsed, bgmAutoplay,
     bgmUrl, themeVersionId, blockOrder, ogTitle, ogDescription, ogImage,
   })
   const [initialFingerprint, setInitialFingerprint] = useState(dirtyFingerprint)
@@ -561,6 +570,9 @@ export default function CustomizeClient({
       phone_expose: phoneExpose ? "예" : "아니오",
       groom_show_phone: groomShowPhone ? "예" : "아니오",
       bride_show_phone: brideShowPhone ? "예" : "아니오",
+      gallery_zoom_block: galleryZoomBlock ? "예" : "아니오",
+      account_collapsed: accountCollapsed ? "예" : "아니오",
+      bgm_autoplay: bgmAutoplay ? "예" : "아니오",
     }
 
     const existingOgMeta = (invitation.og_meta && typeof invitation.og_meta === "object")
@@ -863,6 +875,17 @@ export default function CustomizeClient({
                     )}
 
                     <Field>
+                      <div className="flex items-center gap-3">
+                        <Switch id="galleryZoomBlock" checked={galleryZoomBlock} onCheckedChange={setGalleryZoomBlock} />
+                        <Label htmlFor="galleryZoomBlock" className="font-normal cursor-pointer">사진 확대 방지</Label>
+                      </div>
+                      <FieldDescription>
+                        켜면 하객이 갤러리 사진을 크게 볼 수 없습니다 — 사진을 눌러 확대(라이트박스)하는 기능이 꺼지고,
+                        모바일 핀치줌·더블탭과 PC 우클릭·드래그·Ctrl+휠 확대가 모두 차단됩니다.
+                      </FieldDescription>
+                    </Field>
+
+                    <Field>
                       <FieldLabel>사진 목록</FieldLabel>
                       <div className="grid grid-cols-[repeat(auto-fill,minmax(90px,1fr))] gap-2">
                         {galleryImages.map((url, i) => (
@@ -968,7 +991,16 @@ export default function CustomizeClient({
                   <CardTitle className="text-base font-medium">마음 전하실 곳 (계좌)</CardTitle>
                   <CardDescription>혼주 계좌는 아버지·어머니 계좌를 함께 적는 등 형식이 자유로워 텍스트로 직접 입력합니다.</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-6">
+                  <Field>
+                    <div className="flex items-center gap-3">
+                      <Switch id="accountCollapsed" checked={accountCollapsed} onCheckedChange={setAccountCollapsed} />
+                      <Label htmlFor="accountCollapsed" className="font-normal cursor-pointer">계좌 정보 접어두기</Label>
+                    </div>
+                    <FieldDescription>
+                      켜면 청첩장에서 계좌 정보가 바로 보이지 않고 &ldquo;마음 전하실 곳 보기&rdquo; 버튼을 눌러야 펼쳐집니다.
+                    </FieldDescription>
+                  </Field>
                   <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                     <FieldGroup className="space-y-4">
                       <p className="text-sm font-medium text-muted-foreground">신랑측</p>
@@ -1077,6 +1109,16 @@ export default function CustomizeClient({
                     </Field>
                     <Field>
                       <Input value={bgmUrl} onChange={(e) => setBgmUrl(e.target.value)} placeholder="BGM 파일 URL" />
+                    </Field>
+                    <Field>
+                      <div className="flex items-center gap-3">
+                        <Switch id="bgmAutoplay" checked={bgmAutoplay} onCheckedChange={setBgmAutoplay} />
+                        <Label htmlFor="bgmAutoplay" className="font-normal cursor-pointer">자동 재생</Label>
+                      </div>
+                      <FieldDescription>
+                        꺼두면 청첩장을 열자마자 음악이 나오지 않고, 하객이 우측 상단 ♪ 버튼을 눌렀을 때만 재생됩니다.
+                        (조용한 자리에서 열어본 하객이 당황하지 않도록 기본값은 꺼짐입니다)
+                      </FieldDescription>
                     </Field>
                   </FieldGroup>
                 </CardContent>

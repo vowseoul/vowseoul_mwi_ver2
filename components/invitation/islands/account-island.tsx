@@ -1,14 +1,16 @@
 "use client"
 
-import { Copy, Check, MessageCircle, Send } from "lucide-react"
+import { useState } from "react"
+import { Copy, Check, MessageCircle, Send, ChevronDown } from "lucide-react"
 import { useCopyFeedback } from "@/lib/use-copy-feedback"
+import { isToggledOn } from "@/lib/invitation-data"
 import { soft, iconBtnStyle, type SlotProps } from "./shared"
 
 /* ----------------------------- Account ----------------------------- */
 function composeAccount(bank?: string, number?: string, holder?: string): string {
   return [bank, number, holder].filter(Boolean).join(" ")
 }
-function AccountRow({ label, value, accent }: { label: string; value: string; accent: string }) {
+function AccountRow({ label, value }: { label: string; value: string }) {
   const { isCopied, copy: copyText } = useCopyFeedback()
   const copied = isCopied()
   const numericValue = value.replace(/[^0-9]/g, "")
@@ -44,9 +46,13 @@ function AccountRow({ label, value, accent }: { label: string; value: string; ac
         )}>
           <Send size={16} />
         </button>
+        {/* accent(테마 포인트색)를 직접 쓰면 color-atelier 처럼 섹션 배경이 --accent 로 교대되는
+            테마(vs-alt-a)에서 버튼과 배경이 같은 색이 되어 아예 보이지 않는다 — 조상 섹션이
+            그 순간 실제로 쓰는 글자색(currentColor)을 따라가면 어떤 교대 상태에서도 대비가
+            보장된다(§share-island 의 btnStyle, §color-atelier template.css 의 주소 텍스트와 동일 처방). */}
         <button onClick={copy} aria-label={copied ? "복사됨" : "계좌번호 복사"} title={copied ? "복사됨" : "계좌번호 복사"} style={{
-          ...iconBtnStyle(accent, copied ? accent : "transparent", copied ? "#fff" : accent),
-          transition: "background 200ms ease-out, color 200ms ease-out, transform 200ms ease-out",
+          ...iconBtnStyle("currentColor", copied ? soft(18) : "transparent", "currentColor"),
+          transition: "background 200ms ease-out, transform 200ms ease-out",
           transform: copied ? "scale(1.04)" : "scale(1)",
         }}>
           {copied ? <Check size={16} /> : <Copy size={16} />}
@@ -59,7 +65,7 @@ function AccountRow({ label, value, accent }: { label: string; value: string; ac
  * 정해져 있지 않아(아버지·어머니 각각 또는 한쪽만) 관리자가 자유 형식 텍스트로 입력한다.
  * 숫자만 추출하는 기존 복사 방식은 여러 줄/여러 계좌가 섞인 텍스트에 맞지 않아 원문 그대로 복사한다.
  */
-function ExtraAccountRow({ label, value, accent }: { label: string; value: string; accent: string }) {
+function ExtraAccountRow({ label, value }: { label: string; value: string }) {
   const { isCopied, copy: copyText } = useCopyFeedback()
   const copied = isCopied()
   const copy = () => copyText(value)
@@ -70,8 +76,8 @@ function ExtraAccountRow({ label, value, accent }: { label: string; value: strin
         <div style={{ fontSize: 13.5, whiteSpace: "pre-line" }}>{value}</div>
       </div>
       <button onClick={copy} aria-label={copied ? "복사됨" : "계좌번호 복사"} title={copied ? "복사됨" : "계좌번호 복사"} style={{
-        ...iconBtnStyle(accent, copied ? accent : "transparent", copied ? "#fff" : accent),
-        transition: "background 200ms ease-out, color 200ms ease-out, transform 200ms ease-out",
+        ...iconBtnStyle("currentColor", copied ? soft(18) : "transparent", "currentColor"),
+        transition: "background 200ms ease-out, transform 200ms ease-out",
         transform: copied ? "scale(1.04)" : "scale(1)",
       }}>
         {copied ? <Check size={16} /> : <Copy size={16} />}
@@ -79,18 +85,39 @@ function ExtraAccountRow({ label, value, accent }: { label: string; value: strin
     </div>
   )
 }
-function AccountIsland({ accent, data }: SlotProps) {
+function AccountIsland({ data, raw }: SlotProps) {
   const groom = composeAccount(data.account_groom_bank, data.account_groom_number, data.account_groom_holder)
   const bride = composeAccount(data.account_bride_bank, data.account_bride_number, data.account_bride_holder)
   const extraGroom = data.extra_account_groom
   const extraBride = data.extra_account_bride
   const hasAny = groom || bride || extraGroom || extraBride
+
+  // 계좌 정보가 첫 화면에 바로 보이는 게 부담스러운 고객을 위해 접어둘 수 있다.
+  // 미설정은 펼침이라 기존 청첩장 동작은 그대로다(§isToggledOn).
+  const collapsible = isToggledOn(raw?.account_collapsed)
+  const [open, setOpen] = useState(false)
+  const showRows = !collapsible || open
+
   return (
     <div style={{ textAlign: "left", maxWidth: 320, margin: "0 auto" }}>
-      {groom && <AccountRow label="신랑측" value={groom} accent={accent} />}
-      {bride && <AccountRow label="신부측" value={bride} accent={accent} />}
-      {extraGroom && <ExtraAccountRow label="신랑측 혼주" value={extraGroom} accent={accent} />}
-      {extraBride && <ExtraAccountRow label="신부측 혼주" value={extraBride} accent={accent} />}
+      {collapsible && hasAny && (
+        <button
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          style={{
+            width: "100%", padding: "12px 0", borderRadius: 6, cursor: "pointer",
+            border: "1px solid currentColor", background: "transparent", color: "inherit",
+            fontSize: 13.5, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+          }}
+        >
+          마음 전하실 곳 {open ? "닫기" : "보기"}
+          <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 200ms ease-out" }} />
+        </button>
+      )}
+      {showRows && groom && <AccountRow label="신랑측" value={groom} />}
+      {showRows && bride && <AccountRow label="신부측" value={bride} />}
+      {showRows && extraGroom && <ExtraAccountRow label="신랑측 혼주" value={extraGroom} />}
+      {showRows && extraBride && <ExtraAccountRow label="신부측 혼주" value={extraBride} />}
       {!hasAny && <div style={{ fontSize: 12, opacity: 0.6, padding: "8px 0" }}>등록된 계좌 정보가 없습니다.</div>}
     </div>
   )

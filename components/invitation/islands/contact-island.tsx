@@ -20,8 +20,10 @@ function normalizeInstagramHandle(raw?: string): string | null {
   return handle || null
 }
 
-function ContactRow({ label, name, phone, instagram, accent }: { label: string; name?: string; phone: string; instagram?: string; accent: string }) {
-  const linkStyle = iconBtnStyle(accent, "transparent", accent)
+function ContactRow({ label, name, phone, instagram }: { label: string; name?: string; phone: string; instagram?: string }) {
+  // accent 직접 사용 금지 — 섹션 배경이 --accent 로 교대되는 테마(color-atelier vs-alt-a)에서
+  // 버튼이 배경에 묻혀 보이지 않는다. currentColor 는 어떤 교대 상태에서도 대비가 보장된다.
+  const linkStyle = iconBtnStyle("currentColor", "transparent", "currentColor")
   const handle = normalizeInstagramHandle(instagram)
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${soft(25)}`, gap: 8 }}>
@@ -43,7 +45,7 @@ function ContactRow({ label, name, phone, instagram, accent }: { label: string; 
     </div>
   )
 }
-function ContactIsland({ accent, data }: SlotProps) {
+function ContactIsland({ data }: SlotProps) {
   if (isToggledOff(data.phone_expose)) return null
   const rows = [
     // 신랑·신부 본인은 전체 스위치가 켜져 있어도 개별로 더 숨길 수 있다(groom_show_phone/bride_show_phone).
@@ -60,7 +62,7 @@ function ContactIsland({ accent, data }: SlotProps) {
   return (
     <div style={{ textAlign: "left", maxWidth: 320, margin: "0 auto" }}>
       {rows.map((r) => (
-        <ContactRow key={r.label} label={r.label} name={r.name} phone={r.phone} instagram={r.instagram} accent={accent} />
+        <ContactRow key={r.label} label={r.label} name={r.name} phone={r.phone} instagram={r.instagram} />
       ))}
     </div>
   )
