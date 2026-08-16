@@ -723,8 +723,15 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                             <SelectItem value="design_review">디자인 피드백중</SelectItem>
                             <SelectItem value="published">발행완료</SelectItem>
                             <SelectItem value="delivered">전달완료</SelectItem>
+                            <SelectItem value="sample">샘플/테스트</SelectItem>
                           </SelectContent>
                         </Select>
+                        {orderStatus === 'sample' && (
+                          <p className="text-xs text-muted-foreground">
+                            이 고객은 고객 목록 기본 뷰·통계·고객 수 집계에서 제외되고, 이후 만드는
+                            청첩장은 자동으로 SAMPLE로 생성됩니다.
+                          </p>
+                        )}
                       </Field>
                     </div>
                     <Field>

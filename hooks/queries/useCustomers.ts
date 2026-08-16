@@ -14,6 +14,12 @@ export interface Customer {
   venue_coordinates: any
   transportation_info: string | null
   status: 'registered' | 'form_sent' | 'form_completed' | 'draft' | 'published' | 'expired'
+  /**
+   * 내부 테스트용 고객 표시. 직접 켜는 값이 아니라 주문의 제작 진행 상태를 '샘플/테스트'로
+   * 두면 DB 트리거가 채워준다(§supabase/migrations/20260816000000_sample_customer_flag.sql).
+   * 고객 목록·통계가 orders 를 조인하지 않아서 여기에 비정규화해 둔 사본이다.
+   */
+  is_sample: boolean
   memo: string | null
   deleted_at: string | null
   created_at: string
@@ -26,6 +32,8 @@ export interface CustomerFilters {
   assignedTo?: string
   startDate?: string
   endDate?: string
+  /** 샘플/테스트 고객 취급. 기본은 'exclude' — 목록·집계 어디서도 섞이면 안 된다 */
+  sampleMode?: 'exclude' | 'only'
 }
 
 // 1. Fetch all customers (excluding soft-deleted ones)
@@ -37,6 +45,10 @@ export function useCustomersQuery(filters: CustomerFilters = {}, page = 1, pageS
         .from('customers')
         .select('*', { count: 'exact' })
         .is('deleted_at', null)
+
+      // 샘플/테스트 고객은 기본 뷰에서 뺀다. count 도 같은 쿼리에서 나오므로
+      // 상단 "총 고객 수" 카드가 자동으로 함께 보정된다.
+      query = query.eq('is_sample', filters.sampleMode === 'only')
 
       // Apply search (on groom_name, bride_name, or phone)
       if (filters.search) {
@@ -103,7 +115,8 @@ export function useCreateCustomerMutation() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (newCustomer: Omit<Customer, 'id' | 'created_at' | 'updated_at' | 'deleted_at' | 'created_by'>) => {
+    // is_sample 은 주문 상태에서 트리거가 채우는 값이라 생성 시 받지 않는다
+    mutationFn: async (newCustomer: Omit<Customer, 'id' | 'created_at' | 'updated_at' | 'deleted_at' | 'created_by' | 'is_sample'>) => {
       // Get current logged-in user to map created_by
       const { data: { user } } = await supabase.auth.getUser()
       const created_by = user?.id || null

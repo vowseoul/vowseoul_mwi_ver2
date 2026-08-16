@@ -14,7 +14,13 @@ export interface Order {
   product_type: 'mobile' | 'offline' | 'both'
   external_order_ref: string | null
   amount: number
-  status: 'registered' | 'form_sent' | 'form_completed' | 'in_production' | 'design_review' | 'published' | 'delivered'
+  /**
+   * 'sample'은 진행 단계가 아니라 "이건 내부 테스트 건"이라는 표시다. 이 값을 넣으면 DB
+   * 트리거가 customers.is_sample 을 켜서 고객 목록 기본 뷰·통계·고객 수 집계에서 빠지고,
+   * 이후 이 고객으로 만든 청첩장은 자동으로 SAMPLE로 생성된다
+   * (§supabase/migrations/20260816000000_sample_customer_flag.sql).
+   */
+  status: 'registered' | 'form_sent' | 'form_completed' | 'in_production' | 'design_review' | 'published' | 'delivered' | 'sample'
   notes: string | null
   created_at: string
   updated_at: string
@@ -84,7 +90,13 @@ export function useSaveOrderMutation() {
       return data as Order
     },
     onSuccess: (data) => {
-      if (data?.customer_id) queryClient.invalidateQueries({ queryKey: ['customer-order', data.customer_id] })
+      if (data?.customer_id) {
+        queryClient.invalidateQueries({ queryKey: ['customer-order', data.customer_id] })
+        // status가 'sample'로 바뀌면 트리거가 customers.is_sample 도 함께 바꾼다 —
+        // 캐시된 고객 목록/상세는 그 사실을 모르므로 여기서 무효화한다.
+        queryClient.invalidateQueries({ queryKey: ['customers'] })
+        queryClient.invalidateQueries({ queryKey: ['customer', data.customer_id] })
+      }
     },
   })
 }

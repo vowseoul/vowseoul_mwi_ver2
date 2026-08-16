@@ -56,7 +56,13 @@ export default function CustomersPage() {
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('all')
 
-  const { data: customerData, isLoading, error } = useCustomersQuery({ search, status }, page, 10)
+  // 샘플/테스트 고객은 기본 뷰에서 빠지지만, 이 필터를 고르면 그것만 따로 볼 수 있다
+  const showingSample = status === 'sample'
+  const { data: customerData, isLoading, error } = useCustomersQuery(
+    { search, status: showingSample ? 'all' : status, sampleMode: showingSample ? 'only' : 'exclude' },
+    page,
+    10
+  )
   const deleteMutation = useDeleteCustomerMutation()
 
   const handleDelete = async (id: string) => {
@@ -215,6 +221,7 @@ export default function CustomersPage() {
             <SelectItem value="draft">초안 작성 (draft)</SelectItem>
             <SelectItem value="published">청첩장 발행 (published)</SelectItem>
             <SelectItem value="expired">만료됨 (expired)</SelectItem>
+            <SelectItem value="sample">샘플/테스트</SelectItem>
           </SelectContent>
         </Select>
       </div>

@@ -63,16 +63,20 @@ export default function StatisticsPage() {
         // 매출은 청첩장 건당 5만원 고정이 아니라 실제 orders.amount 합계를 쓴다(§1-B).
         // 주문 관리 화면은 없어졌지만(고객 관리로 통합) amount/notes 데이터는 orders
         // 테이블에 그대로 남아있으므로 매출 집계는 계속 여기서 읽는다.
+        // 샘플/테스트 주문은 매출이 아니다 — 고객 수와 같은 이유로 뺀다.
         const { data: ordersData, error: ordersError } = await supabase
           .from('orders')
           .select('amount, created_at')
+          .neq('status', 'sample')
         logSupabaseError('statistics: orders', ordersError)
 
         // 건수 지표(총 고객 수, 일별 신규 등록)는 orders 가 아니라 customers 기준으로 센다.
+        // 샘플/테스트로 표시된 고객은 내부 테스트 건이라 집계에서 뺀다.
         const { data: customersData, error: customersError } = await supabase
           .from('customers')
           .select('id, status, created_at')
           .is('deleted_at', null)
+          .eq('is_sample', false)
         logSupabaseError('statistics: customers', customersError)
 
         // 시간대별 트래픽은 visit_daily_stats(일 단위 집계)가 아니라 visit_logs 의

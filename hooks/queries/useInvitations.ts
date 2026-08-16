@@ -127,7 +127,7 @@ export function useCreateInvitationMutation() {
       } else {
         const { data: fetchedCustomer, error: fetchErr } = await supabase
           .from('customers')
-          .select('groom_name, bride_name, phone, wedding_date, venue_name, venue_address')
+          .select('groom_name, bride_name, phone, wedding_date, venue_name, venue_address, is_sample')
           .eq('id', targetCustomerId)
           .single()
           
@@ -256,6 +256,9 @@ export function useCreateInvitationMutation() {
         og_meta: ogMeta || {},
         bgm_url: resolvedBgmUrl,
         status: 'draft',
+        // 샘플/테스트 고객의 청첩장은 처음부터 SAMPLE로 만든다 — 자동 파기 대상에서
+        // 빠지고(§app/api/cron/purge-expired-invitations) 목록에서도 구분된다.
+        is_sample: customer?.is_sample === true,
         expires_at: expiresAt.toISOString(),
       }
 
