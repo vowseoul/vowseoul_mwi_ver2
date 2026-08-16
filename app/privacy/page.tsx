@@ -153,8 +153,41 @@ export default async function PrivacyPolicyPage() {
                   <strong className="text-foreground">{GUEST_DATA_PURGE_DAYS}일</strong>이 경과하면 파기합니다.
                 </li>
                 <li>문의 내역: 문의 처리 완료 후 3년간 보관 후 파기합니다.</li>
-                <li>관계 법령에 따라 보존이 필요한 경우 해당 법령이 정한 기간 동안 보관합니다.</li>
               </ul>
+              <p>다음 각 호의 기록은 관계 법령에 따라 아래 기간 동안 별도로 보관한 후 파기합니다.</p>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[480px] border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-border text-left">
+                      <th className="py-2 pr-3 font-semibold text-foreground">보관 항목</th>
+                      <th className="py-2 pr-3 font-semibold text-foreground">근거 법령</th>
+                      <th className="py-2 font-semibold text-foreground">보관 기간</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b border-border/60">
+                      <td className="py-2 pr-3">계약 또는 청약철회 등에 관한 기록</td>
+                      <td className="py-2 pr-3">전자상거래 등에서의 소비자보호에 관한 법률</td>
+                      <td className="py-2">5년</td>
+                    </tr>
+                    <tr className="border-b border-border/60">
+                      <td className="py-2 pr-3">대금결제 및 재화 등의 공급에 관한 기록</td>
+                      <td className="py-2 pr-3">전자상거래 등에서의 소비자보호에 관한 법률</td>
+                      <td className="py-2">5년</td>
+                    </tr>
+                    <tr className="border-b border-border/60">
+                      <td className="py-2 pr-3">소비자의 불만 또는 분쟁처리에 관한 기록</td>
+                      <td className="py-2 pr-3">전자상거래 등에서의 소비자보호에 관한 법률</td>
+                      <td className="py-2">3년</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 pr-3">웹사이트 방문기록</td>
+                      <td className="py-2 pr-3">통신비밀보호법</td>
+                      <td className="py-2">3년</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </Section>
 
             <Section n={4} title="개인정보의 제3자 제공">
@@ -235,7 +268,20 @@ export default async function PrivacyPolicyPage() {
               </ul>
             </Section>
 
-            <Section n={8} title="개인정보의 파기절차 및 방법">
+            <Section n={8} title="이용자가 공개한 정보에 대한 책임 제한">
+              <p>
+                모바일 청첩장은 발행 시 별도의 접근 제한 없이 링크를 아는 누구나 열람할 수 있는 공개
+                페이지입니다. 이용자(신랑신부)가 청첩장에 직접 입력하여 공개한 정보(계좌번호, 연락처,
+                예식 정보 등) 및 하객이 참석 회신·방명록에 자발적으로 남긴 정보는 해당 링크에 접근한
+                제3자에게 노출될 수 있습니다.
+              </p>
+              <p>
+                이용자와 하객은 이러한 공개 범위를 인지하고 정보를 입력해야 하며, 이용자 또는 하객이
+                자발적으로 공개한 정보로 인해 발생한 문제에 대하여 회사는 책임을 지지 않습니다.
+              </p>
+            </Section>
+
+            <Section n={9} title="개인정보의 파기절차 및 방법">
               <ul className="list-disc space-y-1 pl-5">
                 <li>파기절차: 보유기간이 경과한 개인정보는 별도의 DB로 옮겨지거나 즉시 파기됩니다.</li>
                 <li>
@@ -245,7 +291,7 @@ export default async function PrivacyPolicyPage() {
               </ul>
             </Section>
 
-            <Section n={9} title="개인정보의 안전성 확보조치">
+            <Section n={10} title="개인정보의 안전성 확보조치">
               <ul className="list-disc space-y-1 pl-5">
                 <li>비밀번호 등 인증정보는 암호화하여 저장·관리합니다.</li>
                 <li>개인정보에 대한 접근권한을 서비스 제공에 필요한 범위로 제한하고 있습니다.</li>
@@ -254,7 +300,7 @@ export default async function PrivacyPolicyPage() {
               </ul>
             </Section>
 
-            <Section n={10} title="쿠키 등 자동 수집 장치의 설치·운영 및 거부">
+            <Section n={11} title="쿠키 등 자동 수집 장치의 설치·운영 및 거부">
               <p>
                 회사는 이용 통계 분석과 콘텐츠(웹폰트) 제공을 위해 아래와 같은 자동 수집 장치를
                 운영합니다. 이는 광고 목적의 추적에 사용되지 않습니다.
@@ -269,7 +315,7 @@ export default async function PrivacyPolicyPage() {
               </p>
             </Section>
 
-            <Section n={11} title="개인정보 보호책임자">
+            <Section n={12} title="개인정보 보호책임자">
               <div className="rounded-md bg-muted/50 p-4 text-xs">
                 <p>
                   <span className="font-semibold text-foreground">성명</span>{' '}
@@ -291,7 +337,7 @@ export default async function PrivacyPolicyPage() {
               </p>
             </Section>
 
-            <Section n={12} title="권익침해 구제방법">
+            <Section n={13} title="권익침해 구제방법">
               <p>
                 개인정보 침해에 대한 신고나 상담이 필요하신 경우 아래 기관에 문의하실 수 있습니다.
               </p>
@@ -303,7 +349,7 @@ export default async function PrivacyPolicyPage() {
               </ul>
             </Section>
 
-            <Section n={13} title="사업자 정보">
+            <Section n={14} title="사업자 정보">
               <div className="rounded-md bg-muted/50 p-4 text-xs">
                 <p>
                   <span className="font-semibold text-foreground">상호</span>{' '}
@@ -329,7 +375,7 @@ export default async function PrivacyPolicyPage() {
               </div>
             </Section>
 
-            <Section n={14} title="고지의 의무">
+            <Section n={15} title="고지의 의무">
               <p>
                 이 개인정보처리방침은 {PRIVACY_POLICY_EFFECTIVE_DATE}부터 적용됩니다. 법령·정책 또는
                 보안기술의 변경에 따라 내용의 추가·삭제 및 수정이 있을 경우, 변경사항의 시행 7일 전부터
