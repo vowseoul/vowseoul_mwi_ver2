@@ -30,7 +30,6 @@ import {
   extractBlockOrder,
   extractBlockOverrides,
   extractDisabledSlots,
-  extractIntroEnabled,
   extractSectionImages,
   getBlockManifest,
   getFieldManifest,
@@ -43,6 +42,7 @@ import {
   type ThemeRow,
 } from "@/lib/theme-template"
 import { extractScrollMotion, type ScrollMotionSettings } from "@/lib/scroll-motion"
+import { extractIntroSettings, DEFAULT_INTRO_SETTINGS, INTRO_MODES, INTRO_ALIGNS, INTRO_FONT_SIZE_MIN, INTRO_FONT_SIZE_MAX, type IntroSettings } from "@/lib/intro-settings"
 import { ScrollMotionField } from "@/components/invitation/scroll-motion-field"
 import { buildFontStack, fetchRegisteredFonts, fontPreviewStyle, resolveFontFaces, type RegisteredFont } from "@/lib/fonts"
 import { useInjectFontFaces } from "@/lib/use-font-faces"
@@ -227,10 +227,23 @@ export default function CustomizeClient({
   const [scrollMotion, setScrollMotion] = useState<ScrollMotionSettings>(
     () => extractScrollMotion(invitation.customization_overrides)
   )
-  /** 오프닝 인트로 — 진입 시 신랑·신부 이름이 잠깐 나타났다 사라지는 연출. 기본 꺼짐 */
-  const [introEnabled, setIntroEnabled] = useState<boolean>(
-    () => extractIntroEnabled(invitation.customization_overrides)
+  /** 오프닝 인트로 — 진입 시 잠깐 보여줄 내용(이름/문구/이미지)과 서체·크기·정렬. 기본 꺼짐 */
+  const [intro, setIntro] = useState<IntroSettings>(
+    () => extractIntroSettings(invitation.customization_overrides)
   )
+  const setIntroField = <K extends keyof IntroSettings>(key: K, value: IntroSettings[K]) =>
+    setIntro((cur) => ({ ...cur, [key]: value }))
+  const [uploadingIntroImage, setUploadingIntroImage] = useState(false)
+  const uploadIntroImage = async (file: File) => {
+    setUploadingIntroImage(true)
+    try {
+      setIntroField("imageUrl", await uploadImage(file, "invitations/intro"))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "이미지 업로드에 실패했습니다.")
+    } finally {
+      setUploadingIntroImage(false)
+    }
+  }
   const [isUploadingSectionImage, setIsUploadingSectionImage] = useState(false)
   const addSectionImage = async (file: File) => {
     setIsUploadingSectionImage(true)
@@ -505,7 +518,7 @@ export default function CustomizeClient({
   // 이탈 경고 — save()가 실제로 보내는 값들과 같은 필드 집합의 지문을 비교해 저장 안 한
   // 변경사항이 있으면 새로고침/탭 닫기 시 브라우저 확인을 받는다(§useUnsavedChangesWarning).
   const dirtyFingerprint = JSON.stringify({
-    overrides, disabledSlots, blockOverrides, sectionImages, scrollMotion, introEnabled,
+    overrides, disabledSlots, blockOverrides, sectionImages, scrollMotion, intro,
     content, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign,
     greetingImageRatio, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone,
     galleryZoomBlock, accountCollapsed, bgmAutoplay,
@@ -547,7 +560,7 @@ export default function CustomizeClient({
     // "blocks" 를 여기서 빠뜨리면 매번 옛 값이 되살아난다 — disabled_slots 때 겪은 실수의 반복,
     // PLAN_DESIGN_CONTROLS.md §5.3. scrollMotion/introEnabled도 아래에서 명시적으로 다시 채워
     // 넣으므로 동일하게 제외한다.
-    const MANAGED_OVERRIDE_KEYS = new Set(["disabled_slots", "blocks", "sectionImages", "scrollMotion", "introEnabled"])
+    const MANAGED_OVERRIDE_KEYS = new Set(["disabled_slots", "blocks", "sectionImages", "scrollMotion", "introEnabled", "intro"])
     for (const [k, v] of Object.entries(existingOverrides)) if (!k.startsWith("--") && !MANAGED_OVERRIDE_KEYS.has(k)) preservedOverrideKeys[k] = v
 
     const existingContentData = (invitation.content_data && typeof invitation.content_data === "object")
@@ -584,7 +597,7 @@ export default function CustomizeClient({
       .from("invitations")
       .update({
         content_data: contentPayload,
-        customization_overrides: { ...preservedOverrideKeys, ...cleanTokens, disabled_slots: disabledSlots, blocks: blockOverrides, sectionImages, scrollMotion, introEnabled },
+        customization_overrides: { ...preservedOverrideKeys, ...cleanTokens, disabled_slots: disabledSlots, blocks: blockOverrides, sectionImages, scrollMotion, intro, introEnabled: intro.enabled },
         block_order: fullBlockOrder,
         bgm_url: bgmUrl || null,
         theme_version_id: themeVersionId,
@@ -1206,15 +1219,126 @@ export default function CustomizeClient({
               <CardHeader>
                 <CardTitle className="text-base font-medium">청첩장 열기 연출</CardTitle>
                 <CardDescription>
-                  하객이 링크에 처음 들어왔을 때 신랑·신부 이름이 잠깐 나타났다 사라집니다. 재방문 시에도
+                  하객이 링크에 처음 들어왔을 때 잠깐 나타났다 사라지는 연출입니다. 재방문 시에도
                   매번 보이므로 취향이 갈릴 수 있어 기본은 꺼짐입니다.
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-5">
                 <div className="flex items-center justify-between">
                   <span className="text-sm">오프닝 인트로 사용</span>
-                  <Switch checked={introEnabled} onCheckedChange={setIntroEnabled} />
+                  <Switch checked={intro.enabled} onCheckedChange={(v) => setIntroField("enabled", v)} />
                 </div>
+
+                {intro.enabled && (
+                  <FieldGroup className="space-y-4 border-t pt-5">
+                    <Field>
+                      <FieldLabel>보여줄 내용</FieldLabel>
+                      <RadioGroup
+                        value={intro.mode}
+                        onValueChange={(v) => setIntroField("mode", v as IntroSettings["mode"])}
+                        className="flex flex-col gap-2"
+                      >
+                        {INTRO_MODES.map((m) => (
+                          <div key={m.value} className="flex items-center gap-2">
+                            <RadioGroupItem value={m.value} id={`intro-mode-${m.value}`} />
+                            <Label htmlFor={`intro-mode-${m.value}`} className="font-normal cursor-pointer">
+                              {m.label}
+                              <span className="ml-1.5 text-xs text-muted-foreground">{m.description}</span>
+                            </Label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    </Field>
+
+                    {intro.mode === "text" && (
+                      <Field>
+                        <FieldLabel htmlFor="introText">문구</FieldLabel>
+                        <Textarea
+                          id="introText"
+                          value={intro.text}
+                          onChange={(e) => setIntroField("text", e.target.value)}
+                          placeholder={"예: 저희 두 사람\n결혼합니다"}
+                          rows={3}
+                        />
+                        <FieldDescription>줄바꿈은 입력한 그대로 표시됩니다.</FieldDescription>
+                      </Field>
+                    )}
+
+                    {intro.mode === "image" && (
+                      <ImageField
+                        def={{ key: "intro_image", label: "인트로 이미지", type: "image" }}
+                        value={intro.imageUrl}
+                        uploading={uploadingIntroImage}
+                        onUpload={uploadIntroImage}
+                        onClear={() => setIntroField("imageUrl", "")}
+                      />
+                    )}
+
+                    {/* 서체·크기는 글자를 보여줄 때만 의미가 있다 (이미지 모드에서는 감춘다) */}
+                    {intro.mode !== "image" && (
+                      <>
+                        <Field>
+                          <FieldLabel>서체</FieldLabel>
+                          <div className="flex items-start gap-2">
+                            <div className="flex min-w-0 flex-1 flex-col gap-2">
+                              {fonts.length > 0 && (
+                                <Select
+                                  value={fonts.map((f) => buildFontStack(f, "--font-kr")).find((s) => s === intro.fontFamily) || ""}
+                                  onValueChange={(v) => { if (v) setIntroField("fontFamily", v) }}
+                                >
+                                  <SelectTrigger className="w-full" style={intro.fontFamily ? { fontFamily: intro.fontFamily } : undefined}>
+                                    <SelectValue placeholder="에셋에 등록된 폰트 선택…" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {fonts.map((f) => (
+                                      <SelectItem key={f.id} value={buildFontStack(f, "--font-kr")} style={fontPreviewStyle(f)}>{f.name}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              )}
+                              <Input
+                                value={intro.fontFamily}
+                                onChange={(e) => setIntroField("fontFamily", e.target.value)}
+                                placeholder="비워두면 테마 한글 폰트"
+                              />
+                            </div>
+                            {intro.fontFamily && (
+                              <Button type="button" variant="ghost" size="icon-sm" title="테마 기본 폰트로" onClick={() => setIntroField("fontFamily", "")}>
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </Field>
+
+                        <SizeSliderField
+                          label="글자 크기"
+                          value={intro.fontSize}
+                          defaultValue={DEFAULT_INTRO_SETTINGS.fontSize}
+                          min={INTRO_FONT_SIZE_MIN}
+                          max={INTRO_FONT_SIZE_MAX}
+                          onChange={(v) => setIntroField("fontSize", v)}
+                          onReset={() => setIntroField("fontSize", DEFAULT_INTRO_SETTINGS.fontSize)}
+                        />
+                      </>
+                    )}
+
+                    <Field>
+                      <FieldLabel>정렬</FieldLabel>
+                      <RadioGroup
+                        value={intro.align}
+                        onValueChange={(v) => setIntroField("align", v as IntroSettings["align"])}
+                        className="flex flex-row gap-6"
+                      >
+                        {INTRO_ALIGNS.map((a) => (
+                          <div key={a.value} className="flex items-center gap-2">
+                            <RadioGroupItem value={a.value} id={`intro-align-${a.value}`} />
+                            <Label htmlFor={`intro-align-${a.value}`} className="font-normal cursor-pointer">{a.label}</Label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    </Field>
+                  </FieldGroup>
+                )}
               </CardContent>
             </Card>
 
@@ -1899,7 +2023,7 @@ export default function CustomizeClient({
               hiddenBlocks={hiddenBlocks}
               sectionImages={sectionImages}
               scrollMotion={scrollMotion}
-              introEnabled={introEnabled}
+              intro={intro}
               focusBlock={focusBlock}
               width={380}
               height={680}

@@ -6,6 +6,7 @@ import { buildSlots } from "@/components/invitation/slot-registry"
 import { buildFieldData, normalizeLegacyKeys, type RawInvitationData } from "@/lib/invitation-data"
 import { toThemeTemplate, type ThemeRow } from "@/lib/theme-template"
 import type { ScrollMotionSettings } from "@/lib/scroll-motion"
+import type { IntroSettings } from "@/lib/intro-settings"
 
 /**
  * 발행용 템플릿 렌더러 (render_engine === 'template').
@@ -26,7 +27,7 @@ export default function TemplateInvitationClient({
   hiddenBlocks = [],
   sectionImages = [],
   scrollMotion,
-  introEnabled,
+  intro,
 }: {
   themeRow: ThemeRow
   raw: RawInvitationData
@@ -45,8 +46,8 @@ export default function TemplateInvitationClient({
   sectionImages?: SectionImage[]
   /** 스크롤 시 섹션 진입 연출 (customization_overrides.scrollMotion) */
   scrollMotion?: ScrollMotionSettings
-  /** 진입 시 오프닝 인트로 연출 여부 (customization_overrides.introEnabled) */
-  introEnabled?: boolean
+  /** 진입 시 오프닝 연출 설정 (customization_overrides.intro) */
+  intro?: IntroSettings
 }) {
   const template = toThemeTemplate(themeRow)
   // 실제 청첩장은 화면 전체를 채운다 (뷰포트 기준)
@@ -81,7 +82,7 @@ export default function TemplateInvitationClient({
         hiddenBlocks={hiddenBlocks}
         sectionImages={sectionImages}
         scrollMotion={scrollMotion}
-        introEnabled={introEnabled}
+        intro={intro}
         width={size.w}
         height={size.h}
         preventZoom

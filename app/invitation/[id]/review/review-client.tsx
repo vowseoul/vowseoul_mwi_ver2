@@ -9,6 +9,7 @@ import { buildSlots } from "@/components/invitation/slot-registry"
 import { buildFieldData, normalizeLegacyKeys, type RawInvitationData } from "@/lib/invitation-data"
 import { toThemeTemplate, getBlockManifest, BLOCK_LABEL_FALLBACK, type ThemeRow } from "@/lib/theme-template"
 import type { ScrollMotionSettings } from "@/lib/scroll-motion"
+import type { IntroSettings } from "@/lib/intro-settings"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 
@@ -31,7 +32,7 @@ export default function ReviewClient({
   hiddenBlocks = [],
   sectionImages = [],
   scrollMotion,
-  introEnabled,
+  intro,
   reviewStatus,
   initialRevisions,
 }: {
@@ -45,7 +46,7 @@ export default function ReviewClient({
   hiddenBlocks?: string[]
   sectionImages?: SectionImage[]
   scrollMotion?: ScrollMotionSettings
-  introEnabled?: boolean
+  intro?: IntroSettings
   reviewStatus: string
   initialRevisions: Revision[]
 }) {
@@ -150,7 +151,7 @@ export default function ReviewClient({
           hiddenBlocks={hiddenBlocks}
           sectionImages={sectionImages}
           scrollMotion={scrollMotion}
-          introEnabled={introEnabled}
+          intro={intro}
           width={Math.min(size.w, 480)}
           height={size.h - 44 - 60}
           onBlockClick={commentMode ? (key) => setActiveBlock(key) : undefined}

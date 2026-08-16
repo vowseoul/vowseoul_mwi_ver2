@@ -30,9 +30,19 @@ export type ScrollMotionIntensity = (typeof SCROLL_MOTION_INTENSITIES)[number]["
 export interface ScrollMotionSettings {
   preset: ScrollMotionPreset
   intensity: ScrollMotionIntensity
+  /**
+   * 발동 지점 — 섹션 상단이 화면 높이의 이 비율까지 올라오면 모션을 시작한다.
+   * 1.0 이면 섹션이 화면 아래 끝에 걸치자마자(=가장 이르게), 0.4 면 화면 중간보다
+   * 더 위로 올라와야(=가장 늦게) 시작한다. §invitation-frame.tsx 의 스크롤 판정에서 쓴다.
+   */
+  revealRatio: number
 }
 
-export const DEFAULT_SCROLL_MOTION: ScrollMotionSettings = { preset: "none", intensity: "normal" }
+/** 발동 지점 허용 범위 — 1.0 을 넘으면 화면 밖에서 이미 끝나 버리고, 너무 낮으면 영영 안 나온다 */
+export const REVEAL_RATIO_MIN = 0.4
+export const REVEAL_RATIO_MAX = 1.0
+
+export const DEFAULT_SCROLL_MOTION: ScrollMotionSettings = { preset: "none", intensity: "normal", revealRatio: 0.75 }
 
 const PRESET_VALUES: string[] = SCROLL_MOTION_PRESETS.map((p) => p.value)
 const INTENSITY_VALUES: string[] = SCROLL_MOTION_INTENSITIES.map((i) => i.value)
@@ -52,12 +62,21 @@ export function extractScrollMotion(overrides: unknown): ScrollMotionSettings {
   const r = raw as Record<string, unknown>
   const preset = typeof r.preset === "string" && PRESET_VALUES.includes(r.preset) ? (r.preset as ScrollMotionPreset) : DEFAULT_SCROLL_MOTION.preset
   const intensity = typeof r.intensity === "string" && INTENSITY_VALUES.includes(r.intensity) ? (r.intensity as ScrollMotionIntensity) : DEFAULT_SCROLL_MOTION.intensity
-  return { preset, intensity }
+  // revealRatio 는 나중에 추가된 값이라 기존 청첩장에는 아예 없다 — 없으면 기본값으로 채운다
+  const revealRatio = typeof r.revealRatio === "number" && Number.isFinite(r.revealRatio)
+    ? Math.min(REVEAL_RATIO_MAX, Math.max(REVEAL_RATIO_MIN, r.revealRatio))
+    : DEFAULT_SCROLL_MOTION.revealRatio
+  return { preset, intensity, revealRatio }
 }
 
-/** 클라이언트가 보낸 값이 유효한 ScrollMotionSettings 형태인지 검증 (self-edit API 화이트리스트용) */
+/**
+ * 클라이언트가 보낸 값이 유효한 ScrollMotionSettings 형태인지 검증 (self-edit API 화이트리스트용).
+ * revealRatio 는 선택 — 이 값이 생기기 전 화면에서 온 요청(또는 구버전 캐시)도 계속 받아줘야
+ * 하고, 빠졌거나 범위를 벗어나도 읽는 쪽(extractScrollMotion)이 기본값으로 보정한다.
+ */
 export function isValidScrollMotion(value: unknown): value is ScrollMotionSettings {
   if (!value || typeof value !== "object") return false
   const r = value as Record<string, unknown>
+  if (r.revealRatio !== undefined && (typeof r.revealRatio !== "number" || !Number.isFinite(r.revealRatio))) return false
   return typeof r.preset === "string" && PRESET_VALUES.includes(r.preset) && typeof r.intensity === "string" && INTENSITY_VALUES.includes(r.intensity)
 }
