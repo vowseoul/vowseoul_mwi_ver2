@@ -61,6 +61,7 @@ import { Switch } from "@/components/ui/switch"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { SaveButton } from "@/components/ui/save-button"
+import { QrCodeDialog } from "@/components/admin/qr-code-dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Slider } from "@/components/ui/slider"
@@ -1991,6 +1992,7 @@ export default function CustomizeClient({
               <Copy className="h-3.5 w-3.5" /> 청첩장 주소 복사하기
             </Button>
           )}
+          {publicSlug && <QrCodeDialog path={`/w/${publicSlug}`} fileBaseName={publicSlug} />}
           {publicSlug && (
             <Button variant="outline" className="gap-2" onClick={copyDashboardLink}>
               <Copy className="h-3.5 w-3.5" /> 고객용 대시보드 복사하기
