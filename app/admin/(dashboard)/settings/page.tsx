@@ -573,42 +573,6 @@ export default function AdminSettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Shield className="w-5 h-5" />
-                데이터 보관 정책
-              </CardTitle>
-              <CardDescription>
-                예식일로부터 지정한 일수가 지나면 청첩장이 자동으로 삭제(소프트 삭제)됩니다.
-                청첩장 목록에서 &quot;SAMPLE&quot;로 지정한 청첩장은 예식일과 무관하게 항상 제외됩니다.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium">예식일 기준 보관일수</p>
-                  <p className="text-xs text-muted-foreground">
-                    변경하면 기존 청첩장에도 즉시 적용됩니다 (매일 자동 실행되는 파기 작업이 이 값을 그때그때 읽습니다).
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min={1}
-                    value={retentionDays}
-                    onChange={(e) => setRetentionDays(Number(e.target.value))}
-                    className="w-24"
-                  />
-                  <span className="text-sm text-muted-foreground">일 후</span>
-                </div>
-              </div>
-              <div className="flex justify-end">
-                <SaveButton onSave={handleSaveRetention} />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
                 <Users className="w-5 h-5" />
                 고객 셀프 편집
               </CardTitle>
@@ -1176,6 +1140,42 @@ export default function AdminSettingsPage() {
               </div>
               <div className="flex justify-end">
                 <SaveButton onSave={handleSaveBusinessInfo} />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="w-5 h-5" />
+                데이터 보관 정책
+              </CardTitle>
+              <CardDescription>
+                예식일로부터 지정한 일수가 지나면 청첩장이 자동으로 삭제(소프트 삭제)됩니다.
+                청첩장 목록에서 &quot;SAMPLE&quot;로 지정한 청첩장은 예식일과 무관하게 항상 제외됩니다.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">예식일 기준 보관일수</p>
+                  <p className="text-xs text-muted-foreground">
+                    변경하면 기존 청첩장에도 즉시 적용됩니다 (매일 자동 실행되는 파기 작업이 이 값을 그때그때 읽습니다).
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    value={retentionDays}
+                    onChange={(e) => setRetentionDays(Number(e.target.value))}
+                    className="w-24"
+                  />
+                  <span className="text-sm text-muted-foreground">일 후</span>
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <SaveButton onSave={handleSaveRetention} />
               </div>
             </CardContent>
           </Card>
