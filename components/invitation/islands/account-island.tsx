@@ -5,6 +5,7 @@ import { Copy, Check, MessageCircle, Send, ChevronDown } from "lucide-react"
 import { useCopyFeedback } from "@/lib/use-copy-feedback"
 import { isToggledOn } from "@/lib/invitation-data"
 import { soft, iconBtnStyle, type SlotProps } from "./shared"
+import { composeAccountText, isAccountFilled, parseAccountList } from "@/lib/account-fields"
 
 /* ----------------------------- Account ----------------------------- */
 function composeAccount(bank?: string, number?: string, holder?: string): string {
@@ -88,9 +89,19 @@ function ExtraAccountRow({ label, value }: { label: string; value: string }) {
 function AccountIsland({ data, raw }: SlotProps) {
   const groom = composeAccount(data.account_groom_bank, data.account_groom_number, data.account_groom_holder)
   const bride = composeAccount(data.account_bride_bank, data.account_bride_number, data.account_bride_holder)
-  const extraGroom = data.extra_account_groom
-  const extraBride = data.extra_account_bride
-  const hasAny = groom || bride || extraGroom || extraBride
+
+  // 혼주 계좌는 값이 배열이라 data 가 아니라 raw 에서 읽어야 한다 — buildFieldData 는
+  // 문자열/숫자만 통과시키고 배열·객체는 슬롯이 raw 로 직접 쓰라고 빼둔다(§lib/invitation-data.ts).
+  const extraGroomList = parseAccountList(raw?.extra_account_groom)
+  const extraBrideList = parseAccountList(raw?.extra_account_bride)
+  // 예전 자유 입력(문자열)으로 발행된 청첩장은 원문 그대로 계속 보여준다
+  const extraGroomText = extraGroomList === null ? data.extra_account_groom : ""
+  const extraBrideText = extraBrideList === null ? data.extra_account_bride : ""
+
+  const groomRows = (extraGroomList ?? []).filter(isAccountFilled)
+  const brideRows = (extraBrideList ?? []).filter(isAccountFilled)
+  const hasAny =
+    groom || bride || extraGroomText || extraBrideText || groomRows.length > 0 || brideRows.length > 0
 
   // 계좌 정보가 첫 화면에 바로 보이는 게 부담스러운 고객을 위해 접어둘 수 있다.
   // 미설정은 펼침이라 기존 청첩장 동작은 그대로다(§isToggledOn).
@@ -116,8 +127,16 @@ function AccountIsland({ data, raw }: SlotProps) {
       )}
       {showRows && groom && <AccountRow label="신랑측" value={groom} />}
       {showRows && bride && <AccountRow label="신부측" value={bride} />}
-      {showRows && extraGroom && <ExtraAccountRow label="신랑측 혼주" value={extraGroom} />}
-      {showRows && extraBride && <ExtraAccountRow label="신부측 혼주" value={extraBride} />}
+      {/* 혼주 계좌도 계좌마다 한 줄씩 — 본인 계좌와 똑같이 계좌번호만 복사되고
+          카카오페이·토스 버튼도 함께 붙는다 */}
+      {showRows && groomRows.map((a, i) => (
+        <AccountRow key={`g${i}`} label="신랑측 혼주" value={composeAccountText(a)} />
+      ))}
+      {showRows && brideRows.map((a, i) => (
+        <AccountRow key={`b${i}`} label="신부측 혼주" value={composeAccountText(a)} />
+      ))}
+      {showRows && extraGroomText && <ExtraAccountRow label="신랑측 혼주" value={extraGroomText} />}
+      {showRows && extraBrideText && <ExtraAccountRow label="신부측 혼주" value={extraBrideText} />}
       {!hasAny && <div style={{ fontSize: 12, opacity: 0.6, padding: "8px 0" }}>등록된 계좌 정보가 없습니다.</div>}
     </div>
   )

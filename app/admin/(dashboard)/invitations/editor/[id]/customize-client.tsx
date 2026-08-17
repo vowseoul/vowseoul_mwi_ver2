@@ -62,6 +62,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { SaveButton } from "@/components/ui/save-button"
 import { QrCodeDialog } from "@/components/admin/qr-code-dialog"
+import { ExtraAccountEditor } from "@/components/account-fields"
+import { isAccountFilled, parseAccountList, type AccountEntry } from "@/lib/account-fields"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Slider } from "@/components/ui/slider"
@@ -267,6 +269,16 @@ export default function CustomizeClient({
   const moveSectionImage = (id: string, direction: -1 | 1) =>
     setSectionImages((cur) => moveArrayItem(cur, cur.findIndex((img) => img.id === id), direction))
 
+  // 혼주 계좌는 값이 배열이라 문자열 맵인 content 에 담기지 않는다 — 갤러리 이미지처럼
+  // 별도 state 로 들고 저장 시 합친다. null 이면 "배열 값이 없음"이고, 이 경우 예전
+  // 자유 입력 문자열(content 에 그대로 실려 있다)을 계속 쓴다.
+  const [extraGroomList, setExtraGroomList] = useState<AccountEntry[] | null>(() =>
+    parseAccountList(initialRaw.extra_account_groom)
+  )
+  const [extraBrideList, setExtraBrideList] = useState<AccountEntry[] | null>(() =>
+    parseAccountList(initialRaw.extra_account_bride)
+  )
+
   const [content, setContent] = useState<Record<string, string>>(() => {
     const out: Record<string, string> = {}
     for (const f of ALL_TEXT_FIELD_DEFS) {
@@ -336,6 +348,14 @@ export default function CustomizeClient({
   // 폰트 선택 드롭다운에서 이름만으로는 어떤 폰트인지 알기 어려우므로 그 폰트로 직접 렌더해 보여준다
   useInjectFontFaces(fonts)
 
+  // 배열이 있을 때만 덮어쓴다 — null 이면 예전 자유 입력 문자열을 content 가 그대로 들고 있다
+  const extraAccountPayload = useMemo(() => {
+    const out: Record<string, unknown> = {}
+    if (extraGroomList !== null) out.extra_account_groom = extraGroomList.filter(isAccountFilled)
+    if (extraBrideList !== null) out.extra_account_bride = extraBrideList.filter(isAccountFilled)
+    return out
+  }, [extraGroomList, extraBrideList])
+
   // 미리보기용 raw: 저장된 값 위에 현재 편집 중인 값을 얹는다 (발행 파이프라인과 동일 함수로 렌더)
   const liveRaw = useMemo(() => ({
     ...initialRaw,
@@ -343,6 +363,7 @@ export default function CustomizeClient({
     wedding_date: weddingDate,
     wedding_time: weddingTime,
     gallery_images: galleryImages,
+    ...extraAccountPayload,
     gallery_view_type: galleryViewType,
     gallery_align: galleryAlign,
     greeting_image_ratio: greetingImageRatio,
@@ -355,7 +376,7 @@ export default function CustomizeClient({
     account_collapsed: accountCollapsed ? "예" : "아니오",
     bgm_autoplay: bgmAutoplay ? "예" : "아니오",
     bgm_url: bgmUrl,
-  }), [initialRaw, content, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign, greetingImageRatio, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone, galleryZoomBlock, accountCollapsed, bgmAutoplay, bgmUrl])
+  }), [initialRaw, content, extraAccountPayload, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign, greetingImageRatio, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone, galleryZoomBlock, accountCollapsed, bgmAutoplay, bgmUrl])
 
   const data = useMemo(() => buildFieldData(liveRaw), [liveRaw])
 
@@ -522,7 +543,7 @@ export default function CustomizeClient({
     overrides, disabledSlots, blockOverrides, sectionImages, scrollMotion, intro,
     content, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign,
     greetingImageRatio, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone,
-    galleryZoomBlock, accountCollapsed, bgmAutoplay,
+    galleryZoomBlock, accountCollapsed, bgmAutoplay, extraGroomList, extraBrideList,
     bgmUrl, themeVersionId, blockOrder, ogTitle, ogDescription, ogImage,
   })
   const [initialFingerprint, setInitialFingerprint] = useState(dirtyFingerprint)
@@ -576,6 +597,7 @@ export default function CustomizeClient({
       wedding_date: weddingDate,
       wedding_time: weddingTime,
       gallery_images: galleryImages,
+      ...extraAccountPayload,
       gallery_view_type: galleryViewType,
       gallery_align: galleryAlign,
       greeting_image_ratio: greetingImageRatio,
@@ -1003,7 +1025,7 @@ export default function CustomizeClient({
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base font-medium">마음 전하실 곳 (계좌)</CardTitle>
-                  <CardDescription>혼주 계좌는 아버지·어머니 계좌를 함께 적는 등 형식이 자유로워 텍스트로 직접 입력합니다.</CardDescription>
+                  <CardDescription>혼주 계좌는 필요한 만큼 추가·삭제할 수 있습니다. 계좌마다 따로 넣어야 하객 화면에서 계좌번호만 정확히 복사됩니다.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <Field>
@@ -1021,10 +1043,12 @@ export default function CustomizeClient({
                       {ACCOUNT_FIELD_DEFS.slice(0, 3).map((f) => (
                         <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
                       ))}
-                      <TextField
-                        def={ACCOUNT_FIELD_DEFS.find((f) => f.key === "extra_account_groom")!}
-                        value={content.extra_account_groom || ""}
-                        onChange={(v) => setField("extra_account_groom", v)}
+                      <ExtraAccountEditor
+                        label="신랑측 혼주 계좌"
+                        legacyText={content.extra_account_groom || ""}
+                        list={extraGroomList}
+                        onChangeList={setExtraGroomList}
+                        onChangeLegacy={(v) => setField("extra_account_groom", v)}
                       />
                     </FieldGroup>
                     <FieldGroup className="space-y-4">
@@ -1032,10 +1056,12 @@ export default function CustomizeClient({
                       {ACCOUNT_FIELD_DEFS.slice(3, 6).map((f) => (
                         <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
                       ))}
-                      <TextField
-                        def={ACCOUNT_FIELD_DEFS.find((f) => f.key === "extra_account_bride")!}
-                        value={content.extra_account_bride || ""}
-                        onChange={(v) => setField("extra_account_bride", v)}
+                      <ExtraAccountEditor
+                        label="신부측 혼주 계좌"
+                        legacyText={content.extra_account_bride || ""}
+                        list={extraBrideList}
+                        onChangeList={setExtraBrideList}
+                        onChangeLegacy={(v) => setField("extra_account_bride", v)}
                       />
                     </FieldGroup>
                   </div>

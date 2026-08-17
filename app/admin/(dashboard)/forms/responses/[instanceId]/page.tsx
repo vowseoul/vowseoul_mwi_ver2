@@ -25,6 +25,8 @@ import { cn } from '@/lib/utils'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { toast } from 'sonner'
 import { uploadImage } from '@/lib/image-upload'
+import { ExtraAccountEditor } from '@/components/account-fields'
+import { composeAccountText, isAccountFilled, isExtraAccountKey, parseAccountList } from '@/lib/account-fields'
 
 const parseLocalDate = (dateStr: string) => {
   if (!dateStr) return undefined
@@ -169,6 +171,28 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
     if (displayVal === 'true') displayVal = '예'
     if (displayVal === 'false') displayVal = '아니오'
 
+    // 계좌 배열이 아래 이미지 분기(Array.isArray)에 먼저 걸리면 계좌 객체를 img src 로
+    // 그리려 하므로 그 앞에서 처리한다
+    if (isExtraAccountKey(field.field_key)) {
+      const list = parseAccountList(rawVal)
+      if (list !== null) {
+        const filled = list.filter(isAccountFilled)
+        if (filled.length === 0) {
+          return <div className="text-xs text-muted-foreground italic bg-muted p-2.5 rounded-lg border border-border/60">(미입력 항목)</div>
+        }
+        return (
+          <div className="space-y-1.5">
+            {filled.map((a, idx) => (
+              <div key={idx} className="text-xs font-semibold text-foreground bg-muted p-2.5 rounded-lg border border-border/80 select-text">
+                {composeAccountText(a)}
+              </div>
+            ))}
+          </div>
+        )
+      }
+      // 예전 자유 입력 문자열은 아래 기본 표시로 넘어간다
+    }
+
     if (field.field_type === 'image' || field.field_type === 'images' || Array.isArray(rawVal)) {
       const imageList: string[] = Array.isArray(rawVal) ? rawVal : (typeof rawVal === 'string' && rawVal.startsWith('http') ? [rawVal] : (rawVal ? [rawVal] : []))
       
@@ -223,6 +247,20 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
 
   const renderInputField = (field: any) => {
     const value = formData[field.field_key] || ''
+
+    // 혼주 계좌는 값이 배열이라 textarea 로 그리면 깨진다 — 고객 폼과 같은 계좌별 입력을 쓴다
+    if (isExtraAccountKey(field.field_key)) {
+      const parsed = parseAccountList(formData[field.field_key])
+      return (
+        <ExtraAccountEditor
+          label=""
+          legacyText={typeof value === 'string' ? value : ''}
+          list={parsed}
+          onChangeList={(next) => handleInputChange(field.field_key, next)}
+          onChangeLegacy={(next) => handleInputChange(field.field_key, next)}
+        />
+      )
+    }
 
     switch (field.field_type) {
       case 'textarea':

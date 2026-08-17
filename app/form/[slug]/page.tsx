@@ -50,6 +50,15 @@ import { supabase } from '@/lib/supabase'
 import { DATA_RETENTION_SETTINGS_KEY, DEFAULT_RETENTION_DAYS, parseRetentionSettings } from '@/lib/data-retention'
 import { BUSINESS_INFO_SETTINGS_KEY, parseBusinessInfo } from '@/lib/business-info'
 import { AddressSearchField } from '@/components/address-search-field'
+import { AccountBlock, AccountListField } from '@/components/account-fields'
+import {
+  ACCOUNT_GROUPS,
+  EMPTY_ACCOUNT,
+  accountGroupKeys,
+  accountGroupOf,
+  isExtraAccountKey,
+  parseAccountList,
+} from '@/lib/account-fields'
 import { CONSENT_VERSION, getFormConsentCopy } from '@/lib/privacy-consent'
 
 const parseLocalDate = (dateStr: string) => {
@@ -569,6 +578,12 @@ function PublicFormContent({ slug }: { slug: string }) {
     setMissingKeys((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : prev))
   }
 
+  /** 계좌 블럭처럼 여러 키를 한 번에 바꾸는 입력용 */
+  const handleInputPatch = (patch: Record<string, any>) => {
+    setFormValues((prev) => ({ ...prev, ...patch }))
+    setMissingKeys((prev) => prev.filter((k) => !(k in patch) || isBlank(patch[k])))
+  }
+
   /** 부모 항목의 답에 따라 지금 이 항목을 실제로 물어보고 있는지 */
   const isFieldActive = (f: any) => {
     const opts = parseOptions(f)
@@ -706,6 +721,66 @@ function PublicFormContent({ slug }: { slug: string }) {
 
   const renderInputField = (field: any) => {
     const value = formValues[field.field_key] || ''
+
+    // 계좌 필드는 field_type 이 아니라 키로 판정한다(§lib/account-fields.ts).
+    // 신랑·신부 본인 계좌: 예금주/은행명/계좌번호 3개 필드를 한 블럭으로 묶어 보여주되
+    // 저장은 기존 키 그대로다.
+    const groupPrefix = accountGroupOf(field.field_key)
+    if (groupPrefix) {
+      const k = accountGroupKeys(groupPrefix)
+      return (
+        <AccountBlock
+          idPrefix={groupPrefix}
+          value={{
+            holder: formValues[k.holder] || '',
+            bank: formValues[k.bank] || '',
+            number: formValues[k.number] || '',
+          }}
+          onChange={(next) =>
+            handleInputPatch({ [k.holder]: next.holder, [k.bank]: next.bank, [k.number]: next.number })
+          }
+          invalid={[k.holder, k.bank, k.number].some((key) => missingKeys.includes(key))}
+        />
+      )
+    }
+
+    // 혼주 계좌: 개수가 정해져 있지 않아 값 하나에 배열로 담는다.
+    if (isExtraAccountKey(field.field_key)) {
+      const parsed = parseAccountList(formValues[field.field_key])
+      if (parsed === null && typeof value === 'string' && value.trim()) {
+        // 예전 자유 입력으로 이미 채워진 폼 — 값을 임의로 쪼개면 잘못 나눌 수 있어
+        // 원문을 그대로 두고 고칠 수만 있게 한다.
+        return (
+          <div className="space-y-2">
+            <Textarea
+              value={value}
+              onChange={(e) => handleInputChange(field.field_key, e.target.value)}
+              rows={3}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              예전 방식(자유 입력)으로 저장된 내용입니다. 아래 버튼을 누르면 계좌별로 나눠 입력하는
+              방식으로 바꿀 수 있습니다.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handleInputChange(field.field_key, [{ ...EMPTY_ACCOUNT }])}
+            >
+              계좌별로 나눠 입력하기
+            </Button>
+          </div>
+        )
+      }
+      return (
+        <AccountListField
+          idPrefix={field.field_key}
+          items={parsed ?? []}
+          onChange={(next) => handleInputChange(field.field_key, next)}
+          addLabel="혼주 계좌 추가"
+        />
+      )
+    }
 
     switch (field.field_type) {
       case 'textarea':
@@ -1666,6 +1741,14 @@ function PublicFormContent({ slug }: { slug: string }) {
                           (c) => parseOptions(c).parent_field_key === field.field_key
                         )
 
+                        // 계좌 그룹은 대표 필드(예금주) 하나에서 블럭 전체를 그리므로
+                        // 나머지 두 필드(은행명·계좌번호)는 따로 카드를 만들지 않는다.
+                        const groupPrefix = accountGroupOf(field.field_key)
+                        if (groupPrefix && field.field_key !== accountGroupKeys(groupPrefix).holder) return null
+                        const groupLabel = groupPrefix
+                          ? ACCOUNT_GROUPS.find((g) => g.prefix === groupPrefix)?.label
+                          : null
+
                         const isMissing = missingKeys.includes(field.field_key)
 
                         return (
@@ -1679,7 +1762,7 @@ function PublicFormContent({ slug }: { slug: string }) {
                           >
                             <Field>
                               <FieldLabel htmlFor={field.field_key} className="text-sm font-extrabold text-foreground tracking-tight flex items-center gap-1">
-                                <span>{field.label}</span>
+                                <span>{groupLabel ?? field.label}</span>
                                 {field.is_required && (
                                   <span className="text-rose-500 font-bold text-sm ml-0.5" title="필수 입력 항목">*</span>
                                 )}
@@ -1703,12 +1786,22 @@ function PublicFormContent({ slug }: { slug: string }) {
                               const triggerVal = (childOpts.parent_trigger_option || '').toString().trim()
                               const isTriggered = parentVal === triggerVal && parentVal !== ''
 
+                              // 계좌 3필드는 대표 필드(예금주)에서 블럭 하나로 그린다 —
+                              // 계좌 항목들은 토글의 하위 항목이라 여기로 들어온다.
+                              const childGroup = accountGroupOf(childField.field_key)
+                              if (childGroup && childField.field_key !== accountGroupKeys(childGroup).holder) return null
+                              const childGroupLabel = childGroup
+                                ? ACCOUNT_GROUPS.find((g) => g.prefix === childGroup)?.label
+                                : null
+
                               return (
                                 <div
                                   key={childField.field_key}
                                   className={`transition-all duration-300 ease-in-out overflow-hidden border-l-2 border-primary pl-4 ml-1 mt-3 bg-muted/60 p-3.5 rounded-r-xl border-y border-r border-border/60 ${
-                                    isTriggered 
-                                      ? 'max-h-[600px] opacity-100 py-3' 
+                                    isTriggered
+                                      // 높이를 고정값으로 묶어두면(예전 max-h-[600px]) 계좌를 여러 개
+                                      // 추가했을 때 아래쪽 입력칸이 잘려서 아예 보이지 않는다.
+                                      ? 'max-h-none opacity-100 py-3'
                                       : 'max-h-0 opacity-0 py-0 pointer-events-none'
                                   }`}
                                 >
@@ -1717,7 +1810,7 @@ function PublicFormContent({ slug }: { slug: string }) {
                                    </div>
                                    <Field>
                                      <FieldLabel htmlFor={childField.field_key} className="text-xs font-bold text-muted-foreground">
-                                       {childField.label}
+                                       {childGroupLabel ?? childField.label}
                                        {childField.is_required && <span className="text-rose-500 font-bold text-xs ml-0.5">*</span>}
                                      </FieldLabel>
                                      {renderAttachedImages(childOpts.attached_images)}
