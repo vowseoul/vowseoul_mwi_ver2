@@ -413,7 +413,9 @@ export function useFormInstanceBySlugQuery(slug: string) {
             id,
             data,
             is_complete,
-            updated_at
+            updated_at,
+            consent_agreed_at,
+            consent_version
           )
         `)
         .eq('unique_url_slug', slug)

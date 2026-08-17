@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState, useEffect, use, Suspense } from 'react'
-import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { SaveButton } from '@/components/ui/save-button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -18,6 +17,7 @@ import {
 } from '@/components/ui/select'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { useFormInstanceBySlugQuery, useSubmitFormMutation } from '@/hooks/queries/useForms'
+import { pickFormSubmission } from '@/lib/form-submission'
 import { useBgmLibraryQuery } from '@/hooks/queries/useBgms'
 import { mergeMusicChoices } from '@/lib/bgm-choices'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -48,6 +48,8 @@ import { Logo } from '@/components/logo'
 import { Checkbox } from '@/components/ui/checkbox'
 import { supabase } from '@/lib/supabase'
 import { DATA_RETENTION_SETTINGS_KEY, DEFAULT_RETENTION_DAYS, parseRetentionSettings } from '@/lib/data-retention'
+import { BUSINESS_INFO_SETTINGS_KEY, parseBusinessInfo } from '@/lib/business-info'
+import { AddressSearchField } from '@/components/address-search-field'
 import { CONSENT_VERSION, getFormConsentCopy } from '@/lib/privacy-consent'
 
 const parseLocalDate = (dateStr: string) => {
@@ -56,8 +58,53 @@ const parseLocalDate = (dateStr: string) => {
   return new Date(year, month - 1, day)
 }
 
+/**
+ * 값이 비었는지 판정. 사진 항목은 값이 배열이라 `!val` 로는 걸러지지 않는다 —
+ * 사진을 넣었다 전부 지우면 빈 배열([])이 남는데 JS 에서 []는 truthy 라
+ * "첨부됨"으로 보이면서 제출 검증은 누락으로 잡는 모순이 생긴다.
+ */
+const isBlank = (val: any) => {
+  if (val === null || val === undefined) return true
+  if (Array.isArray(val)) return val.length === 0
+  return val.toString().trim() === ''
+}
+
+/** 임시저장 시각을 "3분 전"처럼 읽기 쉬운 상대 시간으로. 하루가 넘으면 날짜로 보여준다 */
+const formatSavedAt = (iso: string) => {
+  const saved = new Date(iso)
+  if (Number.isNaN(saved.getTime())) return ''
+  const minutes = Math.floor((Date.now() - saved.getTime()) / 60000)
+  if (minutes < 1) return '방금 전'
+  if (minutes < 60) return `${minutes}분 전`
+  if (minutes < 60 * 24) return `${Math.floor(minutes / 60)}시간 전`
+  return format(saved, 'M월 d일 a h:mm', { locale: ko })
+}
+
+/**
+ * 링크가 잘못됐거나 만료됐을 때 보여주는 문의 안내. 예전에는 "메인 화면으로 이동"
+ * 버튼이었는데 그 경로(/)가 관리자 페이지로 리다이렉트돼(§app/page.tsx) 고객이
+ * 관리자 로그인 화면에 떨어지는 막다른 길이었다.
+ */
+function SupportContact({ email }: { email: string }) {
+  return (
+    <div className="rounded-lg bg-muted/60 p-3 text-sm">
+      <p className="font-medium text-foreground">문의하기</p>
+      <p className="mt-1 text-muted-foreground">
+        카카오채널 <span className="font-medium text-foreground">바우서울</span>
+        {email && (
+          <>
+            {' 또는 '}
+            <a href={`mailto:${email}`} className="font-medium text-foreground underline underline-offset-2">
+              {email}
+            </a>
+          </>
+        )}
+      </p>
+    </div>
+  )
+}
+
 function PublicFormContent({ slug }: { slug: string }) {
-  const router = useRouter()
   const { data: instance, isLoading, error } = useFormInstanceBySlugQuery(slug)
   const submitMutation = useSubmitFormMutation()
   const { data: bgmLibrary } = useBgmLibraryQuery()
@@ -75,20 +122,31 @@ function PublicFormContent({ slug }: { slug: string }) {
   const [consentConfirmed, setConsentConfirmed] = useState(false)
   const [consentAgreedAt, setConsentAgreedAt] = useState<string | null>(null)
   const [retentionDays, setRetentionDays] = useState(DEFAULT_RETENTION_DAYS)
+  // 링크가 잘못됐거나 만료됐을 때 고객이 연락할 곳. 예전엔 '메인 화면으로 이동' 버튼을
+  // 뒀는데 그 경로(/)가 관리자 페이지로 리다이렉트돼 고객이 로그인 화면에 떨어졌다.
+  const [supportEmail, setSupportEmail] = useState('')
 
   useEffect(() => {
     supabase
       .from('settings')
-      .select('value')
-      .eq('key', DATA_RETENTION_SETTINGS_KEY)
-      .maybeSingle()
-      .then(({ data }) => setRetentionDays(parseRetentionSettings(data?.value).daysAfterWedding))
+      .select('key, value')
+      .in('key', [DATA_RETENTION_SETTINGS_KEY, BUSINESS_INFO_SETTINGS_KEY])
+      .then(({ data }) => {
+        const byKey = Object.fromEntries((data ?? []).map((r) => [r.key, r.value]))
+        setRetentionDays(parseRetentionSettings(byKey[DATA_RETENTION_SETTINGS_KEY]).daysAfterWedding)
+        setSupportEmail(parseBusinessInfo(byKey[BUSINESS_INFO_SETTINGS_KEY]).supportEmail)
+      })
   }, [])
 
   // Form Value state { field_key: value }
   const [formValues, setFormValues] = useState<Record<string, any>>({})
   const [zoomImage, setZoomImage] = useState<string | null>(null)
   const [currentStep, setCurrentStep] = useState(0)
+  // 다음/제출을 눌렀을 때 비어 있던 필수 항목들. 해당 입력칸에 오류 표시를 띄우는 데 쓴다
+  const [missingKeys, setMissingKeys] = useState<string[]>([])
+  // 이전에 쓰던 내용을 되살렸을 때의 저장 시각. 긴 폼이라 "내가 쓴 게 남아있나"를
+  // 알려주지 않으면 고객이 처음부터 다시 쓰게 된다. null 이면 새로 시작하는 것.
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [customSelectTexts, setCustomSelectTexts] = useState<Record<string, boolean>>({})
@@ -205,10 +263,20 @@ function PublicFormContent({ slug }: { slug: string }) {
     const draftKey = `vowseoul_draft_${instance.slug || instance.id}`
 
     let initialValues: Record<string, any> = {}
+    let savedAt: string | null = null
 
-    const serverSubmission = instance.form_submissions?.[0]
+    const serverSubmission = pickFormSubmission<any>(instance.form_submissions)
     if (serverSubmission?.data) {
       initialValues = { ...serverSubmission.data }
+      savedAt = serverSubmission.updated_at ?? null
+    }
+
+    // 이미 이번 버전 방침에 동의한 기록이 서버에 있으면 다시 묻지 않는다. 방침이
+    // 개정돼 버전이 올라가면 값이 달라지므로 그때는 자동으로 다시 받게 된다.
+    if (serverSubmission?.consent_agreed_at && serverSubmission.consent_version === CONSENT_VERSION) {
+      setConsentAgreedAt(serverSubmission.consent_agreed_at)
+      setConsentChecked(true)
+      setConsentConfirmed(true)
     }
 
     try {
@@ -220,14 +288,19 @@ function PublicFormContent({ slug }: { slug: string }) {
           if (typeof parsed.currentStep === 'number') {
             setCurrentStep(parsed.currentStep)
           }
+          // 이 기기에 남은 게 서버 기록보다 최신이다
+          if (typeof parsed.updatedAt === 'string') savedAt = parsed.updatedAt
         }
       }
     } catch (e) {
       console.error('Error reading localStorage draft:', e)
     }
 
+    // 값이 실제로 들어있을 때만 "이어쓰기"로 본다 — 빈 문자열로 초기화된 기본값
+    // 뭉치까지 복원으로 치면 처음 여는 고객에게도 안내가 뜬다.
     if (Object.keys(initialValues).length > 0) {
       setFormValues((prev) => ({ ...prev, ...initialValues }))
+      if (Object.values(initialValues).some((v) => !isBlank(v))) setDraftSavedAt(savedAt)
     }
   }, [instance])
 
@@ -293,12 +366,10 @@ function PublicFormContent({ slug }: { slug: string }) {
             <div className="space-y-2">
               <h2 className="text-lg font-semibold">찾을 수 없는 양식</h2>
               <p className="text-sm text-muted-foreground">
-                입력 양식이 만료되었거나, 주소가 잘못되었습니다. 운영팀에 문의해주세요.
+                입력 양식이 만료되었거나, 주소가 잘못되었습니다.
               </p>
             </div>
-            <Button className="w-full" onClick={() => router.push('/')}>
-              메인 화면으로 이동
-            </Button>
+            <SupportContact email={supportEmail} />
           </CardContent>
         </Card>
       </div>
@@ -316,11 +387,10 @@ function PublicFormContent({ slug }: { slug: string }) {
               <h2 className="text-lg font-semibold">만료된 입력 링크</h2>
               <p className="text-sm text-muted-foreground">
                 이 정보 수집 링크는 만료기한이 지나 비활성화되었습니다.
+                새 링크를 받으시려면 아래로 문의해주세요.
               </p>
             </div>
-            <Button className="w-full" onClick={() => router.push('/')}>
-              메인 화면으로 이동
-            </Button>
+            <SupportContact email={supportEmail} />
           </CardContent>
         </Card>
       </div>
@@ -495,6 +565,37 @@ function PublicFormContent({ slug }: { slug: string }) {
 
   const handleInputChange = (key: string, val: any) => {
     setFormValues((prev) => ({ ...prev, [key]: val }))
+    // 입력을 시작하면 그 항목의 누락 표시는 바로 걷어준다
+    setMissingKeys((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : prev))
+  }
+
+  /** 부모 항목의 답에 따라 지금 이 항목을 실제로 물어보고 있는지 */
+  const isFieldActive = (f: any) => {
+    const opts = parseOptions(f)
+    if (!opts.parent_field_key) return true
+    let parentVal = (formValues[opts.parent_field_key] || '').toString().trim()
+    if (parentVal === 'true') parentVal = '예'
+    if (parentVal === 'false') parentVal = '아니오'
+    return parentVal === (opts.parent_trigger_option || '').toString().trim()
+  }
+
+  /** 화면에 떠 있는 필수 항목 중 아직 안 채운 것들 */
+  const collectMissing = (fields: any[]) =>
+    fields.filter((f) => f.is_required && isFieldActive(f) && isBlank(formValues[f.field_key]))
+
+  /**
+   * 누락 항목을 표시하고 첫 번째 항목으로 스크롤한다. 한 단계가 3,000px 이 넘어서
+   * 토스트로 이름만 나열하면 고객이 긴 폼을 직접 뒤져야 한다.
+   */
+  const focusMissing = (missing: any[]) => {
+    setMissingKeys(missing.map((f) => f.field_key))
+    const first = document.getElementById(`formfield-${missing[0].field_key}`)
+    if (first) {
+      // smooth 가 아니라 즉시 이동이다 — 오류를 고치러 가는 길이라 1초짜리 애니메이션이
+      // 도움이 안 되고, 애니메이션 프레임이 안 도는 환경에서는 조용히 아무 일도 안 일어난다.
+      first.scrollIntoView({ behavior: 'auto', block: 'center' })
+      first.querySelector<HTMLElement>('input, textarea, select, button')?.focus({ preventScroll: true })
+    }
   }
 
   // 3. Manual Draft Save Handler
@@ -534,30 +635,19 @@ function PublicFormContent({ slug }: { slug: string }) {
   }
 
   const handleNext = () => {
-    // Validate current step fields
-    const missingFields = currentFields.filter((f) => {
-      if (!f.is_required) return false
-      
-      // If it is a child field, check if its parent is triggered. If not triggered, ignore it.
-      const opts = parseOptions(f)
-      if (opts.parent_field_key) {
-        let parentVal = (formValues[opts.parent_field_key] || '').toString().trim()
-        if (parentVal === 'true') parentVal = '예'
-        if (parentVal === 'false') parentVal = '아니오'
-        const triggerVal = (opts.parent_trigger_option || '').toString().trim()
-        if (parentVal !== triggerVal) {
-          return false // Not triggered, ignore
-        }
-      }
-      
-      return !formValues[f.field_key] || formValues[f.field_key].toString().trim() === ''
-    })
+    const missingFields = collectMissing(currentFields)
 
     if (missingFields.length > 0) {
-      toast.error(`필수 항목을 입력해주세요: ${missingFields.map((f) => f.label).join(', ')}`)
+      toast.error(
+        missingFields.length === 1
+          ? `'${missingFields[0].label}' 항목을 입력해주세요.`
+          : `입력하지 않은 필수 항목이 ${missingFields.length}개 있습니다. 표시된 항목을 확인해주세요.`
+      )
+      focusMissing(missingFields)
       return
     }
 
+    setMissingKeys([])
     if (currentStep < allStepKeys.length - 1) {
       setCurrentStep((c) => c + 1)
       window.scrollTo(0, 0)
@@ -572,32 +662,25 @@ function PublicFormContent({ slug }: { slug: string }) {
   }
 
   const handleSubmit = async () => {
-    // Final check for all fields
-    const allMissing: string[] = []
-    instance.fields_snapshot.forEach((f: any) => {
-      if (!f.is_required) return
-      
-      const opts = parseOptions(f)
-      if (opts.parent_field_key) {
-        let parentVal = (formValues[opts.parent_field_key] || '').toString().trim()
-        if (parentVal === 'true') parentVal = '예'
-        if (parentVal === 'false') parentVal = '아니오'
-        const triggerVal = (opts.parent_trigger_option || '').toString().trim()
-        if (parentVal !== triggerVal) {
-          return // Parent is not triggered, skip
-        }
-      }
-      
-      if (!formValues[f.field_key] || formValues[f.field_key].toString().trim() === '') {
-        allMissing.push(f.label)
-      }
-    })
+    const allMissing = collectMissing(instance.fields_snapshot)
 
     if (allMissing.length > 0) {
-      toast.error(`입력하지 않은 필수 항목이 있습니다: ${allMissing.join(', ')}`)
+      toast.error(
+        allMissing.length === 1
+          ? `'${allMissing[0].label}' 항목을 입력해주세요.`
+          : `입력하지 않은 필수 항목이 ${allMissing.length}개 있습니다. 표시된 항목을 확인해주세요.`
+      )
+      // 최종 확인 화면에서 눌렀으므로 누락된 항목은 다른 단계에 있다. 그 단계로 옮긴 뒤
+      // 실제로 그려지고 나서 스크롤해야 해서 다음 프레임까지 기다린다.
+      const targetStep = fieldStepKeys.findIndex((key) =>
+        (stepsMap[key] || []).some((f: any) => f.field_key === allMissing[0].field_key)
+      )
+      if (targetStep >= 0 && targetStep !== currentStep) setCurrentStep(targetStep)
+      requestAnimationFrame(() => focusMissing(allMissing))
       return
     }
 
+    setMissingKeys([])
     setSubmitting(true)
     try {
       await submitMutation.mutateAsync({
@@ -616,6 +699,10 @@ function PublicFormContent({ slug }: { slug: string }) {
       setSubmitting(false)
     }
   }
+
+  /** 누락으로 표시된 항목의 입력칸에 붙일 속성. Input 이 aria-invalid 를 빨간 테두리로 그린다 */
+  const errorProps = (field: any) =>
+    missingKeys.includes(field.field_key) ? { 'aria-invalid': true as const } : {}
 
   const renderInputField = (field: any) => {
     const value = formValues[field.field_key] || ''
@@ -1282,16 +1369,34 @@ function PublicFormContent({ slug }: { slug: string }) {
             <p className="text-[11px] text-muted-foreground">영문 소문자, 숫자, 하이픈(-)만 입력 가능합니다.</p>
           </div>
         )
-      default:
+      case 'address':
+        return (
+          <AddressSearchField
+            id={field.field_key}
+            value={value}
+            onChange={(addr) => handleInputChange(field.field_key, addr)}
+            placeholder={field.help_text}
+            required={field.is_required}
+            invalid={missingKeys.includes(field.field_key)}
+          />
+        )
+      default: {
+        // phone 은 전용 분기가 없어 여기로 떨어진다. 그냥 text 로 두면 휴대폰에서
+        // 숫자 키패드 대신 일반 자판이 올라와 연락처 6개를 전부 그렇게 입력해야 한다.
+        const isPhone = field.field_type === 'phone'
         return (
           <Input
-            type={field.field_type === 'number' ? 'number' : 'text'}
+            type={field.field_type === 'number' ? 'number' : isPhone ? 'tel' : 'text'}
+            inputMode={isPhone ? 'numeric' : undefined}
+            autoComplete={isPhone ? 'tel' : undefined}
             value={value}
             onChange={(e) => handleInputChange(field.field_key, e.target.value)}
             placeholder={field.help_text || '내용을 입력하세요.'}
             required={field.is_required}
+            {...errorProps(field)}
           />
         )
+      }
     }
   }
 
@@ -1330,6 +1435,20 @@ function PublicFormContent({ slug }: { slug: string }) {
 
       {/* Main Container */}
       <main className="flex-1 max-w-xl w-full mx-auto px-4 py-8 space-y-6">
+        {draftSavedAt !== null && (
+          <div className="flex items-start gap-2 rounded-xl border border-primary/30 bg-primary/5 p-3 text-xs">
+            <CheckCircle2 className="mt-px h-4 w-4 shrink-0 text-primary" />
+            <p className="text-foreground">
+              이전에 입력하신 내용을 그대로 불러왔습니다. 이어서 작성해주세요.
+              {draftSavedAt && (
+                <span className="mt-0.5 block text-muted-foreground">
+                  마지막 저장 {formatSavedAt(draftSavedAt)}
+                </span>
+              )}
+            </p>
+          </div>
+        )}
+
         {/* Step Indicator Map */}
         <div className="bg-white border border-border rounded-xl p-3.5 shadow-sm space-y-3">
           <div className="flex items-center justify-between gap-1 select-none overflow-x-auto py-1 scrollbar-hide">
@@ -1388,19 +1507,7 @@ function PublicFormContent({ slug }: { slug: string }) {
             <CardContent className="p-5 space-y-6">
               {fieldStepKeys.map((stepKey, sIdx) => {
                 const stepFields = stepsMap[stepKey] || []
-                const filledFields = stepFields.filter(f => {
-                  const opts = parseOptions(f)
-                  if (opts.parent_field_key) {
-                    let parentVal = (formValues[opts.parent_field_key] || '').toString().trim()
-                    if (parentVal === 'true') parentVal = '예'
-                    if (parentVal === 'false') parentVal = '아니오'
-                    const triggerVal = (opts.parent_trigger_option || '').toString().trim()
-                    if (parentVal !== triggerVal) {
-                      return false
-                    }
-                  }
-                  return true
-                })
+                const filledFields = stepFields.filter(isFieldActive)
 
                 if (filledFields.length === 0) return null
 
@@ -1425,18 +1532,23 @@ function PublicFormContent({ slug }: { slug: string }) {
                     <div className="grid grid-cols-1 gap-1.5 text-xs bg-muted/50 p-2.5 rounded-lg border border-border">
                       {filledFields.map(f => {
                         const val = formValues[f.field_key]
-                        let displayVal = val ? val.toString() : ''
+                        // isBlank 로 판정해야 사진을 넣었다 전부 지운 경우([])도 '없음'으로 잡힌다
+                        const blank = isBlank(val)
+                        let displayVal = blank ? '' : val.toString()
                         if (displayVal === 'true') displayVal = '예'
                         if (displayVal === 'false') displayVal = '아니오'
                         if (f.field_type === 'image' || f.field_type === 'images') {
-                          displayVal = val ? '이미지 첨부됨' : ''
+                          const count = Array.isArray(val) ? val.length : 1
+                          displayVal = blank ? '' : `사진 ${count}장 첨부됨`
                         }
                         
                         return (
                           <div key={f.field_key} className="flex justify-between items-start gap-4">
                             <span className="text-muted-foreground font-medium shrink-0">{f.label}:</span>
+                            {/* 오탈자를 확인하라고 만든 화면이라 값을 자르면 안 된다. 인사말처럼
+                                줄바꿈이 들어간 긴 글도 그대로 보이도록 접어서 전부 표시한다. */}
                             <span className={cn(
-                              "text-right truncate max-w-[250px]",
+                              "min-w-0 text-right whitespace-pre-wrap break-words",
                               displayVal ? "text-foreground font-semibold" : "text-amber-500 italic font-medium"
                             )}>
                               {displayVal || (f.is_required ? "필수 입력 누락" : "선택 안 함")}
@@ -1554,8 +1666,17 @@ function PublicFormContent({ slug }: { slug: string }) {
                           (c) => parseOptions(c).parent_field_key === field.field_key
                         )
 
+                        const isMissing = missingKeys.includes(field.field_key)
+
                         return (
-                          <div key={field.field_key} className="p-4 sm:p-5 rounded-2xl border border-border bg-card shadow-2xs space-y-3">
+                          <div
+                            key={field.field_key}
+                            id={`formfield-${field.field_key}`}
+                            className={cn(
+                              'p-4 sm:p-5 rounded-2xl border bg-card shadow-2xs space-y-3',
+                              isMissing ? 'border-destructive ring-2 ring-destructive/20' : 'border-border'
+                            )}
+                          >
                             <Field>
                               <FieldLabel htmlFor={field.field_key} className="text-sm font-extrabold text-foreground tracking-tight flex items-center gap-1">
                                 <span>{field.label}</span>
@@ -1566,6 +1687,11 @@ function PublicFormContent({ slug }: { slug: string }) {
 
                               {renderAttachedImages(parseOptions(field).attached_images)}
                               {renderInputField(field)}
+                              {isMissing && (
+                                <p role="alert" className="text-xs font-medium text-destructive">
+                                  이 항목은 필수입니다.
+                                </p>
+                              )}
                             </Field>
 
                             {/* Child fields accordion wrapper */}
