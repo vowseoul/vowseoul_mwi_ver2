@@ -35,6 +35,7 @@ import {
 import { useThemesQuery } from '@/hooks/queries/useThemes'
 import { useCreateInvitationMutation } from '@/hooks/queries/useInvitations'
 import { useFormTemplateFieldsQuery } from '@/hooks/queries/useForms'
+import { pickFormSubmission } from '@/lib/form-submission'
 import { supabase } from '@/lib/supabase'
 import { logAuditEvent } from '@/lib/audit-log'
 import { useQueryClient } from '@tanstack/react-query'
@@ -527,7 +528,9 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
     }
   }
 
-  const formSubmissionTime = formInstance?.form_submissions?.[0]?.updated_at
+  // form_submissions 임베드는 UNIQUE 제약 때문에 배열이 아니라 객체로 온다 (§pickFormSubmission)
+  const formSubmission = pickFormSubmission<any>(formInstance?.form_submissions)
+  const formSubmissionTime = formSubmission?.updated_at
 
   return (
     <div className="space-y-6 font-sans max-w-5xl mx-auto">
@@ -873,7 +876,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                     </a>
                   </Button>
 
-                  {formInstance.status === 'completed' || formInstance.form_submissions?.[0] ? (
+                  {formInstance.status === 'completed' || formSubmission ? (
                     <Button variant="default" className="w-full text-xs h-9 gap-1.5" asChild>
                       <Link href={`/admin/forms/responses/${formInstance.id}`}>
                         <FileCheck className="w-3.5 h-3.5" /> 고객 제출 내용 보기 / 수정
