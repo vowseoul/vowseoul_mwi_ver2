@@ -64,6 +64,8 @@ import { SaveButton } from "@/components/ui/save-button"
 import { QrCodeDialog } from "@/components/admin/qr-code-dialog"
 import { ExtraAccountEditor } from "@/components/account-fields"
 import { isAccountFilled, parseAccountList, type AccountEntry } from "@/lib/account-fields"
+import { ContactListField } from "@/components/contact-fields"
+import { isContactFilled, parseContactList, type ContactEntry } from "@/lib/contact-fields"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Slider } from "@/components/ui/slider"
@@ -278,6 +280,11 @@ export default function CustomizeClient({
   const [extraBrideList, setExtraBrideList] = useState<AccountEntry[] | null>(() =>
     parseAccountList(initialRaw.extra_account_bride)
   )
+  // 그 외 연락처(혼주 등)도 같은 이유로 같은 방식이다 — extra_contacts 는 legacy 자유 입력이
+  // 있던 적이 없어(신규 필드) 문자열 마이그레이션 분기가 필요 없다.
+  const [extraContactsList, setExtraContactsList] = useState<ContactEntry[] | null>(() =>
+    parseContactList(initialRaw.extra_contacts)
+  )
 
   const [content, setContent] = useState<Record<string, string>>(() => {
     const out: Record<string, string> = {}
@@ -348,13 +355,15 @@ export default function CustomizeClient({
   // 폰트 선택 드롭다운에서 이름만으로는 어떤 폰트인지 알기 어려우므로 그 폰트로 직접 렌더해 보여준다
   useInjectFontFaces(fonts)
 
-  // 배열이 있을 때만 덮어쓴다 — null 이면 예전 자유 입력 문자열을 content 가 그대로 들고 있다
-  const extraAccountPayload = useMemo(() => {
+  // 배열이 있을 때만 덮어쓴다 — null 이면 계좌는 예전 자유 입력 문자열을 content 가 그대로
+  // 들고 있고, 연락처는 애초에 값 자체가 없다는 뜻이다.
+  const extraArrayFieldsPayload = useMemo(() => {
     const out: Record<string, unknown> = {}
     if (extraGroomList !== null) out.extra_account_groom = extraGroomList.filter(isAccountFilled)
     if (extraBrideList !== null) out.extra_account_bride = extraBrideList.filter(isAccountFilled)
+    if (extraContactsList !== null) out.extra_contacts = extraContactsList.filter(isContactFilled)
     return out
-  }, [extraGroomList, extraBrideList])
+  }, [extraGroomList, extraBrideList, extraContactsList])
 
   // 미리보기용 raw: 저장된 값 위에 현재 편집 중인 값을 얹는다 (발행 파이프라인과 동일 함수로 렌더)
   const liveRaw = useMemo(() => ({
@@ -363,7 +372,7 @@ export default function CustomizeClient({
     wedding_date: weddingDate,
     wedding_time: weddingTime,
     gallery_images: galleryImages,
-    ...extraAccountPayload,
+    ...extraArrayFieldsPayload,
     gallery_view_type: galleryViewType,
     gallery_align: galleryAlign,
     greeting_image_ratio: greetingImageRatio,
@@ -376,7 +385,7 @@ export default function CustomizeClient({
     account_collapsed: accountCollapsed ? "예" : "아니오",
     bgm_autoplay: bgmAutoplay ? "예" : "아니오",
     bgm_url: bgmUrl,
-  }), [initialRaw, content, extraAccountPayload, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign, greetingImageRatio, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone, galleryZoomBlock, accountCollapsed, bgmAutoplay, bgmUrl])
+  }), [initialRaw, content, extraArrayFieldsPayload, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign, greetingImageRatio, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone, galleryZoomBlock, accountCollapsed, bgmAutoplay, bgmUrl])
 
   const data = useMemo(() => buildFieldData(liveRaw), [liveRaw])
 
@@ -543,7 +552,7 @@ export default function CustomizeClient({
     overrides, disabledSlots, blockOverrides, sectionImages, scrollMotion, intro,
     content, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign,
     greetingImageRatio, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone,
-    galleryZoomBlock, accountCollapsed, bgmAutoplay, extraGroomList, extraBrideList,
+    galleryZoomBlock, accountCollapsed, bgmAutoplay, extraGroomList, extraBrideList, extraContactsList,
     bgmUrl, themeVersionId, blockOrder, ogTitle, ogDescription, ogImage,
   })
   const [initialFingerprint, setInitialFingerprint] = useState(dirtyFingerprint)
@@ -597,7 +606,7 @@ export default function CustomizeClient({
       wedding_date: weddingDate,
       wedding_time: weddingTime,
       gallery_images: galleryImages,
-      ...extraAccountPayload,
+      ...extraArrayFieldsPayload,
       gallery_view_type: galleryViewType,
       gallery_align: galleryAlign,
       greeting_image_ratio: greetingImageRatio,
@@ -1117,6 +1126,17 @@ export default function CustomizeClient({
                             onChange={(v) => setField("bride_sns_instagram", v)}
                           />
                         </FieldGroup>
+                      </div>
+                    )}
+                    {phoneExpose && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium">그 외 연락처 (혼주 등)</p>
+                        <ContactListField
+                          idPrefix="extra-contacts"
+                          items={extraContactsList ?? []}
+                          onChange={setExtraContactsList}
+                          addLabel="연락처 추가"
+                        />
                       </div>
                     )}
                   </FieldGroup>

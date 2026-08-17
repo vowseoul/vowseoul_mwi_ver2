@@ -3,6 +3,7 @@
 import { Phone, MessageSquare, Instagram } from "lucide-react"
 import { isToggledOff } from "@/lib/invitation-data"
 import { soft, iconBtnStyle, type SlotProps } from "./shared"
+import { isContactFilled, parseContactList } from "@/lib/contact-fields"
 
 
 /* ----------------------------- Contact ------------------------------
@@ -45,8 +46,14 @@ function ContactRow({ label, name, phone, instagram }: { label: string; name?: s
     </div>
   )
 }
-function ContactIsland({ data }: SlotProps) {
+function ContactIsland({ data, raw }: SlotProps) {
   if (isToggledOff(data.phone_expose)) return null
+
+  // 부모(혼주) 등 그 외 연락처는 값이 배열이라 data 가 아니라 raw 에서 읽어야 한다 —
+  // buildFieldData 는 문자열/숫자만 통과시키고 배열·객체는 슬롯이 raw 로 직접 쓰라고
+  // 빼둔다(§lib/invitation-data.ts, §account-island.tsx 와 동일한 이유).
+  const extraContacts = (parseContactList(raw?.extra_contacts) ?? []).filter(isContactFilled)
+
   const rows = [
     // 신랑·신부 본인은 전체 스위치가 켜져 있어도 개별로 더 숨길 수 있다(groom_show_phone/bride_show_phone).
     // 혼주(부모) 연락처는 개별 토글이 없어 전체 스위치만 따른다.
@@ -56,13 +63,14 @@ function ContactIsland({ data }: SlotProps) {
     { label: "신랑 어머니", name: data.groom_mother_name, phone: data.groom_mother_phone },
     { label: "신부 아버지", name: data.bride_father_name, phone: data.bride_father_phone },
     { label: "신부 어머니", name: data.bride_mother_name, phone: data.bride_mother_phone },
+    ...extraContacts.map((c) => ({ label: c.relation || "가족", name: c.name, phone: c.phone, instagram: undefined })),
   ].filter((r) => !!r.phone)
 
   if (rows.length === 0) return null
   return (
     <div style={{ textAlign: "left", maxWidth: 320, margin: "0 auto" }}>
-      {rows.map((r) => (
-        <ContactRow key={r.label} label={r.label} name={r.name} phone={r.phone} instagram={r.instagram} />
+      {rows.map((r, i) => (
+        <ContactRow key={i} label={r.label} name={r.name} phone={r.phone} instagram={r.instagram} />
       ))}
     </div>
   )

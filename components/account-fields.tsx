@@ -6,6 +6,12 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { EMPTY_ACCOUNT, type AccountEntry } from "@/lib/account-fields"
 
+/** 반복 입력 목록(계좌·연락처)에서 공통으로 쓰는 스타일 — 식순(timentext) 입력과 통일 */
+export const REPEATABLE_ROW_CLASS = "space-y-2 bg-muted/60 p-3 rounded-xl border border-border/80"
+export const REPEATABLE_INPUT_CLASS = "h-10 text-xs sm:text-sm bg-white border-border focus:border-ring"
+export const REPEATABLE_ADD_BUTTON_CLASS =
+  "w-full h-10 text-xs sm:text-sm gap-1.5 border-dashed border-input bg-white text-muted-foreground hover:border-foreground hover:bg-muted font-medium rounded-xl shadow-2xs"
+
 /**
  * 계좌 한 건 입력 블럭 — 예금주/은행명은 한 줄에 나란히, 계좌번호는 그 아래 전체 폭.
  * 셋을 세로로 쌓으면 계좌 하나에 세 줄씩 잡아먹어 폼이 길어지고, 누구의 어떤 정보인지
@@ -26,42 +32,44 @@ export function AccountBlock({
 }) {
   const set = (key: keyof AccountEntry) => (e: React.ChangeEvent<HTMLInputElement>) =>
     onChange({ ...value, [key]: e.target.value })
+  const inputClass = `${REPEATABLE_INPUT_CLASS} ${invalid ? "border-destructive" : ""}`
 
   return (
-    <div
-      className={`relative rounded-xl border-2 p-3 ${invalid ? "border-destructive" : "border-foreground/80"}`}
-    >
-      {onRemove && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={onRemove}
-          aria-label="이 계좌 삭제"
-          className="absolute -top-3 -right-2 h-7 w-7 rounded-full border bg-background text-destructive shadow-sm hover:bg-destructive/10"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
-      )}
-
-      <div className="grid grid-cols-2 gap-2">
-        <div className="space-y-1">
-          <label htmlFor={`${idPrefix}-holder`} className="text-xs text-muted-foreground">예금주</label>
-          <Input id={`${idPrefix}-holder`} value={value.holder} onChange={set("holder")} />
+    <div className={REPEATABLE_ROW_CLASS}>
+      <div className="flex items-start gap-2">
+        <div className="grid flex-1 grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <label htmlFor={`${idPrefix}-holder`} className="text-[11px] text-muted-foreground">예금주</label>
+            <Input id={`${idPrefix}-holder`} value={value.holder} onChange={set("holder")} className={inputClass} />
+          </div>
+          <div className="space-y-1">
+            <label htmlFor={`${idPrefix}-bank`} className="text-[11px] text-muted-foreground">은행명</label>
+            <Input id={`${idPrefix}-bank`} value={value.bank} onChange={set("bank")} className={inputClass} />
+          </div>
         </div>
-        <div className="space-y-1">
-          <label htmlFor={`${idPrefix}-bank`} className="text-xs text-muted-foreground">은행명</label>
-          <Input id={`${idPrefix}-bank`} value={value.bank} onChange={set("bank")} />
-        </div>
+        {onRemove && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onRemove}
+            aria-label="이 계좌 삭제"
+            title="삭제"
+            className="mt-[22px] h-10 w-10 shrink-0 rounded-lg text-muted-foreground hover:bg-red-50 hover:text-red-500"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        )}
       </div>
-      <div className="mt-2 space-y-1">
-        <label htmlFor={`${idPrefix}-number`} className="text-xs text-muted-foreground">계좌번호</label>
+      <div className="space-y-1">
+        <label htmlFor={`${idPrefix}-number`} className="text-[11px] text-muted-foreground">계좌번호</label>
         <Input
           id={`${idPrefix}-number`}
           value={value.number}
           onChange={set("number")}
           inputMode="numeric"
           placeholder="- 없이 입력해도 됩니다"
+          className={inputClass}
         />
       </div>
     </div>
@@ -136,7 +144,7 @@ export function AccountListField({
     onChange(items.map((it, i) => (i === idx ? next : it)))
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {items.map((item, idx) => (
         <AccountBlock
           key={idx}
@@ -151,9 +159,9 @@ export function AccountListField({
         type="button"
         variant="outline"
         onClick={() => onChange([...items, { ...EMPTY_ACCOUNT }])}
-        className="w-full gap-1.5 border-dashed text-muted-foreground"
+        className={REPEATABLE_ADD_BUTTON_CLASS}
       >
-        <Plus className="h-4 w-4" /> {addLabel}
+        <Plus className="h-4 w-4 text-primary" /> {addLabel}
       </Button>
     </div>
   )

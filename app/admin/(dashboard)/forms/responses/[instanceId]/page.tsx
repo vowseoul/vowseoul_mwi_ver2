@@ -27,6 +27,8 @@ import { toast } from 'sonner'
 import { uploadImage } from '@/lib/image-upload'
 import { ExtraAccountEditor } from '@/components/account-fields'
 import { composeAccountText, isAccountFilled, isExtraAccountKey, parseAccountList } from '@/lib/account-fields'
+import { ContactListField } from '@/components/contact-fields'
+import { composeContactText, isContactFilled, isExtraContactsKey, parseContactList } from '@/lib/contact-fields'
 
 const parseLocalDate = (dateStr: string) => {
   if (!dateStr) return undefined
@@ -193,6 +195,22 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
       // 예전 자유 입력 문자열은 아래 기본 표시로 넘어간다
     }
 
+    if (isExtraContactsKey(field.field_key)) {
+      const filled = (parseContactList(rawVal) ?? []).filter(isContactFilled)
+      if (filled.length === 0) {
+        return <div className="text-xs text-muted-foreground italic bg-muted p-2.5 rounded-lg border border-border/60">(미입력 항목)</div>
+      }
+      return (
+        <div className="space-y-1.5">
+          {filled.map((c, idx) => (
+            <div key={idx} className="text-xs font-semibold text-foreground bg-muted p-2.5 rounded-lg border border-border/80 select-text">
+              {composeContactText(c)}
+            </div>
+          ))}
+        </div>
+      )
+    }
+
     if (field.field_type === 'image' || field.field_type === 'images' || Array.isArray(rawVal)) {
       const imageList: string[] = Array.isArray(rawVal) ? rawVal : (typeof rawVal === 'string' && rawVal.startsWith('http') ? [rawVal] : (rawVal ? [rawVal] : []))
       
@@ -258,6 +276,17 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
           list={parsed}
           onChangeList={(next) => handleInputChange(field.field_key, next)}
           onChangeLegacy={(next) => handleInputChange(field.field_key, next)}
+        />
+      )
+    }
+
+    if (isExtraContactsKey(field.field_key)) {
+      return (
+        <ContactListField
+          idPrefix={field.field_key}
+          items={parseContactList(formData[field.field_key]) ?? []}
+          onChange={(next) => handleInputChange(field.field_key, next)}
+          addLabel="연락처 추가"
         />
       )
     }

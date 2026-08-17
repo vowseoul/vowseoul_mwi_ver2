@@ -56,9 +56,13 @@ import {
   EMPTY_ACCOUNT,
   accountGroupKeys,
   accountGroupOf,
+  composeAccountText,
+  isAccountFilled,
   isExtraAccountKey,
   parseAccountList,
 } from '@/lib/account-fields'
+import { ContactListField } from '@/components/contact-fields'
+import { composeContactText, isContactFilled, isExtraContactsKey, parseContactList } from '@/lib/contact-fields'
 import { CONSENT_VERSION, getFormConsentCopy } from '@/lib/privacy-consent'
 
 const parseLocalDate = (dateStr: string) => {
@@ -778,6 +782,19 @@ function PublicFormContent({ slug }: { slug: string }) {
           items={parsed ?? []}
           onChange={(next) => handleInputChange(field.field_key, next)}
           addLabel="혼주 계좌 추가"
+        />
+      )
+    }
+
+    // 축하 연락처: 신랑·신부 본인은 고정 필드로 남고, 그 외(혼주 등)는 값 하나에
+    // 배열로 담아 필요한 만큼 추가한다.
+    if (isExtraContactsKey(field.field_key)) {
+      return (
+        <ContactListField
+          idPrefix={field.field_key}
+          items={parseContactList(formValues[field.field_key]) ?? []}
+          onChange={(next) => handleInputChange(field.field_key, next)}
+          addLabel="연락처 추가"
         />
       )
     }
@@ -1616,7 +1633,17 @@ function PublicFormContent({ slug }: { slug: string }) {
                           const count = Array.isArray(val) ? val.length : 1
                           displayVal = blank ? '' : `사진 ${count}장 첨부됨`
                         }
-                        
+                        // 계좌·연락처는 값이 객체 배열이라 val.toString() 이 "[object Object]"를
+                        // 만든다 — 계좌·연락처별로 한 줄씩 풀어서 보여준다.
+                        if (isExtraAccountKey(f.field_key)) {
+                          const list = parseAccountList(val)
+                          if (list) displayVal = list.filter(isAccountFilled).map(composeAccountText).join('\n')
+                        }
+                        if (isExtraContactsKey(f.field_key)) {
+                          const list = parseContactList(val)
+                          if (list) displayVal = list.filter(isContactFilled).map(composeContactText).join('\n')
+                        }
+
                         return (
                           <div key={f.field_key} className="flex justify-between items-start gap-4">
                             <span className="text-muted-foreground font-medium shrink-0">{f.label}:</span>
@@ -1794,28 +1821,31 @@ function PublicFormContent({ slug }: { slug: string }) {
                                 ? ACCOUNT_GROUPS.find((g) => g.prefix === childGroup)?.label
                                 : null
 
+                              // 별도 표식(라벨·테두리) 없이 부모를 켜면 그냥 자연스럽게 펼쳐지는
+                              // 아코디언으로만 동작한다 — grid-template-rows 0fr/1fr 전환은
+                              // max-height 를 고정값으로 잡아두는 방식과 달리 내용이 길어져도
+                              // (계좌를 여러 개 추가하는 경우 등) 잘리지 않는다.
                               return (
                                 <div
                                   key={childField.field_key}
-                                  className={`transition-all duration-300 ease-in-out overflow-hidden border-l-2 border-primary pl-4 ml-1 mt-3 bg-muted/60 p-3.5 rounded-r-xl border-y border-r border-border/60 ${
+                                  className={`grid transition-[grid-template-rows,opacity,margin-top] duration-300 ease-in-out ${
                                     isTriggered
-                                      // 높이를 고정값으로 묶어두면(예전 max-h-[600px]) 계좌를 여러 개
-                                      // 추가했을 때 아래쪽 입력칸이 잘려서 아예 보이지 않는다.
-                                      ? 'max-h-none opacity-100 py-3'
-                                      : 'max-h-0 opacity-0 py-0 pointer-events-none'
+                                      ? 'grid-rows-[1fr] opacity-100 mt-3'
+                                      : 'grid-rows-[0fr] opacity-0 mt-0 pointer-events-none'
                                   }`}
                                 >
-                                   <div className="text-[11px] font-bold text-primary flex items-center gap-1 mb-2">
-                                     <span>↳</span> 하위 세부 입력 항목
-                                   </div>
-                                   <Field>
-                                     <FieldLabel htmlFor={childField.field_key} className="text-xs font-bold text-muted-foreground">
-                                       {childGroupLabel ?? childField.label}
-                                       {childField.is_required && <span className="text-rose-500 font-bold text-xs ml-0.5">*</span>}
-                                     </FieldLabel>
-                                     {renderAttachedImages(childOpts.attached_images)}
-                                     {renderInputField(childField)}
-                                   </Field>
+                                  <div className="overflow-hidden">
+                                    <Field>
+                                      <FieldLabel htmlFor={childField.field_key} className="text-sm font-extrabold text-foreground tracking-tight flex items-center gap-1">
+                                        <span>{childGroupLabel ?? childField.label}</span>
+                                        {childField.is_required && (
+                                          <span className="text-rose-500 font-bold text-sm ml-0.5">*</span>
+                                        )}
+                                      </FieldLabel>
+                                      {renderAttachedImages(childOpts.attached_images)}
+                                      {renderInputField(childField)}
+                                    </Field>
+                                  </div>
                                 </div>
                               )
                             })}
