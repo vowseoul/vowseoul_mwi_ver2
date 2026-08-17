@@ -1,11 +1,12 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { createPortal } from "react-dom"
 import { supabase } from "@/lib/supabase"
 import { ConsentNotice } from "../consent-notice"
 import { CONSENT_VERSION, GUESTBOOK_CONSENT_COPY } from "@/lib/privacy-consent"
 import { hashPassword } from "@/lib/dashboard-password"
-import { popupOverlay, popupCard, rsvpInput, RsvpField, useModalA11y, type SlotProps } from "./shared"
+import { popupOverlay, popupCard, rsvpInput, RsvpField, useModalA11y, usePortalDocument, type SlotProps } from "./shared"
 
 /* ---------------------------- Guestbook ---------------------------- */
 /**
@@ -19,6 +20,7 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
   const [loading, setLoading] = useState(!!invitationId)
   const [open, setOpen] = useState(false)
   const modalRef = useModalA11y(open, () => setOpen(false))
+  const [rootRef, portalDoc] = usePortalDocument<HTMLDivElement>()
   const [name, setName] = useState("")
   const [msg, setMsg] = useState("")
   const [composePassword, setComposePassword] = useState("")
@@ -66,25 +68,30 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
 
     setSaving(true)
     const passwordHash = await hashPassword(composePassword.trim())
-    const { data, error: err } = await supabase
-      .from("guestbook_entries")
-      .insert({
-        invitation_id: invitationId,
-        author_name: name.trim(),
-        message: msg.trim(),
-        password_hash: passwordHash,
-        consent_agreed_at: new Date().toISOString(),
-        consent_version: CONSENT_VERSION,
-      })
-      .select("id, author_name, message")
-      .single()
+    // INSERT 뒤 .select()로 값을 되받으면 PostgREST가 RETURNING을 위해 SELECT 권한도
+    // 요구한다 — 방명록은 RLS상 anon에게 SELECT를 열어두지 않아(§app/api/guestbook,
+    // 전 청첩장 실명 노출 방지) 그 즉시 INSERT 전체가 롤백되고 있었다. id를 미리
+    // 클라이언트에서 만들어 넘기면 INSERT만으로 끝나 이 문제를 피할 수 있다
+    // (§app/admin/(dashboard)/assets/page.tsx 의 BGM 등록과 동일한 패턴).
+    const id = crypto.randomUUID()
+    const authorName = name.trim()
+    const message = msg.trim()
+    const { error: err } = await supabase.from("guestbook_entries").insert({
+      id,
+      invitation_id: invitationId,
+      author_name: authorName,
+      message,
+      password_hash: passwordHash,
+      consent_agreed_at: new Date().toISOString(),
+      consent_version: CONSENT_VERSION,
+    })
     setSaving(false)
 
-    if (err || !data) {
+    if (err) {
       setError("등록에 실패했습니다. 잠시 후 다시 시도해주세요.")
       return
     }
-    setEntries((e) => [{ id: data.id, name: data.author_name, msg: data.message }, ...e])
+    setEntries((e) => [{ id, name: authorName, msg: message }, ...e])
     setName(""); setMsg(""); setComposePassword(""); setOpen(false)
   }
 
@@ -113,7 +120,7 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
   }
 
   return (
-    <div style={{ textAlign: "left", maxWidth: 320, margin: "0 auto", fontSize: 13 }}>
+    <div ref={rootRef} style={{ textAlign: "left", maxWidth: 320, margin: "0 auto", fontSize: 13 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {loading ? (
           <div style={{ padding: "10px 12px", opacity: 0.6 }}>불러오는 중…</div>
@@ -176,7 +183,7 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
         축하 메시지 남기기
       </button>
 
-      {open && (
+      {open && portalDoc && createPortal(
         <div onClick={() => setOpen(false)} style={popupOverlay}>
           <div
             ref={modalRef}
@@ -216,7 +223,8 @@ function GuestbookIsland({ accent, invitationId }: SlotProps) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        portalDoc.body,
       )}
     </div>
   )

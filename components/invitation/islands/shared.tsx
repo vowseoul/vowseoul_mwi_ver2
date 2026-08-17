@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import type { FieldData, BlockOverrideMap } from "../invitation-frame"
 import type { RawInvitationData } from "@/lib/invitation-data"
 
@@ -45,6 +45,23 @@ export const popupCard: React.CSSProperties = {
   width: "100%", maxWidth: 320, maxHeight: "85%", overflowY: "auto",
   background: "#fff", color: "#1a1a1a", borderRadius: 8, padding: 24, textAlign: "left",
   border: "1px solid #e5e7eb", boxShadow: "0 10px 15px -3px rgba(0,0,0,.1), 0 4px 6px -4px rgba(0,0,0,.1)",
+}
+
+/** RSVP·방명록 팝업을 어느 document 에 portal 해야 하는지 알아낸다. 아일랜드는 섹션
+ * 안(§rsvp-island의 <div style={{maxWidth:320}}>처럼)에 그대로 렌더되면, 짝수 번째
+ * 섹션에 걸린 backdrop-filter(§Modern Script template_css)가 새 containing block을
+ * 만들어 popupOverlay의 position:fixed;inset:0 가 뷰포트가 아니라 그 섹션 크기로
+ * 잘려버린다(모달이 화면 절반만 보이고 등록 버튼이 화면 밖으로 밀려남). iframe 문서
+ * 최상위(body)에 직접 portal 하면 어떤 조상의 backdrop-filter/transform과도 무관하게
+ * 항상 실제 뷰포트 기준 오버레이가 된다. ref가 이미 iframe 문서 안에 마운트된 뒤에야
+ * ownerDocument를 알 수 있어 첫 렌더에는 null이었다가 마운트 이펙트에서 채워진다. */
+export function usePortalDocument<T extends HTMLElement>() {
+  const ref = useRef<T>(null)
+  const [doc, setDoc] = useState<Document | null>(null)
+  useEffect(() => {
+    setDoc(ref.current?.ownerDocument ?? null)
+  }, [])
+  return [ref, doc] as const
 }
 
 /** RSVP·방명록 입력창 라벨+필드 래퍼 — 두 아일랜드 모두 같은 팝업 폼 톤을 쓴다 */

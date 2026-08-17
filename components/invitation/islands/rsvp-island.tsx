@@ -1,11 +1,12 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { createPortal } from "react-dom"
 import { Calendar as CalendarIcon } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { ConsentNotice } from "../consent-notice"
 import { CONSENT_VERSION, RSVP_CONSENT_COPY } from "@/lib/privacy-consent"
-import { popupOverlay, popupCard, rsvpInput, RsvpField, useModalA11y, type SlotProps } from "./shared"
+import { popupOverlay, popupCard, rsvpInput, RsvpField, useModalA11y, usePortalDocument, type SlotProps } from "./shared"
 
 /** 관리자가 rsvp_meal_menu에 입력한 자유 텍스트("한식, 양식, 어린이 메뉴" 등)를
  * 콤마/세미콜론/줄바꿈 기준으로 나눠 커스텀 식사 옵션 목록을 만든다.
@@ -55,6 +56,7 @@ function CheckmarkDraw({ color }: { color: string }) {
 function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
   const [open, setOpen] = useState(false)
   const modalRef = useModalA11y(open, () => setOpen(false))
+  const [rootRef, portalDoc] = usePortalDocument<HTMLDivElement>()
   const [done, setDone] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -187,7 +189,7 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
   }
 
   return (
-    <div style={{ maxWidth: 320, margin: "0 auto" }}>
+    <div ref={rootRef} style={{ maxWidth: 320, margin: "0 auto" }}>
       {/* 채워진 배경(background: accent)은 색을 직접 지정해야 해서 섹션 배경이 --accent 로
           교대되는 테마에서 버튼이 배경에 파묻힐 위험이 있다 — guestbook의 "축하 메시지
           남기기" 버튼과 같은 톤(테두리+투명 배경, currentColor)으로 맞춰 항상 대비를 보장한다. */}
@@ -220,6 +222,9 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
                 onChange={(e) => setCancelPhone(e.target.value)}
                 placeholder="제출 시 입력한 연락처"
                 disabled={cancelBusy}
+                type="tel"
+                inputMode="numeric"
+                autoComplete="tel"
                 style={{ ...rsvpInput, flex: 1, fontSize: 13, padding: "8px 10px" }}
               />
               <button
@@ -238,7 +243,7 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
         <p style={{ marginTop: 10, textAlign: "center", fontSize: 12.5, color: "inherit" }}>참석 응답이 취소되었습니다.</p>
       )}
 
-      {open && (
+      {open && portalDoc && createPortal(
         <div onClick={() => setOpen(false)} style={popupOverlay}>
           <div
             ref={modalRef}
@@ -256,7 +261,7 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="성함을 입력해주세요" style={rsvpInput} />
             </RsvpField>
             <RsvpField label="연락처">
-              <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="예: 010-0000-0000" style={rsvpInput} />
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="예: 010-0000-0000" type="tel" inputMode="numeric" autoComplete="tel" style={rsvpInput} />
             </RsvpField>
             <RsvpField label="참석 여부">
               <Segmented
@@ -320,7 +325,8 @@ function RsvpIsland({ accent, data, invitationId, blockOverrides }: SlotProps) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        portalDoc.body,
       )}
     </div>
   )

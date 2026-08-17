@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { soft, type SlotProps } from "./shared"
+import { parseWeddingDateTime } from "@/lib/ics"
 
 /* ----------------------------- Calendar ---------------------------- *
  * 달력 + D-day. 이전 버전 디자인(흰 카드 / 예식일 원형 강조 / DAYS·HOURS·MINUTES)을
@@ -23,38 +24,14 @@ function getCalendarDays(dateStr: string) {
   return { year, month, targetDay, days, date }
 }
 
-/** RFC5545 텍스트 이스케이프 (콤마/세미콜론/개행) */
-function escapeIcsText(text: string): string {
-  return text.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n")
-}
-
-/** "YYYY-MM-DD" + "HH:MM"(없으면 낮 12시로 폴백)을 캘린더 링크에 쓸 날짜/시각 부품으로 분해 */
-function parseWeddingDateTime(dateStr: string, timeStr?: string) {
-  const dateMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/)
-  if (!dateMatch) return null
-  const timeMatch = (timeStr || "").match(/^(\d{2}):(\d{2})/)
-  return {
-    y: Number(dateMatch[1]), mo: Number(dateMatch[2]), d: Number(dateMatch[3]),
-    h: timeMatch ? Number(timeMatch[1]) : 12, mi: timeMatch ? Number(timeMatch[2]) : 0,
-  }
-}
-
-/** iOS/macOS 캘린더 앱이 여는 .ics 데이터 URI. 예식 소요시간은 관례상 2시간으로 고정한다
- * (실제 종료 시각을 입력받는 필드가 없다 — 굳이 새 필드를 만들 만큼 중요하지 않다). */
-function buildIcsHref(opts: { title: string; location: string; dateStr: string; timeStr?: string }): string | null {
-  const t = parseWeddingDateTime(opts.dateStr, opts.timeStr)
-  if (!t) return null
-  const pad = (n: number) => String(n).padStart(2, "0")
-  const stamp = (h: number) => `${t.y}${pad(t.mo)}${pad(t.d)}T${pad(h)}${pad(t.mi)}00`
-  const ics = [
-    "BEGIN:VCALENDAR", "VERSION:2.0", "BEGIN:VEVENT",
-    `DTSTART;TZID=Asia/Seoul:${stamp(t.h)}`,
-    `DTEND;TZID=Asia/Seoul:${stamp((t.h + 2) % 24)}`,
-    `SUMMARY:${escapeIcsText(opts.title)}`,
-    `LOCATION:${escapeIcsText(opts.location)}`,
-    "END:VEVENT", "END:VCALENDAR",
-  ].join("\r\n")
-  return `data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`
+/** 서버 라우트(§app/api/ics/route.ts)가 실제 .ics 파일을 Content-Disposition: attachment로
+ * 내려준다 — data: URI를 <a download>로 직접 열던 예전 방식은 iOS Safari/Chrome이 top-level
+ * data: 다운로드를 막아 상당수 하객에게 무반응이었다. */
+function buildIcsDownloadHref(opts: { title: string; location: string; dateStr: string; timeStr?: string }): string | null {
+  if (!parseWeddingDateTime(opts.dateStr, opts.timeStr)) return null
+  const params = new URLSearchParams({ title: opts.title, location: opts.location, date: opts.dateStr })
+  if (opts.timeStr) params.set("time", opts.timeStr)
+  return `/api/ics?${params.toString()}`
 }
 
 /** 구글 캘린더 "일정 추가" 템플릿 링크 (안드로이드/데스크톱에서 .ics보다 UX가 매끄럽다) */
@@ -226,7 +203,7 @@ function CalendarIsland({ accent, data, raw, blockOverrides }: SlotProps) {
         const location = [data.venue_name, data.venue_address].filter(Boolean).join(" ")
         const icsEnabled = blockOverrides?.calendar?.icsButtonEnabled !== false
         const googleEnabled = blockOverrides?.calendar?.googleCalendarButtonEnabled !== false
-        const icsHref = icsEnabled ? buildIcsHref({ title, location, dateStr, timeStr }) : null
+        const icsHref = icsEnabled ? buildIcsDownloadHref({ title, location, dateStr, timeStr }) : null
         const googleHref = googleEnabled ? buildGoogleCalendarHref({ title, location, dateStr, timeStr }) : null
         if (!icsHref && !googleHref) return null
         const btnStyle: React.CSSProperties = {

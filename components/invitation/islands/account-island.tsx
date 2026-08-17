@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Copy, Check, MessageCircle, Send, ChevronDown } from "lucide-react"
 import { useCopyFeedback } from "@/lib/use-copy-feedback"
 import { isToggledOn } from "@/lib/invitation-data"
@@ -87,6 +87,7 @@ function ExtraAccountRow({ label, value }: { label: string; value: string }) {
   )
 }
 function AccountIsland({ data, raw }: SlotProps) {
+  const rootRef = useRef<HTMLDivElement>(null)
   const groom = composeAccount(data.account_groom_bank, data.account_groom_number, data.account_groom_holder)
   const bride = composeAccount(data.account_bride_bank, data.account_bride_number, data.account_bride_holder)
 
@@ -103,6 +104,16 @@ function AccountIsland({ data, raw }: SlotProps) {
   const hasAny =
     groom || bride || extraGroomText || extraBrideText || groomRows.length > 0 || brideRows.length > 0
 
+  // 계좌가 하나도 없으면 이 슬롯은 빈 줄만 남지만, "ACCOUNT / 마음 전하실 곳" 섹션 제목은
+  // 테마 template.html에 정적으로 박혀 있어(§components/invitation/invitation-frame.tsx의
+  // [data-slot] 계약 — 슬롯은 내용만, 제목은 테마 몫) React가 못 건드린다. 관리자용
+  // "등록된 계좌 정보가 없습니다" 문구를 하객에게 그대로 보여주던 대신, 슬롯이 이미 그
+  // 테마 문서 안에 마운트되어 있다는 점을 이용해 조상 [data-block] 섹션 자체를 숨긴다.
+  useEffect(() => {
+    const section = rootRef.current?.closest<HTMLElement>("[data-block]")
+    if (section) section.style.display = hasAny ? "" : "none"
+  }, [hasAny])
+
   // 계좌 정보가 첫 화면에 바로 보이는 게 부담스러운 고객을 위해 접어둘 수 있다.
   // 미설정은 펼침이라 기존 청첩장 동작은 그대로다(§isToggledOn).
   const collapsible = isToggledOn(raw?.account_collapsed)
@@ -110,7 +121,7 @@ function AccountIsland({ data, raw }: SlotProps) {
   const showRows = !collapsible || open
 
   return (
-    <div style={{ textAlign: "left", maxWidth: 320, margin: "0 auto" }}>
+    <div ref={rootRef} style={{ textAlign: "left", maxWidth: 320, margin: "0 auto" }}>
       {collapsible && hasAny && (
         <button
           onClick={() => setOpen((v) => !v)}
@@ -137,7 +148,6 @@ function AccountIsland({ data, raw }: SlotProps) {
       ))}
       {showRows && extraGroomText && <ExtraAccountRow label="신랑측 혼주" value={extraGroomText} />}
       {showRows && extraBrideText && <ExtraAccountRow label="신부측 혼주" value={extraBrideText} />}
-      {!hasAny && <div style={{ fontSize: 12, opacity: 0.6, padding: "8px 0" }}>등록된 계좌 정보가 없습니다.</div>}
     </div>
   )
 }
