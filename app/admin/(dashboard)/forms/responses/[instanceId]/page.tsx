@@ -767,14 +767,19 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
           <CardContent className="p-6">
             <FieldGroup className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {(() => {
-                let lastSectionTitle = ''
-                return fields.map((field: any) => {
+                // 섹션 제목별로 묶어서 그린다. 예전엔 "직전 필드와 섹션이 다르면 머리말 출력"
+                // 방식이라, 나중에 추가돼 sort_order가 뒤로 밀린 필드가 앞 섹션 소속이면
+                // 같은 머리말이 여러 번 나오고 관련 항목이 흩어졌다(실제 양식에서 섹션 10개가
+                // 머리말 15번으로 쪼개졌다 — 도로명 주소가 화면 맨 아래 두 번째 "예식 정보"에
+                // 있었다). 하객용 폼(§app/form/[slug]/page.tsx)은 처음부터 이 방식이라
+                // 같은 데이터를 제대로 10개로 보여주고 있었다.
+                const sections: { title: string; fields: any[] }[] = []
+                fields.forEach((field: any) => {
                   let currentSection = ''
                   if (field.options) {
                     if (typeof field.options === 'string') {
                       try {
-                        const parsed = JSON.parse(field.options)
-                        currentSection = parsed.section_title || ''
+                        currentSection = JSON.parse(field.options).section_title || ''
                       } catch {
                         currentSection = ''
                       }
@@ -782,23 +787,28 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
                       currentSection = field.options.section_title || ''
                     }
                   }
+                  currentSection = currentSection.trim()
 
-                  const showSectionHeader = currentSection && currentSection !== lastSectionTitle
-                  if (showSectionHeader) {
-                    lastSectionTitle = currentSection
+                  let sec = sections.find((s) => s.title === currentSection)
+                  if (!sec) {
+                    sec = { title: currentSection, fields: [] }
+                    sections.push(sec)
                   }
+                  sec.fields.push(field)
+                })
 
-                  return (
-                    <React.Fragment key={field.field_key}>
-                      {showSectionHeader && (
-                        <div className="col-span-1 md:col-span-2 pt-4 pb-1 border-b border-border mt-3 first:mt-0">
-                          <h3 className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                            <span className="w-1.5 h-3 bg-primary rounded-full" />
-                            {currentSection}
-                          </h3>
-                        </div>
-                      )}
-                      <div className="space-y-1">
+                return sections.map((section) => (
+                  <React.Fragment key={section.title || '(무제)'}>
+                    {section.title && (
+                      <div className="col-span-1 md:col-span-2 pt-4 pb-1 border-b border-border mt-3 first:mt-0">
+                        <h3 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                          <span className="w-1.5 h-3 bg-primary rounded-full" />
+                          {section.title}
+                        </h3>
+                      </div>
+                    )}
+                    {section.fields.map((field: any) => (
+                      <div key={field.field_key} className="space-y-1">
                         <div className="flex justify-between items-center">
                           <span className="text-[11px] font-semibold text-muted-foreground">
                             {field.label_override || field.label}
@@ -810,9 +820,9 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
                         </div>
                         {isEditing ? renderInputField(field) : renderResponseView(field)}
                       </div>
-                    </React.Fragment>
-                  )
-                })
+                    ))}
+                  </React.Fragment>
+                ))
               })()}
             </FieldGroup>
 

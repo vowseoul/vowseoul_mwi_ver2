@@ -30,6 +30,7 @@ export default function NewCustomerPage() {
   const [orderer, setOrderer] = useState('')
   const [ordererType, setOrdererType] = useState<'groom' | 'bride'>('groom')
   const [phone, setPhone] = useState('')
+  const [weddingDate, setWeddingDate] = useState('')
   const [assignedTo, setAssignedTo] = useState('none')
   // 초기값은 아래에서 실제 라인업의 첫 항목으로 해석한다 (setState-in-effect 회피)
   const [paperType, setPaperType] = useState('')
@@ -45,14 +46,14 @@ export default function NewCustomerPage() {
       return
     }
 
+    if (!weddingDate) {
+      toast.error('예식일을 입력해주세요.')
+      return
+    }
+
     setIsSubmitting(true)
 
     try {
-      // Calculate dummy wedding date (90 days from now)
-      const dummyDate = new Date()
-      dummyDate.setDate(dummyDate.getDate() + 90)
-      const weddingDateString = dummyDate.toISOString().slice(0, 10)
-
       const isGroom = ordererType === 'groom'
       // Select 가 미선택 상태면 화면에 보이는 첫 항목이 곧 선택값이다
       const resolvedPaperType = paperType || (paperTypes ?? DEFAULT_PAPER_TYPES)[0]
@@ -62,7 +63,7 @@ export default function NewCustomerPage() {
         groom_name: isGroom ? orderer.trim() : '미지정',
         bride_name: isGroom ? '미지정' : orderer.trim(),
         phone: phone.trim() || null,
-        wedding_date: weddingDateString,
+        wedding_date: weddingDate,
         venue_name: '미지정',
         venue_address: '미지정',
         venue_coordinates: null,
@@ -106,7 +107,7 @@ export default function NewCustomerPage() {
           </CardHeader>
           <CardContent>
             <FieldGroup className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <Field>
                   <FieldLabel htmlFor="orderer">주문자 이름 *</FieldLabel>
                   <Input
@@ -136,6 +137,20 @@ export default function NewCustomerPage() {
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="010-XXXX-XXXX"
+                  />
+                </Field>
+                {/* 예전엔 이 입력이 없어서 등록일+90일을 예식일로 넣었다. 그 값이 고객 목록의
+                    "예식일시"와 폼 발행 화면에 진짜 날짜처럼 표시되고, 링크 만료일(예식일+7일)과
+                    보관기간 파기 판정까지 그 가짜 날짜를 기준으로 계산돼 실제 예식보다 먼저
+                    폼이 닫히는 문제가 있었다. */}
+                <Field>
+                  <FieldLabel htmlFor="weddingDate">예식일 *</FieldLabel>
+                  <Input
+                    id="weddingDate"
+                    type="date"
+                    value={weddingDate}
+                    onChange={(e) => setWeddingDate(e.target.value)}
+                    required
                   />
                 </Field>
               </div>

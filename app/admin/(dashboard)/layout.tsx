@@ -158,8 +158,8 @@ export default function AdminLayout({
       {/* Main Content */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Header */}
-        <header className="flex h-16 items-center justify-between border-b border-border bg-background px-4 lg:px-6">
-          <div className="flex items-center gap-4">
+        <header className="flex h-16 items-center justify-between gap-2 border-b border-border bg-background px-4 lg:px-6">
+          <div className="flex min-w-0 items-center gap-4">
             {/* Mobile Menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild className="lg:hidden">
@@ -178,12 +178,16 @@ export default function AdminLayout({
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <span className="text-lg font-semibold lg:hidden flex items-center gap-1.5">
-              <Logo className="h-4.5 w-auto text-foreground" /> Admin
+            {/* 폰에서 이 브랜드 영역이 줄어들지 않아 오른쪽의 알림 배지가 "Admin" 글자 위로
+                겹쳐 보였다. min-w-0 로 줄어들 수 있게 하고, 폭이 가장 빠듯한 구간에서는
+                로고만 온전히 남기고 "Admin" 글자를 뺀다(잘린 채로 보이는 것보다 낫다). */}
+            <span className="flex min-w-0 items-center gap-1.5 text-lg font-semibold lg:hidden">
+              <Logo className="h-4.5 w-auto shrink-0 text-foreground" />
+              <span className="hidden sm:inline">Admin</span>
             </span>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             <AdminNotificationBell />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

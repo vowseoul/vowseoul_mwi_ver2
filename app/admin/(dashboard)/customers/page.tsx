@@ -144,7 +144,9 @@ export default function CustomersPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      {/* 폰(<640px)에서 1열이면 요약 카드 4장이 세로로 쌓여 정작 고객 목록까지 600px을
+          스크롤해야 했다 — 기본을 2열로 둔다 */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">전체 고객</CardTitle>
