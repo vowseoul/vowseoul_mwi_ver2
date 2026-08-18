@@ -80,3 +80,32 @@ export function isHashedDashboardPassword(value: string): boolean {
  */
 export const hashPassword = hashDashboardPassword
 export const verifyPassword = verifyDashboardPassword
+
+/**
+ * 대시보드 기본 비밀번호 = 등록된 연락처 뒷 4자리.
+ *
+ * 예전엔 호출부에서 `phone.slice(-4)` 로 잘라 썼는데, 문자열을 그대로 자르는 바람에
+ * 하이픈이 섞인 오타 번호에서 비밀번호에 숫자가 아닌 문자가 들어갔다 —
+ * "010-1234-567" → "-567", "010-12-34" → "2-34". 담당자는 규칙대로 "뒷 4자리"라고
+ * 안내하는데 고객은 영영 못 들어가는 상태가 된다. 숫자만 남기고 자른다.
+ *
+ * 연락처가 없거나 숫자가 4자리에 못 미치면 뒷 4자리라는 규칙 자체가 성립하지 않으므로
+ * 고정값으로 떨어뜨리고, 그 사실을 source 로 알려 관리자 화면이 "연락처 미등록이라
+ * 0000 입니다" 처럼 정확히 안내할 수 있게 한다.
+ */
+export interface DefaultDashboardPassword {
+  password: string
+  source: "phone" | "fallback"
+  /** 실제로 사용한 연락처 원문 (없으면 null) — 관리자 화면 안내 문구용 */
+  phone: string | null
+}
+
+export const DASHBOARD_PASSWORD_FALLBACK = "0000"
+
+export function resolveDefaultDashboardPassword(phone: string | null | undefined): DefaultDashboardPassword {
+  const digits = String(phone ?? "").replace(/\D/g, "")
+  if (digits.length < 4) {
+    return { password: DASHBOARD_PASSWORD_FALLBACK, source: "fallback", phone: phone || null }
+  }
+  return { password: digits.slice(-4), source: "phone", phone: phone || null }
+}

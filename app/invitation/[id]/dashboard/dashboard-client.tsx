@@ -32,6 +32,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
+import { ChangePasswordDialog } from './change-password-dialog'
 
 export interface RSVP {
   id: string
@@ -285,6 +286,7 @@ export default function CustomerDashboardClient({
             </span>
           </div>
           <div className="flex items-center gap-1">
+            <ChangePasswordDialog invitationId={invitationId} />
             {selfEditEnabled && (
               <Link href={`/invitation/${invitationId}/edit`}>
                 <Button variant="ghost" size="sm" className="text-xs gap-1.5 hover:bg-muted px-2 sm:px-3">

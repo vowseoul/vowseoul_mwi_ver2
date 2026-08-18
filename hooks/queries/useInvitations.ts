@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { DATA_RETENTION_SETTINGS_KEY, computeExpiryDate, parseRetentionSettings } from '@/lib/data-retention'
 import { buildContentDataFromForm, deriveOgMetaFromForm, deriveOverridesFromForm, resolveBgmUrlFromSnapshot } from '@/lib/invitation-data'
-import { hashDashboardPassword } from '@/lib/dashboard-password'
+import { hashDashboardPassword, resolveDefaultDashboardPassword } from '@/lib/dashboard-password'
 
 export interface Invitation {
   id: string
@@ -139,10 +139,10 @@ export function useCreateInvitationMutation() {
         customer = fetchedCustomer
       }
 
-      const phoneStr = customer?.phone || '0000'
       // 실제 값(연락처 뒷 4자리)은 해시로만 저장한다 — 평문은 어디에도 남기지 않는다.
-      // 안내는 "연락처 뒷 4자리입니다"라는 고정 규칙 문구로 대신한다(§lib/dashboard-password.ts).
-      const dashboardPassword = phoneStr.slice(-4)
+      // 잘라내는 규칙은 관리자 초기화(§app/api/admin/dashboard-password)와 반드시 같아야
+      // 담당자가 고객에게 안내하는 값과 실제 값이 어긋나지 않는다.
+      const { password: dashboardPassword } = resolveDefaultDashboardPassword(customer?.phone)
       const dashboardPasswordHash = await hashDashboardPassword(dashboardPassword)
       const dashboardSlug = `dash-${publicSlug}`
 

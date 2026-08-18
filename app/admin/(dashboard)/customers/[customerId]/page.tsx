@@ -235,6 +235,67 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
   const [isCreatingInvite, setIsCreatingInvite] = useState(false)
   const [isSyncingInvite, setIsSyncingInvite] = useState(false)
 
+  /** 대시보드 비밀번호 현황 — 해시라 값은 못 보고, "기본값인지"와 "초기화하면 무슨 값이 되는지"만 서버가 알려준다 */
+  const [passwordInfo, setPasswordInfo] = useState<
+    { isDefault: boolean; resetTo: string; phone: string | null; phoneMissing: boolean } | null
+  >(null)
+  const [isResettingPassword, setIsResettingPassword] = useState(false)
+
+  const invitationId = invitation?.id
+  useEffect(() => {
+    if (!invitationId) return
+    let active = true
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/admin/dashboard-password?invitationId=${encodeURIComponent(invitationId)}`)
+        if (!res.ok) return
+        const json = await res.json()
+        if (active) setPasswordInfo(json)
+      } catch {
+        // 조용히 실패 — 안내 문구만 "확인 중…"에 머문다
+      }
+    })()
+    return () => { active = false }
+  }, [invitationId])
+
+  const handleResetDashboardPassword = async () => {
+    if (!invitationId || !passwordInfo) return
+    const target = passwordInfo.phoneMissing
+      ? `고정값 ${passwordInfo.resetTo}`
+      : `${passwordInfo.phone} 뒷 4자리(${passwordInfo.resetTo})`
+    const ok = await confirmDialog({
+      title: '대시보드 비밀번호를 초기화하시겠습니까?',
+      description: `${target} 로 되돌립니다. 고객이 직접 바꾼 비밀번호가 있다면 더 이상 사용할 수 없게 되니, 초기화 후 이 값을 고객에게 안내해주세요.`,
+      confirmText: '초기화',
+    })
+    if (!ok) return
+
+    setIsResettingPassword(true)
+    try {
+      const res = await fetch('/api/admin/dashboard-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invitationId }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(json?.error || '초기화하지 못했습니다.')
+        return
+      }
+      setPasswordInfo({ isDefault: true, resetTo: json.resetTo, phone: json.phone, phoneMissing: json.phoneMissing })
+      toast.success(
+        json.phoneMissing
+          ? `비밀번호를 ${json.resetTo} 로 초기화했습니다. (등록된 연락처 없음)`
+          : `비밀번호를 ${json.phone} 뒷 4자리(${json.resetTo})로 초기화했습니다. 고객에게 이 번호와 함께 안내해주세요.`,
+      )
+    } catch (err) {
+      console.error(err)
+      toast.error('초기화하지 못했습니다.')
+    } finally {
+      setIsResettingPassword(false)
+    }
+  }
+
   // Populate publicSlug and selectedThemeId when modal opens.
   // 폼에 mwi_address(원하는 링크 주소)를 적어둔 고객이면 그 값을 슬러그 규칙에 맞게 다듬어
   // 기본값으로 제안한다 — 관리자가 그대로 쓰거나 고쳐서 쓸 수 있다(무작위 값보다 훨씬 유용하다).
@@ -994,9 +1055,52 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                     </div>
                   </div>
 
-                  <div className="flex justify-between items-center text-xs bg-muted/50 p-2.5 rounded-lg">
-                    <span className="text-muted-foreground">대시보드 패스워드:</span>
-                    <span className="font-medium text-right">등록된 고객 연락처 뒷 4자리</span>
+                  {/* 예전엔 "등록된 고객 연락처 뒷 4자리"라는 고정 문구만 있었다. 고객이 직접
+                      비밀번호를 바꿀 수 있게 되면서 이 안내가 틀릴 수 있고, 신랑/신부 번호가
+                      다르거나 등록 시 오타가 있으면 "뒷 4자리"만으로는 고객이 어느 번호인지
+                      몰라 못 들어간다 — 실제 사용된 번호와 값을 그대로 보여준다. */}
+                  <div className="space-y-2 text-xs bg-muted/50 p-2.5 rounded-lg">
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="text-muted-foreground shrink-0">대시보드 패스워드:</span>
+                      {passwordInfo === null ? (
+                        <span className="text-muted-foreground">확인 중…</span>
+                      ) : passwordInfo.isDefault ? (
+                        <span className="font-medium text-right">기본값 (아래 번호 뒷 4자리)</span>
+                      ) : (
+                        <span className="font-medium text-right text-amber-700 dark:text-amber-400">
+                          고객이 변경함
+                        </span>
+                      )}
+                    </div>
+
+                    {passwordInfo && (
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        {passwordInfo.phoneMissing ? (
+                          <>
+                            등록된 연락처가 없어 초기화 시 <strong className="text-foreground">{passwordInfo.resetTo}</strong> 이(가) 됩니다.
+                            고객 연락처를 먼저 입력하시면 그 번호 기준으로 바뀝니다.
+                          </>
+                        ) : (
+                          <>
+                            초기화하면 <strong className="text-foreground">{passwordInfo.phone}</strong> 의 뒷 4자리
+                            (<strong className="text-foreground">{passwordInfo.resetTo}</strong>)가 됩니다.
+                            고객에게 안내할 때 이 번호를 함께 알려주세요.
+                          </>
+                        )}
+                      </p>
+                    )}
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full h-8 text-xs gap-1.5"
+                      onClick={handleResetDashboardPassword}
+                      disabled={isResettingPassword || passwordInfo === null}
+                    >
+                      {isResettingPassword ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                      비밀번호 초기화
+                    </Button>
                   </div>
 
                   <Button
