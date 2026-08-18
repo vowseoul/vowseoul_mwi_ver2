@@ -276,7 +276,18 @@ export function useCreateInvitationMutation() {
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {
+        // public_slug / dashboard_slug 둘 다 UNIQUE 라 이미 쓰는 주소면 23505 로 떨어진다
+        // (dashboard_slug 는 `dash-${publicSlug}` 라 결국 같은 원인이다). 이 메시지를
+        // 그대로 토스트에 띄우면 담당자에게 'duplicate key value violates unique
+        // constraint "invitations_public_slug_key"' 라는 DB 원문이 보인다 —
+        // "wedding-june" 같은 흔한 주소는 실제로 충돌하기 쉬우므로 안내 문구로 바꾼다.
+        // (§useUpdateInvitationSlugMutation 의 주소 수정 경로와 같은 처방)
+        if (error.code === '23505') {
+          throw new Error(`이미 사용 중인 링크 주소입니다: ${publicSlug} — 다른 주소를 입력해주세요.`)
+        }
+        throw error
+      }
 
       // Update customer status to 'draft' (making the mobile invitation in draft)
       const { error: customerError } = await supabase
