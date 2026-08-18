@@ -222,7 +222,7 @@ export default function InvitationsListPage() {
                       <SelectItem value="none">임시 고객으로 생성 (고객 선택 없음)</SelectItem>
                       {availableCustomers.map((c) => (
                         <SelectItem key={c.id} value={c.id}>
-                          {c.groom_name} & {c.bride_name} (예식일: {c.wedding_date})
+                          {c.groom_name} & {c.bride_name} (예식일: {c.wedding_date || '미정'})
                         </SelectItem>
                       ))}
                     </SelectContent>

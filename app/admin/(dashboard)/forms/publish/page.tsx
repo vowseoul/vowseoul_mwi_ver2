@@ -231,7 +231,7 @@ function FormPublishContent() {
                   <div className="flex items-center justify-between p-3 border border-border rounded-lg bg-muted/20 text-sm">
                     <div>
                       <span className="font-semibold">{selectedCustomer.groom_name} & {selectedCustomer.bride_name}</span>
-                      <span className="text-xs text-muted-foreground ml-2">예식일: {selectedCustomer.wedding_date}</span>
+                      <span className="text-xs text-muted-foreground ml-2">예식일: {selectedCustomer.wedding_date || '미정'}</span>
                     </div>
                     {customerIdParam ? null : (
                       <Button variant="link" onClick={() => setCustomerId('')} className="h-auto p-0 text-xs">
@@ -248,7 +248,7 @@ function FormPublishContent() {
                       <SelectItem value="none">고객 선택</SelectItem>
                       {registeredCustomers.map((c) => (
                         <SelectItem key={c.id} value={c.id}>
-                          {c.groom_name} & {c.bride_name} (예식일: {c.wedding_date})
+                          {c.groom_name} & {c.bride_name} (예식일: {c.wedding_date || '미정'})
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -334,7 +334,10 @@ function FormPublishContent() {
                   onChange={(e) => setExpiresAt(e.target.value)}
                 />
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  만료일 이후에는 고객이 폼을 수정하거나 응답할 수 없습니다. (기본값: 예식일 + 7일)
+                  만료일 이후에는 고객이 폼을 수정하거나 응답할 수 없습니다.
+                  {selectedCustomer && !selectedCustomer.wedding_date
+                    ? ' 예식일이 아직 없어 자동 계산되지 않았습니다 — 비워두면 만료 없이 계속 열려 있습니다.'
+                    : ' (기본값: 예식일 + 7일)'}
                 </p>
               </Field>
             </FieldGroup>

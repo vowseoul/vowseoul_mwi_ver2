@@ -46,10 +46,6 @@ export default function NewCustomerPage() {
       return
     }
 
-    if (!weddingDate) {
-      toast.error('예식일을 입력해주세요.')
-      return
-    }
 
     setIsSubmitting(true)
 
@@ -63,7 +59,7 @@ export default function NewCustomerPage() {
         groom_name: isGroom ? orderer.trim() : '미지정',
         bride_name: isGroom ? '미지정' : orderer.trim(),
         phone: phone.trim() || null,
-        wedding_date: weddingDate,
+        wedding_date: weddingDate || null,
         venue_name: '미지정',
         venue_address: '미지정',
         venue_coordinates: null,
@@ -142,16 +138,20 @@ export default function NewCustomerPage() {
                 {/* 예전엔 이 입력이 없어서 등록일+90일을 예식일로 넣었다. 그 값이 고객 목록의
                     "예식일시"와 폼 발행 화면에 진짜 날짜처럼 표시되고, 링크 만료일(예식일+7일)과
                     보관기간 파기 판정까지 그 가짜 날짜를 기준으로 계산돼 실제 예식보다 먼저
-                    폼이 닫히는 문제가 있었다. */}
+                    폼이 닫히는 문제가 있었다. 주문 접수 시점엔 예식일을 모르는 경우가 많으므로
+                    (스마트스토어 주문 → 주문자명으로 고객 생성 → 폼 발급 순서) 비워둘 수 있고,
+                    비면 NULL로 저장한 뒤 고객이 폼에 입력하면 그때 채워진다. */}
                 <Field>
-                  <FieldLabel htmlFor="weddingDate">예식일 *</FieldLabel>
+                  <FieldLabel htmlFor="weddingDate">예식일</FieldLabel>
                   <Input
                     id="weddingDate"
                     type="date"
                     value={weddingDate}
                     onChange={(e) => setWeddingDate(e.target.value)}
-                    required
                   />
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    모르면 비워두세요. 고객이 폼에 입력하면 자동으로 채워집니다.
+                  </p>
                 </Field>
               </div>
 

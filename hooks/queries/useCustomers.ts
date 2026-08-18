@@ -8,7 +8,8 @@ export interface Customer {
   groom_name: string
   bride_name: string
   phone: string | null
-  wedding_date: string
+  /** 주문 접수 시점엔 모르는 경우가 많아 비어 있을 수 있다 — 고객이 폼에 입력하면 채워진다 */
+  wedding_date: string | null
   venue_name: string
   venue_address: string
   venue_coordinates: any

@@ -278,7 +278,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
       setGroomName(customer.groom_name)
       setBrideName(customer.bride_name)
       setPhone(customer.phone || '')
-      setWeddingDate(customer.wedding_date)
+      setWeddingDate(customer.wedding_date || '')
       setVenueName(customer.venue_name)
       setVenueAddress(customer.venue_address)
       setAssignedTo(customer.assigned_to || 'none')
@@ -290,7 +290,9 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!groomName.trim() || !brideName.trim() || !weddingDate || !venueName.trim() || !venueAddress.trim()) {
+    // 예식일은 필수가 아니다 — 주문 접수 단계에선 모르는 경우가 많고, 고객이 폼에
+    // 입력하면 /api/form-submit 이 채워준다.
+    if (!groomName.trim() || !brideName.trim() || !venueName.trim() || !venueAddress.trim()) {
       toast.error('필수 항목을 모두 입력해주세요.')
       return
     }
@@ -304,7 +306,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
           groom_name: groomName,
           bride_name: brideName,
           phone: phone || null,
-          wedding_date: weddingDate,
+          wedding_date: weddingDate || null,
           venue_name: venueName,
           venue_address: venueAddress,
           assigned_to: assignedTo === 'none' ? null : assignedTo,
@@ -615,13 +617,12 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Field>
-                      <FieldLabel htmlFor="weddingDate">예식 일자 *</FieldLabel>
+                      <FieldLabel htmlFor="weddingDate">예식 일자</FieldLabel>
                       <Input
                         id="weddingDate"
                         type="date"
                         value={weddingDate}
                         onChange={(e) => setWeddingDate(e.target.value)}
-                        required
                       />
                     </Field>
                     <Field>

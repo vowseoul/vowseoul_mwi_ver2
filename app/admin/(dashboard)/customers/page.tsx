@@ -88,7 +88,7 @@ export default function CustomersPage() {
       c.groom_name,
       c.bride_name,
       c.phone || '',
-      c.wedding_date,
+      c.wedding_date || '',
       c.venue_name,
       c.venue_address,
       c.status,
@@ -334,7 +334,7 @@ export default function CustomersPage() {
                     </TableCell>
                     <TableCell className="text-sm">{customer.phone || '-'}</TableCell>
                     <TableCell className="text-sm">
-                      {customer.wedding_date}
+                      {customer.wedding_date || <span className="text-muted-foreground">미정</span>}
                     </TableCell>
                     <TableCell className="text-sm">{customer.venue_name}</TableCell>
                     <TableCell><CustomerStatusBadge status={customer.status} /></TableCell>

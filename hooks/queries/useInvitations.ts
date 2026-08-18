@@ -27,7 +27,7 @@ export interface Invitation {
     id: string
     groom_name: string
     bride_name: string
-    wedding_date: string
+    wedding_date: string | null
   }
 }
 
@@ -142,6 +142,10 @@ export function useCreateInvitationMutation() {
       const dashboardPasswordHash = await hashDashboardPassword(dashboardPassword)
       const dashboardSlug = `dash-${publicSlug}`
 
+      // 예식일이 아직 없으면(주문 접수 직후) 오늘을 기준으로 잡아둔다. invitations.expires_at
+      // 은 NOT NULL 이라 비워둘 수 없는데, 실제 파기 판정은 이 컬럼이 아니라 크론이 매번
+      // customers.wedding_date 로 다시 계산하므로(§app/api/cron/purge-expired-invitations,
+      // 예식일이 없으면 아예 만료 판정을 건너뛴다) 이 값 때문에 조기 파기되지는 않는다.
       const weddingDate = customer?.wedding_date
         ? new Date(customer.wedding_date)
         : new Date()
