@@ -27,6 +27,12 @@ beforeAll(async () => {
   if (!available) return
 
   const admin = adminClient()
+
+  // 이 파일은 로그인 관문을 여러 번 두드린다(성공·실패 경로를 다 확인해야 하므로).
+  // rate limit 이 IP당 15분에 10회라(§lib/rate-limit.ts) 그대로 두면 15분 안에 두 번째
+  // 실행이 429 로 죽어, 기능이 멀쩡한데 테스트만 빨개진다. 실행 전에 이 창구의 기록을
+  // 비워 매번 같은 조건에서 시작하게 한다 — 로컬 개발 환경에서만 도는 테스트다.
+  await admin.from("rate_limit_attempts").delete().in("scope", ["dashboard-auth", "dashboard-password"])
   const { data: customer } = await admin.from("customers").insert([{
     groom_name: "통합테스트", bride_name: "미지정", phone: `010-0000-${PASSWORD}`,
     wedding_date: null, venue_name: "미지정", venue_address: "미지정", status: "published",
