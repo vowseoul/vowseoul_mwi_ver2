@@ -144,15 +144,29 @@ export function useDeleteFieldMutation() {
 // =========================================================================
 // 2. Form Template Hooks
 // =========================================================================
-export function useFormTemplatesQuery() {
+/**
+ * 폼 템플릿 목록.
+ *
+ * activeOnly 는 "고객에게 발송할 양식을 고르는 화면"에서만 켠다. 폼 관리 화면(/admin/forms)은
+ * 비활성 템플릿까지 보여야 한다 — 거기가 활성/비활성을 토글하는 곳이라, 끄는 순간 목록에서
+ * 사라지면 다시 켤 수가 없다.
+ *
+ * 기본값을 false 로 둔 이유: is_active 를 무조건 걸면 관리 화면이 조용히 망가진다. 대신
+ * 발행 화면이 명시적으로 켜서, "비활성으로 바꿨는데 발송 목록엔 그대로 남아 있는" 상태를 막는다.
+ */
+export function useFormTemplatesQuery(options: { activeOnly?: boolean } = {}) {
+  const { activeOnly = false } = options
   return useQuery({
-    queryKey: ['form-templates'],
+    queryKey: ['form-templates', activeOnly],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('form_templates')
         .select('*')
         .is('deleted_at', null)
-        .order('created_at', { ascending: false })
+
+      if (activeOnly) query = query.eq('is_active', true)
+
+      const { data, error } = await query.order('created_at', { ascending: false })
 
       if (error) throw error
       return data as FormTemplate[]

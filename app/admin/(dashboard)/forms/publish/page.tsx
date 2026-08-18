@@ -47,7 +47,8 @@ function FormPublishContent() {
 
   // Queries
   const { data: selectedCustomer } = useCustomerQuery(customerId || customerIdParam)
-  const { data: templates } = useFormTemplatesQuery()
+  // 비활성으로 꺼둔 양식은 발송 대상에서 빠져야 한다 (폼 관리 화면의 활성 토글이 실제로 반영되는 지점)
+  const { data: templates } = useFormTemplatesQuery({ activeOnly: true })
   const createInstanceMutation = useCreateFormInstanceMutation()
   const updateCustomerMutation = useUpdateCustomerMutation()
 
