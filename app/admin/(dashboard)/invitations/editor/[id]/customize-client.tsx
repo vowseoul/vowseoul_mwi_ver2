@@ -737,7 +737,11 @@ export default function CustomizeClient({
     // 스크롤시키는 방식(assets/themes/[id] 페이지와 동일 패턴)으로 우측 미리보기를 항상 고정한다.
     // 이 2단 고정 레이아웃은 미리보기 420px를 뺀 나머지가 편집 폭이 되므로 좁은 화면(노트북/태블릿)에서
     // 찌그러진다 — xl(1280px) 미만에서는 1단으로 쌓고(미리보기를 위로), 위에서만 2단 고정을 적용한다.
-    <div className="mx-auto grid max-w-[1280px] gap-6 font-sans xl:h-[calc(100vh-100px)] xl:grid-cols-[minmax(0,1fr)_420px]">
+    // 이때 xl 미만에서 컬럼을 명시하지 않으면 암시적 트랙이 미리보기 iframe(375px+여백)에
+    // 맞춰 404px로 커지고, 같은 트랙을 공유하는 편집 패널까지 화면 밖으로 밀려 오른쪽이
+    // 잘린다(가로 스크롤도 없어 접근 불가) — 기본값을 minmax(0,1fr)로 고정해 트랙이
+    // 컨테이너 너비를 넘지 않게 한다.
+    <div className="mx-auto grid max-w-[1280px] grid-cols-[minmax(0,1fr)] gap-6 font-sans xl:h-[calc(100vh-100px)] xl:grid-cols-[minmax(0,1fr)_420px]">
       {/* 편집 */}
       <div className="order-2 min-w-0 pb-24 xl:order-1 xl:h-full xl:max-w-3xl xl:overflow-y-auto xl:pb-0 xl:pr-1">
         <div className="mb-6">
@@ -2024,7 +2028,10 @@ export default function CustomizeClient({
         {/* xl 미만(1단 레이아웃)에서는 실제 스크롤이 main이 아니라 html에서 일어나(admin 레이아웃의
             고질적인 문제) sticky가 기준을 잃으므로 fixed로 뷰포트 하단에 고정하고(사이드바 폭만큼
             lg:left-64 로 비켜준다), xl 이상에서는 원래의(검증된) 컬럼 내부 sticky로 되돌린다. */}
-        <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t bg-background px-4 py-4 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] lg:left-64 lg:px-6 xl:sticky xl:inset-x-auto xl:left-auto xl:z-auto xl:mt-6 xl:px-0 xl:shadow-none">
+        {/* 버튼이 6개라 좁은 화면에서는 한 줄에 안 들어간다. 줄바꿈(flex-wrap)을 쓰면 바가
+            2~3줄로 높아져 편집 패널의 pb-24(96px)를 넘어 내용을 가리므로, 높이는 한 줄로
+            유지한 채 가로 스크롤시킨다 — 가장 많이 쓰는 "저장"이 맨 앞이라 항상 보인다. */}
+        <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 overflow-x-auto border-t bg-background px-4 py-4 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] [&>*]:shrink-0 lg:left-64 lg:px-6 xl:sticky xl:inset-x-auto xl:left-auto xl:z-auto xl:mt-6 xl:overflow-x-visible xl:px-0 xl:shadow-none">
           <SaveButton onSave={save} className="gap-2" />
           {publicSlug && (
             <Button variant="outline" asChild>
