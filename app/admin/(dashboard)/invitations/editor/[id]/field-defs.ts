@@ -9,12 +9,8 @@ import { BLOCK_LABEL_FALLBACK } from "@/lib/theme-template"
 export type FieldType = "text" | "textarea" | "tel" | "image"
 export interface FieldDef { key: string; label: string; type: FieldType }
 
-export const REVIEW_STATUS_LABEL: Record<string, string> = {
-  none: "검수 전",
-  in_review: "검수 요청됨",
-  changes_requested: "수정 요청 있음",
-  approved: "확정됨",
-}
+/** 검수 상태 라벨은 목록·고객 상세도 함께 쓰므로 lib/review-status.ts 로 옮겼다 */
+export { REVIEW_STATUS_LABEL } from "@/lib/review-status"
 
 /** field_manifest 에 있을 때만 노출되는 필드 (테마가 실제로 쓰는 것만 보여준다) */
 export const CONTENT_FIELD_DEFS: FieldDef[] = [

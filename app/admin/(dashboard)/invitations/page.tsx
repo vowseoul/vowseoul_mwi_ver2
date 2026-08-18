@@ -37,6 +37,7 @@ import {
   useDeleteInvitationMutation
 } from '@/hooks/queries/useInvitations'
 import { CustomerPicker } from '@/components/admin/customer-picker'
+import { reviewStatusClass, reviewStatusLabel } from '@/lib/review-status'
 import { useThemesQuery } from '@/hooks/queries/useThemes'
 import { useCopyFeedback } from '@/lib/use-copy-feedback'
 import { 
@@ -339,9 +340,14 @@ export default function InvitationsListPage() {
                   </div>
 
                   <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5" />
-                      {inv.customer?.wedding_date || '-'}
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5" />
+                        {inv.customer?.wedding_date || '-'}
+                      </span>
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${reviewStatusClass(inv.review_status)}`}>
+                        {reviewStatusLabel(inv.review_status)}
+                      </span>
                     </div>
                     <label className="flex w-fit cursor-pointer items-center gap-1.5">
                       <Checkbox
@@ -416,6 +422,7 @@ export default function InvitationsListPage() {
                 <TableHead>신랑 & 신부</TableHead>
                 <TableHead>접속 링크 (Slug)</TableHead>
                 <TableHead className="text-center">상태</TableHead>
+                <TableHead className="text-center">검수</TableHead>
                 <TableHead>예식 예정일</TableHead>
                 <TableHead className="text-center">하객 링크</TableHead>
                 <TableHead className="w-24 text-right">관리 액션</TableHead>
@@ -423,16 +430,16 @@ export default function InvitationsListPage() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRowsSkeleton rows={6} columns={6} />
+                <TableRowsSkeleton rows={6} columns={7} />
               ) : error ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-destructive">
+                  <TableCell colSpan={7} className="text-center py-8 text-destructive">
                     목록 조회 중 오류가 발생했습니다.
                   </TableCell>
                 </TableRow>
               ) : filteredInvitations?.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     제작중인 청첩장이 없습니다.
                   </TableCell>
                 </TableRow>
@@ -487,6 +494,12 @@ export default function InvitationsListPage() {
                           ? '정지' 
                           : '만료'}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${reviewStatusClass(inv.review_status)}`}>
+                        {reviewStatusLabel(inv.review_status)}
+                        {Number(inv.review_round) > 0 && ` ${inv.review_round}차`}
+                      </span>
                     </TableCell>
                     <TableCell className="text-sm">
                       <div className="flex items-center gap-1.5 text-muted-foreground">

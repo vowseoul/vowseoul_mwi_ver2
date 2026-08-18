@@ -21,6 +21,10 @@ export interface Invitation {
   expires_at: string
   /** true 면 데이터 자동 파기 대상에서 제외된다 (예: 데모/샘플용 청첩장) */
   is_sample: boolean
+  /** 시안 검수 진행 상태 (§lib/review-status.ts) — 편집기에서 검수 요청을 보낼 때 갱신된다 */
+  review_status: 'none' | 'in_review' | 'changes_requested' | 'approved' | null
+  /** 검수 요청을 보낸 횟수 (1차, 2차 …) */
+  review_round: number | null
   created_at: string
   updated_at: string
   customer?: {

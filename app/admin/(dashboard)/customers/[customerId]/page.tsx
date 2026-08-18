@@ -38,6 +38,7 @@ import { useFormTemplateFieldsQuery } from '@/hooks/queries/useForms'
 import { pickFormSubmission } from '@/lib/form-submission'
 import { supabase } from '@/lib/supabase'
 import { logAuditEvent } from '@/lib/audit-log'
+import { reviewStatusClass, reviewStatusLabel } from '@/lib/review-status'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Dialog,
@@ -939,6 +940,16 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                     <Badge variant={invitation.status === 'published' ? 'default' : 'secondary'}>
                       {invitation.status === 'published' ? '발행완료' : '작성중'}
                     </Badge>
+                  </div>
+
+                  {/* 검수 상태는 편집기 안에서만 볼 수 있어서, 담당 건이 여러 개면 "고객이
+                      승인했는지 / 수정 요청을 남겼는지" 확인하려고 편집기를 열어봐야 했다 */}
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">시안 검수:</span>
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${reviewStatusClass(invitation.review_status)}`}>
+                      {reviewStatusLabel(invitation.review_status)}
+                      {Number(invitation.review_round) > 0 && ` ${invitation.review_round}차`}
+                    </span>
                   </div>
 
                   <div className="space-y-1.5 pt-1">
