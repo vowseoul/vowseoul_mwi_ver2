@@ -36,7 +36,7 @@ import {
   useUpdateInvitationSampleMutation,
   useDeleteInvitationMutation
 } from '@/hooks/queries/useInvitations'
-import { useCustomersQuery } from '@/hooks/queries/useCustomers'
+import { CustomerPicker } from '@/components/admin/customer-picker'
 import { useThemesQuery } from '@/hooks/queries/useThemes'
 import { useCopyFeedback } from '@/lib/use-copy-feedback'
 import { 
@@ -60,7 +60,6 @@ import { toast } from 'sonner'
 
 export default function InvitationsListPage() {
   const { data: invitations, isLoading, error } = useInvitationsQuery()
-  const { data: customersData } = useCustomersQuery({ status: 'form_completed' }, 1, 100)
   const { data: themes } = useThemesQuery()
 
   const createMutation = useCreateInvitationMutation()
@@ -185,7 +184,6 @@ export default function InvitationsListPage() {
     return names.includes(search.toLowerCase()) || inv.public_slug.toLowerCase().includes(search.toLowerCase())
   })
 
-  const availableCustomers = customersData?.data || []
   const availableThemes = themes || []
 
   return (
@@ -214,19 +212,14 @@ export default function InvitationsListPage() {
                 {/* Customer selection */}
                 <Field>
                   <FieldLabel htmlFor="customerSelect">정보 입력 완료 고객 (선택)</FieldLabel>
-                  <Select value={customerId} onValueChange={setCustomerId}>
-                    <SelectTrigger id="customerSelect">
-                      <SelectValue placeholder="고객 선택 없음 (임시 초안 생성)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">임시 고객으로 생성 (고객 선택 없음)</SelectItem>
-                      {availableCustomers.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.groom_name} & {c.bride_name} (예식일: {c.wedding_date || '미정'})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <CustomerPicker
+                    id="customerSelect"
+                    value={customerId}
+                    onChange={(id) => setCustomerId(id)}
+                    filters={{ status: 'form_completed' }}
+                    placeholder="고객 검색 후 선택"
+                    emptyOption={{ value: 'none', label: '임시 고객으로 생성 (고객 선택 없음)' }}
+                  />
                 </Field>
 
                 {/* Theme selection */}

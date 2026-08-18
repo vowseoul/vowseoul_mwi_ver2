@@ -9,11 +9,11 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { 
-  useCustomersQuery, 
-  useCustomerQuery, 
-  useUpdateCustomerMutation 
+import {
+  useCustomerQuery,
+  useUpdateCustomerMutation
 } from '@/hooks/queries/useCustomers'
+import { CustomerPicker } from '@/components/admin/customer-picker'
 import { 
   useFormTemplatesQuery, 
   useFormTemplateFieldsQuery, 
@@ -46,7 +46,6 @@ function FormPublishContent() {
   const copied = isCopied()
 
   // Queries
-  const { data: customerData } = useCustomersQuery({ status: 'all' }, 1, 100)
   const { data: selectedCustomer } = useCustomerQuery(customerId || customerIdParam)
   const { data: templates } = useFormTemplatesQuery()
   const createInstanceMutation = useCreateFormInstanceMutation()
@@ -198,7 +197,6 @@ function FormPublishContent() {
     )
   }
 
-  const registeredCustomers = customerData?.data || []
   const availableTemplates = templates || []
 
   return (
@@ -227,32 +225,23 @@ function FormPublishContent() {
               {/* Customer Select */}
               <Field>
                 <FieldLabel htmlFor="customerSelect">고객 선택 *</FieldLabel>
-                {selectedCustomer ? (
+                {/* 고객 상세에서 넘어온 경우(customerIdParam)에는 대상이 이미 정해져 있으므로
+                    읽기 전용으로 보여주고, 그 외에는 검색형 선택기를 쓴다 */}
+                {customerIdParam && selectedCustomer ? (
                   <div className="flex items-center justify-between p-3 border border-border rounded-lg bg-muted/20 text-sm">
                     <div>
                       <span className="font-semibold">{selectedCustomer.groom_name} & {selectedCustomer.bride_name}</span>
                       <span className="text-xs text-muted-foreground ml-2">예식일: {selectedCustomer.wedding_date || '미정'}</span>
                     </div>
-                    {customerIdParam ? null : (
-                      <Button variant="link" onClick={() => setCustomerId('')} className="h-auto p-0 text-xs">
-                        변경
-                      </Button>
-                    )}
                   </div>
                 ) : (
-                  <Select value={customerId} onValueChange={setCustomerId}>
-                    <SelectTrigger id="customerSelect">
-                      <SelectValue placeholder="폼을 발송할 고객 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">고객 선택</SelectItem>
-                      {registeredCustomers.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.groom_name} & {c.bride_name} (예식일: {c.wedding_date || '미정'})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <CustomerPicker
+                    id="customerSelect"
+                    value={customerId}
+                    onChange={(id) => setCustomerId(id)}
+                    filters={{ status: 'all' }}
+                    placeholder="폼을 발송할 고객 검색"
+                  />
                 )}
               </Field>
 
