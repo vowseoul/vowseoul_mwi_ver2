@@ -29,6 +29,7 @@ export default async function InvitationReviewPage({ params }: { params: Promise
     .from('invitations')
     .select('*')
     .eq('id', id)
+    .is('deleted_at', null)
     .maybeSingle()
 
   if (error) console.error('review: invitation lookup failed:', error.message)

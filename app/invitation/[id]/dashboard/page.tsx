@@ -37,6 +37,7 @@ export default async function CustomerDashboardPage({ params }: { params: Promis
     .from('invitations')
     .select('id, public_slug, customer_id, content_data')
     .eq('id', id)
+    .is('deleted_at', null)
     .maybeSingle()
 
   if (error) console.error('dashboard: invitation lookup failed:', error.message)

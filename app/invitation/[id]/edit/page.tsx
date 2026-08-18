@@ -28,6 +28,7 @@ export default async function InvitationEditPage({ params }: { params: Promise<{
     .from('invitations')
     .select('id, public_slug, customer_id, content_data, customization_overrides')
     .eq('id', id)
+    .is('deleted_at', null)
     .maybeSingle()
 
   if (error) console.error('edit: invitation lookup failed:', error.message)

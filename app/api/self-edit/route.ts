@@ -59,6 +59,7 @@ export async function POST(request: Request) {
     .from("invitations")
     .select("content_data, customization_overrides")
     .eq("id", invitationId)
+    .is("deleted_at", null)
     .maybeSingle()
   if (invError || !invitation) {
     return NextResponse.json({ error: "청첩장을 찾을 수 없습니다." }, { status: 404 })

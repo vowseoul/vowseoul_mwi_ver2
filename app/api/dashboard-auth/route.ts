@@ -43,6 +43,9 @@ export async function POST(request: Request) {
     .from("invitations")
     .select("id, dashboard_password")
     .eq("public_slug", slug)
+    // 삭제·파기된 청첩장에는 대시보드 세션을 새로 내주지 않는다. 이 필터가 없어서
+    // 보관기간이 지나 하객 데이터가 파기된 뒤에도 로그인이 200으로 통과했다.
+    .is("deleted_at", null)
     .maybeSingle()
 
   if (error) console.error("dashboard-auth lookup failed:", error.message)

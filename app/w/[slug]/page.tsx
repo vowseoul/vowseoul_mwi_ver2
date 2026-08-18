@@ -36,10 +36,14 @@ interface PageProps {
  */
 async function loadInvitation(slug: string) {
   const supabase = createSupabaseAdminClient()
+  // 삭제된(소프트 삭제 포함) 청첩장은 없는 것으로 취급한다 — 관리자 목록에서 지웠거나
+  // 보관기간 만료 크론(§app/api/cron/purge-expired-invitations)이 하객 데이터를 파기하고
+  // deleted_at 을 찍은 뒤에도, 이 필터가 없어서 링크가 계속 살아 있었다.
   const { data: invitation } = await supabase
     .from('invitations')
     .select('*')
     .eq('public_slug', slug)
+    .is('deleted_at', null)
     .maybeSingle()
 
   if (!invitation) return { invitation: null, customer: null, themeRow: null }
@@ -163,6 +167,29 @@ export default async function Page({ params }: PageProps) {
           <h2 className="text-lg font-semibold text-foreground">찾을 수 없는 청첩장</h2>
           <p className="text-sm text-muted-foreground">
             링크 주소가 잘못되었거나 만료되었을 수 있습니다.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // 관리자가 청첩장 목록에서 "정지"를 눌렀거나 만료 처리된 청첩장은 하객에게 보여주지
+  // 않는다. 지금까지 이 판정이 없어서 "일시정지 상태로 변경되었습니다" 토스트가 뜬 뒤에도
+  // 링크는 그대로 살아 있었다 — 고객에게 "내렸다"고 안내하고도 실제로는 계속 공개됐다.
+  // draft 는 막지 않는다: 발행 전 시안을 고객·담당자가 이 주소로 확인하는 흐름이 있고
+  // (§고객 상세의 "하객용 모바일 청첩장 URL" 복사), 공개 여부는 위 토글이 담당한다.
+  if (invitation.status === 'paused' || invitation.status === 'expired') {
+    const paused = invitation.status === 'paused'
+    return (
+      <div className="min-h-screen bg-muted flex items-center justify-center font-sans p-4">
+        <div className="text-center space-y-2">
+          <h2 className="text-lg font-semibold text-foreground">
+            {paused ? '현재 열람할 수 없는 청첩장' : '기간이 종료된 청첩장'}
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {paused
+              ? '신랑·신부의 요청으로 잠시 공개가 중단되었습니다.'
+              : '공개 기간이 종료되어 더 이상 확인하실 수 없습니다.'}
           </p>
         </div>
       </div>
