@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { FORM_INSTANCE_COLUMNS } from '@/hooks/queries/useForms'
 
 export interface Customer {
   id: string
@@ -209,7 +210,7 @@ export function useCustomerFormInstanceQuery(customerId: string) {
       const { data, error } = await supabase
         .from('form_instances')
         .select(`
-          *,
+          ${FORM_INSTANCE_COLUMNS},
           form_submissions(updated_at, is_complete)
         `)
         .eq('customer_id', customerId)

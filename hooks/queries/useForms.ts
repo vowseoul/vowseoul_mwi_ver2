@@ -44,10 +44,32 @@ export interface FormInstance {
   fields_snapshot: any
   unique_url_slug: string
   status: 'draft' | 'active' | 'completed' | 'expired'
-  access_password?: string | null
   expires_at?: string | null
   created_at: string
+  has_password?: boolean
 }
+
+/**
+ * form_instances 조회 시 쓰는 컬럼 목록.
+ *
+ * '*' 를 쓰면 안 된다 — access_password 는 anon/authenticated 양쪽에서 회수돼 있어
+ * (§supabase/migrations/20260819000000) 행 전체를 요구하는 순간 권한 오류가 난다.
+ * INSERT 후 .select() 도 RETURNING 이라 같은 제약을 받으므로 이 목록을 넘겨야 한다.
+ */
+/**
+ * 폼 발행 시 보내는 형태.
+ *
+ * access_password 는 여기에만 있고 FormInstance 에는 없다 — 관리자는 이 값을
+ * "쓸 수는 있지만 되읽을 수는 없다"(§20260819000000). 비대칭이 어색해 보이지만
+ * invitations.dashboard_password 와 같은 원칙이고, 대조는 서버만 한다.
+ * has_password 는 DB 생성 컬럼이라 넣어 보내면 안 된다.
+ */
+export type NewFormInstance = Omit<FormInstance, 'id' | 'created_at' | 'has_password'> & {
+  access_password?: string | null
+}
+
+export const FORM_INSTANCE_COLUMNS =
+  'id, customer_id, template_id, fields_snapshot, unique_url_slug, status, expires_at, created_at, has_password'
 
 export interface FormSubmission {
   id: string
@@ -259,11 +281,11 @@ export function useFormInstancesQuery() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('form_instances')
-        .select('*')
+        .select(FORM_INSTANCE_COLUMNS)
         .order('created_at', { ascending: false })
 
       if (error) throw error
-      return data as FormInstance[]
+      return data as unknown as FormInstance[]
     },
   })
 }
@@ -271,15 +293,15 @@ export function useFormInstancesQuery() {
 export function useCreateFormInstanceMutation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (newInstance: Omit<FormInstance, 'id' | 'created_at'>) => {
+    mutationFn: async (newInstance: NewFormInstance) => {
       const { data, error } = await supabase
         .from('form_instances')
         .insert([newInstance])
-        .select()
+        .select(FORM_INSTANCE_COLUMNS)
         .single()
 
       if (error) throw error
-      return data as FormInstance
+      return data as unknown as FormInstance
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['form-instances'] })
@@ -416,7 +438,7 @@ export function useFormInstanceBySlugQuery(slug: string) {
           status,
           expires_at,
           created_at,
-          has_password:form_instances_has_password,
+          has_password,
           customer:customer_id (
             id,
             groom_name,
