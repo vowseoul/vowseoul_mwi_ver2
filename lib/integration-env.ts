@@ -34,6 +34,26 @@ export const SUPABASE_URL = env.NEXT_PUBLIC_SUPABASE_URL
 export const SERVICE_ROLE_KEY = env.SUPABASE_SERVICE_ROLE_KEY
 export const ANON_KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
+/**
+ * DB 자격증명만 필요한 테스트용(§lib/rls-policy.integration.test.ts).
+ * RLS·권한은 Supabase 에만 물어보면 되므로 Next 서버가 떠 있지 않아도 돌릴 수 있다.
+ */
+export function supabaseAvailable(): boolean {
+  return Boolean(SUPABASE_URL && SERVICE_ROLE_KEY && ANON_KEY)
+}
+
+/** PostgREST 가 노출 중인 테이블/뷰 목록 — 새 테이블이 조용히 끼어드는 걸 잡는 데 쓴다 */
+export async function exposedTables(): Promise<string[]> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/`, {
+    headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` },
+  })
+  const spec = (await res.json()) as { paths?: Record<string, unknown> }
+  return Object.keys(spec.paths ?? {})
+    .filter((p) => p !== "/" && !p.includes("{") && !p.startsWith("/rpc/"))
+    .map((p) => p.slice(1))
+    .sort()
+}
+
 /** 서버와 DB 자격증명이 모두 있어야 통합 테스트를 돌린다 */
 export async function integrationAvailable(): Promise<boolean> {
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY) return false
