@@ -18,12 +18,16 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
-import { Save, Globe, Mail, CreditCard, Bell, Shield, Image as ImageIcon, Upload, Loader2, Check, Users, Trash2, Plus } from "lucide-react"
+import { Save, Globe, Mail, Bell, Shield, Image as ImageIcon, Upload, Loader2, Check, Users, Trash2, Plus } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { BUCKET_NAME } from "@/lib/storage"
 import { createClient } from "@supabase/supabase-js"
 import { DATA_RETENTION_SETTINGS_KEY, DEFAULT_RETENTION_DAYS, parseRetentionSettings } from "@/lib/data-retention"
 import { SELF_EDIT_SETTINGS_KEY, parseSelfEditSettings } from "@/lib/self-edit"
+import {
+  TELEGRAM_SETTINGS_KEY, TELEGRAM_KIND_LABELS, parseTelegramSettings,
+  type TelegramNotificationSettings,
+} from "@/lib/telegram"
 import {
   BUSINESS_INFO_SETTINGS_KEY,
   DATA_TRANSFER_SETTINGS_KEY,
@@ -176,6 +180,17 @@ export default function AdminSettingsPage() {
   const [selfEditEnabled, setSelfEditEnabled] = useState(false)
   const [isSavingSelfEdit, setIsSavingSelfEdit] = useState(false)
 
+  // 텔레그램 알림 종류별 on/off (§lib/telegram.ts) — 발송 시점에 서버가 이 값을 읽는다
+  const [telegramSettings, setTelegramSettings] = useState<TelegramNotificationSettings>(
+    parseTelegramSettings(null)
+  )
+
+  // 로그인한 관리자 본인의 비밀번호 변경
+  const [adminEmail, setAdminEmail] = useState("")
+  const [pwCurrent, setPwCurrent] = useState("")
+  const [pwNext, setPwNext] = useState("")
+  const [pwConfirm, setPwConfirm] = useState("")
+
   // 개인정보 처리방침에 채워 넣을 사업자 정보 · CPO · 국외이전 고지 (§lib/business-info.ts)
   const [businessInfo, setBusinessInfo] = useState<BusinessInfo>(EMPTY_BUSINESS_INFO)
   const [dataTransfer, setDataTransfer] = useState<DataTransferInfo>(EMPTY_DATA_TRANSFER_INFO)
@@ -258,6 +273,17 @@ export default function AdminSettingsPage() {
       .maybeSingle()
 
     setDataTransfer(parseDataTransferInfo(dataTransferData?.value))
+
+    const { data: telegramData } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', TELEGRAM_SETTINGS_KEY)
+      .maybeSingle()
+
+    setTelegramSettings(parseTelegramSettings(telegramData?.value))
+
+    const { data: { user } } = await supabase.auth.getUser()
+    setAdminEmail(user?.email ?? "")
   }
 
   const handleSaveBusinessInfo = async (): Promise<boolean> => {
@@ -283,6 +309,72 @@ export default function AdminSettingsPage() {
       return false
     }
     toast.success('국외이전 정보가 저장되었습니다.')
+    return true
+  }
+
+  const handleSaveTelegramSettings = async (): Promise<boolean> => {
+    const { error } = await supabase.from('settings').upsert({
+      key: TELEGRAM_SETTINGS_KEY,
+      value: telegramSettings,
+    })
+    if (error) {
+      toast.error('알림 설정 저장에 실패했습니다.')
+      return false
+    }
+    toast.success('알림 설정이 저장되었습니다.')
+    return true
+  }
+
+  /**
+   * 로그인한 관리자 본인의 비밀번호 변경.
+   *
+   * Supabase 의 updateUser 는 현재 비밀번호를 묻지 않는다 — 자리를 비운 사이 열려 있는
+   * 화면으로 남이 비밀번호를 갈아끼울 수 있다는 뜻이라, 세션을 남기지 않는 임시 클라이언트로
+   * 현재 비밀번호를 먼저 확인한다(직원 계정 생성과 같은 방식). 임시 클라이언트를 쓰는 이유는
+   * signInWithPassword 가 성공하면서 현재 탭의 세션을 덮어쓰는 것을 막기 위해서다.
+   */
+  const handleChangeAdminPassword = async (): Promise<boolean> => {
+    if (!adminEmail) {
+      toast.error('로그인 정보를 확인하지 못했습니다. 새로고침 후 다시 시도해 주세요.')
+      return false
+    }
+    if (pwNext.length < 6) {
+      toast.error('새 비밀번호는 6자 이상이어야 합니다.')
+      return false
+    }
+    if (pwNext !== pwConfirm) {
+      toast.error('새 비밀번호와 확인이 일치하지 않습니다.')
+      return false
+    }
+    if (pwNext === pwCurrent) {
+      toast.error('현재 비밀번호와 다른 비밀번호를 입력해 주세요.')
+      return false
+    }
+
+    const tempClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
+      { auth: { persistSession: false } }
+    )
+    const { error: signInError } = await tempClient.auth.signInWithPassword({
+      email: adminEmail,
+      password: pwCurrent,
+    })
+    if (signInError) {
+      toast.error('현재 비밀번호가 올바르지 않습니다.')
+      return false
+    }
+
+    const { error } = await supabase.auth.updateUser({ password: pwNext })
+    if (error) {
+      toast.error(error.message || '비밀번호 변경에 실패했습니다.')
+      return false
+    }
+
+    setPwCurrent("")
+    setPwNext("")
+    setPwConfirm("")
+    toast.success('비밀번호가 변경되었습니다.')
     return true
   }
 
@@ -447,7 +539,6 @@ export default function AdminSettingsPage() {
           <TabsTrigger value="general">일반</TabsTrigger>
           <TabsTrigger value="homepage">홈페이지</TabsTrigger>
           <TabsTrigger value="email">고객지원</TabsTrigger>
-          <TabsTrigger value="payment">결제</TabsTrigger>
           <TabsTrigger value="notification">알림</TabsTrigger>
           <TabsTrigger value="security">보안</TabsTrigger>
           <TabsTrigger value="staff">직원 관리</TabsTrigger>
@@ -865,65 +956,6 @@ export default function AdminSettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* Payment Settings */}
-        <TabsContent value="payment">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CreditCard className="w-5 h-5" />
-                결제 설정
-              </CardTitle>
-              <CardDescription>결제 게이트웨이 설정을 관리합니다</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="pgProvider">PG사 선택</Label>
-                <Select defaultValue="tosspay">
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="tosspay">토스페이먼츠</SelectItem>
-                    <SelectItem value="kakaopay">카카오페이</SelectItem>
-                    <SelectItem value="naverpay">네이버페이</SelectItem>
-                    <SelectItem value="inicis">KG이니시스</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="merchantId">상점 ID</Label>
-                  <Input id="merchantId" placeholder="상점 ID를 입력하세요" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="merchantKey">상점 키</Label>
-                  <Input id="merchantKey" type="password" placeholder="상점 키를 입력하세요" />
-                </div>
-              </div>
-              <Separator />
-              <div className="space-y-4">
-                <h4 className="text-sm font-medium">결제 옵션</h4>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">테스트 모드</p>
-                    <p className="text-xs text-muted-foreground">실제 결제 대신 테스트 결제를 사용합니다</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">자동 환불</p>
-                    <p className="text-xs text-muted-foreground">취소 요청 시 자동으로 환불 처리합니다</p>
-                  </div>
-                  <Switch />
-                </div>
-              </div>
-              <div className="flex justify-end">
-                <SaveButton onSave={handleSave} />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         {/* Notification Settings */}
         <TabsContent value="notification">
@@ -931,55 +963,35 @@ export default function AdminSettingsPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Bell className="w-5 h-5" />
-                알림 설정
+                텔레그램 알림
               </CardTitle>
-              <CardDescription>알림 발송 조건을 설정합니다</CardDescription>
+              <CardDescription>
+                고객이 무언가를 제출하면 관리자 텔레그램으로 즉시 알립니다. 관리자 대시보드의 벨 알림을 보완하는 용도입니다.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
-                <h4 className="text-sm font-medium">관리자 알림</h4>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">신규 주문 알림</p>
-                    <p className="text-xs text-muted-foreground">새로운 주문이 들어오면 알림을 받습니다</p>
+                {TELEGRAM_KIND_LABELS.map(({ kind, label, description }) => (
+                  <div key={kind} className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">{label}</p>
+                      <p className="text-xs text-muted-foreground">{description}</p>
+                    </div>
+                    <Switch
+                      checked={telegramSettings[kind]}
+                      onCheckedChange={(checked) => setTelegramSettings((p) => ({ ...p, [kind]: checked }))}
+                      aria-label={label}
+                    />
                   </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">문의 알림</p>
-                    <p className="text-xs text-muted-foreground">새로운 문의가 등록되면 알림을 받습니다</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">환불 요청 알림</p>
-                    <p className="text-xs text-muted-foreground">환불 요청이 들어오면 알림을 받습니다</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
+                ))}
               </div>
               <Separator />
-              <div className="space-y-4">
-                <h4 className="text-sm font-medium">사용자 알림</h4>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">결제 완료 알림</p>
-                    <p className="text-xs text-muted-foreground">결제가 완료되면 사용자에게 알림을 발송합니다</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">마케팅 알림</p>
-                    <p className="text-xs text-muted-foreground">프로모션 및 이벤트 알림을 발송합니다</p>
-                  </div>
-                  <Switch />
-                </div>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                크론(자동 파기 등) 실패 알림은 시스템 경보라 끌 수 없습니다.
+                봇 토큰·채팅 ID가 서버에 설정되지 않은 경우에는 위 설정과 무관하게 아무 알림도 발송되지 않습니다.
+              </p>
               <div className="flex justify-end">
-                <SaveButton onSave={handleSave} />
+                <SaveButton onSave={handleSaveTelegramSettings} />
               </div>
             </CardContent>
           </Card>
@@ -997,59 +1009,54 @@ export default function AdminSettingsPage() {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">2단계 인증</p>
-                    <p className="text-xs text-muted-foreground">관리자 로그인 시 2단계 인증을 사용합니다</p>
-                  </div>
-                  <Switch />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">IP 제한</p>
-                    <p className="text-xs text-muted-foreground">특정 IP에서만 관리자 접속을 허용합니다</p>
-                  </div>
-                  <Switch />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">세션 타임아웃</p>
-                    <p className="text-xs text-muted-foreground">일정 시간 후 자동 로그아웃</p>
-                  </div>
-                  <Select defaultValue="60">
-                    <SelectTrigger className="w-32">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="30">30분</SelectItem>
-                      <SelectItem value="60">1시간</SelectItem>
-                      <SelectItem value="120">2시간</SelectItem>
-                      <SelectItem value="480">8시간</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <Separator />
-              <div className="space-y-4">
-                <h4 className="text-sm font-medium">비밀번호 변경</h4>
+                <h4 className="text-sm font-medium">내 비밀번호 변경</h4>
+                <p className="text-xs text-muted-foreground">
+                  지금 로그인한 관리자 계정({adminEmail || "…"})의 비밀번호를 바꿉니다.
+                  다른 직원의 비밀번호는 여기서 바꿀 수 없습니다.
+                </p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="currentPassword">현재 비밀번호</Label>
-                    <Input id="currentPassword" type="password" />
+                    <Input
+                      id="currentPassword"
+                      type="password"
+                      autoComplete="current-password"
+                      value={pwCurrent}
+                      onChange={(e) => setPwCurrent(e.target.value)}
+                    />
                   </div>
                   <div></div>
                   <div className="space-y-2">
                     <Label htmlFor="newPassword">새 비밀번호</Label>
-                    <Input id="newPassword" type="password" />
+                    <Input
+                      id="newPassword"
+                      type="password"
+                      autoComplete="new-password"
+                      value={pwNext}
+                      onChange={(e) => setPwNext(e.target.value)}
+                      placeholder="6자 이상"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="confirmPassword">비밀번호 확인</Label>
-                    <Input id="confirmPassword" type="password" />
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      autoComplete="new-password"
+                      value={pwConfirm}
+                      onChange={(e) => setPwConfirm(e.target.value)}
+                    />
                   </div>
                 </div>
               </div>
               <div className="flex justify-end">
-                <SaveButton onSave={handleSave} />
+                <SaveButton
+                  onSave={handleChangeAdminPassword}
+                  idleLabel="비밀번호 변경"
+                  pendingLabel="변경 중…"
+                  successLabel="변경됨"
+                  disabled={!pwCurrent || !pwNext || !pwConfirm}
+                />
               </div>
             </CardContent>
           </Card>

@@ -89,7 +89,8 @@ export async function POST(request: Request) {
   // 텔레그램 알림 — 관리자가 대시보드를 열어보지 않아도 제출 즉시 알 수 있게(벨 알림 보완).
   // 링크는 배포 도메인을 따로 설정하지 않아도 되도록 요청 URL 에서 origin 을 그대로 딴다.
   await sendTelegram(
-    `📝 ${coupleName}님이 고객 폼을 완료하셨습니다.\n${new URL(request.url).origin}${detailPath}`
+    `📝 ${coupleName}님이 고객 폼을 완료하셨습니다.\n${new URL(request.url).origin}${detailPath}`,
+    "form_submit"
   )
 
   return NextResponse.json({ ok: true })

@@ -119,7 +119,8 @@ export async function POST(request: Request) {
     await sendTelegram(
       `✏️ ${await resolveCoupleLabel(supabase, invitationId)}님이 청첩장 검수 피드백을 남기셨습니다.\n` +
       `"${note.slice(0, 100)}${note.length > 100 ? "…" : ""}"\n` +
-      `${new URL(request.url).origin}/admin/invitations/editor/${invitationId}`
+      `${new URL(request.url).origin}/admin/invitations/editor/${invitationId}`,
+      "review_revision"
     )
 
     return NextResponse.json({ ok: true, revision })
@@ -144,7 +145,8 @@ export async function POST(request: Request) {
 
     await sendTelegram(
       `✅ ${await resolveCoupleLabel(supabase, invitationId)}님이 청첩장 검수를 완료(확정)하셨습니다.\n` +
-      `${new URL(request.url).origin}/admin/invitations/editor/${invitationId}`
+      `${new URL(request.url).origin}/admin/invitations/editor/${invitationId}`,
+      "review_approved"
     )
 
     return NextResponse.json({ ok: true })
