@@ -223,6 +223,17 @@ const BlockOverrideSchema = z.object({
   calendarTimeText: nonEmptyString,
   /** account 블럭 전용: 계좌 표시 방식. 미설정 시 기존 목록형("list") */
   accountLayout: z.enum(["list", "card"]),
+  /** account 카드형 전용: 카드 배경을 무엇에서 가져올지.
+   *  auto  — 그 섹션이 실제로 쓰는 글자색(currentColor)에 맞춘다. 어느 배경 위에서도 보인다.
+   *  accent/bg — 테마 토큰을 따라가므로 테마를 바꿔도 어울리는 색이 유지되지만, 섹션 배경과
+   *              같은 토큰이면 카드가 보이지 않는다(color-atelier 의 계좌 섹션 배경이 --accent 다).
+   *  custom — accountCardBgColor 의 고정 hex.
+   *  미설정 시 ACCOUNT_CARD_BG_DEFAULT.source */
+  accountCardBg: z.enum(["auto", "accent", "bg", "custom"]),
+  /** account 카드형 전용: accountCardBg 가 'custom' 일 때 쓸 색(hex) */
+  accountCardBgColor: nonEmptyString,
+  /** account 카드형 전용: 카드 배경 불투명도(0~100). 미설정 시 ACCOUNT_CARD_BG_DEFAULT.opacity */
+  accountCardBgOpacity: finiteNumber,
   /** greeting 블럭 전용: 인사말 아이콘 모양 (미설정 시 하트) */
   greetingIconShape: z.enum(["heart", "custom"]),
   /** greeting 블럭 전용: greetingIconShape가 'custom'일 때 사용할 업로드 이미지 URL */
@@ -237,6 +248,9 @@ export type BlockOverride = z.infer<typeof BlockOverrideSchema>
 
 /** 달력 박스 배경 기본값 — 렌더러(calendar-island)와 편집기 슬라이더가 공유한다 */
 export const CALENDAR_BOX_DEFAULT = { color: "#bebebe", opacity: 76 } as const
+
+/** 계좌 카드 배경 기본값 — 렌더러(account-island)와 편집기가 공유한다 */
+export const ACCOUNT_CARD_BG_DEFAULT = { source: "auto", color: "#bebebe", opacity: 12 } as const
 
 /**
  * customization_overrides(jsonb) 에서 blocks(블럭별 오버라이드 맵)를 추출한다.

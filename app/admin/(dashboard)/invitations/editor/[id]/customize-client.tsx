@@ -27,6 +27,7 @@ import {
   BLOCK_KEYS,
   BLOCK_LABEL_FALLBACK,
   buildThemeTokens,
+  ACCOUNT_CARD_BG_DEFAULT,
   CALENDAR_BOX_DEFAULT,
   extractBlockOrder,
   extractBlockOverrides,
@@ -1797,6 +1798,62 @@ export default function CustomizeClient({
                                   카드형은 카드를 누르면 계좌번호가 복사됩니다. 예전 자유 입력으로 등록된 혼주 계좌는
                                   은행·번호가 나뉘어 있지 않아 카드형에서도 기존 줄 형태로 표시됩니다.
                                 </p>
+
+                                {(override?.accountLayout === "card") && (
+                                  <div className="space-y-4 border-t pt-4">
+                                    <Field>
+                                      <FieldLabel>카드 배경색</FieldLabel>
+                                      <RadioGroup
+                                        value={override?.accountCardBg || ACCOUNT_CARD_BG_DEFAULT.source}
+                                        onValueChange={(v) => setBlockOverride(b.key, { accountCardBg: v as "auto" | "accent" | "bg" | "custom" })}
+                                        className="flex flex-row flex-wrap gap-x-6 gap-y-2"
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <RadioGroupItem value="auto" id={`${b.key}-cardbg-auto`} />
+                                          <Label htmlFor={`${b.key}-cardbg-auto`} className="font-normal cursor-pointer">자동</Label>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <RadioGroupItem value="accent" id={`${b.key}-cardbg-accent`} />
+                                          <Label htmlFor={`${b.key}-cardbg-accent`} className="font-normal cursor-pointer">테마 포인트 색상</Label>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <RadioGroupItem value="bg" id={`${b.key}-cardbg-bg`} />
+                                          <Label htmlFor={`${b.key}-cardbg-bg`} className="font-normal cursor-pointer">테마 배경색</Label>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <RadioGroupItem value="custom" id={`${b.key}-cardbg-custom`} />
+                                          <Label htmlFor={`${b.key}-cardbg-custom`} className="font-normal cursor-pointer">직접 선택</Label>
+                                        </div>
+                                      </RadioGroup>
+                                      <p className="text-xs text-muted-foreground">
+                                        자동은 섹션 배경이 밝든 어둡든 대비가 생기게 맞춥니다. 테마 색을 고르면 테마를 바꿔도
+                                        카드가 함께 따라가지만, 섹션 배경과 같은 색이면 카드가 보이지 않습니다 — 고르고 나서
+                                        미리보기를 확인하세요.
+                                      </p>
+                                    </Field>
+
+                                    {override?.accountCardBg === "custom" && (
+                                      <BlockColorField
+                                        label="카드 배경 직접 선택"
+                                        value={override?.accountCardBgColor}
+                                        defaultValue={ACCOUNT_CARD_BG_DEFAULT.color}
+                                        onChange={(v) => setBlockOverride(b.key, { accountCardBgColor: v })}
+                                        onReset={() => setBlockOverride(b.key, { accountCardBgColor: undefined })}
+                                      />
+                                    )}
+
+                                    <SizeSliderField
+                                      label="카드 배경 불투명도"
+                                      unit="%"
+                                      value={override?.accountCardBgOpacity}
+                                      defaultValue={ACCOUNT_CARD_BG_DEFAULT.opacity}
+                                      min={0}
+                                      max={100}
+                                      onChange={(v) => setBlockOverride(b.key, { accountCardBgOpacity: v })}
+                                      onReset={() => setBlockOverride(b.key, { accountCardBgOpacity: undefined })}
+                                    />
+                                  </div>
+                                )}
                               </Field>
                             )}
                             {b.key === "greeting" && (

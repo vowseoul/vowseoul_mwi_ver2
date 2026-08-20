@@ -6,6 +6,7 @@ import { useCopyFeedback } from "@/lib/use-copy-feedback"
 import { isToggledOn } from "@/lib/invitation-data"
 import { soft, iconBtnStyle, type SlotProps } from "./shared"
 import { composeAccountText, isAccountFilled, parseAccountList } from "@/lib/account-fields"
+import { ACCOUNT_CARD_BG_DEFAULT } from "@/lib/theme-template"
 
 /* ----------------------------- Account ----------------------------- */
 function composeAccount(bank?: string, number?: string, holder?: string): string {
@@ -99,21 +100,41 @@ function ExtraAccountRow({ label, value }: { label: string; value: string }) {
 
 interface CardEntry { relation: string; holder: string; bank: string; number: string }
 
-function AccountCard({ entry }: { entry: CardEntry }) {
+/**
+ * 카드 배경색 문자열.
+ *
+ * accent/bg 는 테마 토큰을 그대로 참조한다 — 고정 hex 로 굳혀두면 테마를 바꿨을 때
+ * 카드만 옛 테마 색으로 남는다. 네 경우 모두 color-mix 로 투명도를 입혀 한 경로로 다룬다
+ * (배경에만 알파를 먹여야 카드 안 글자가 함께 흐려지지 않는다).
+ */
+function cardBackground(source: string, customColor: string, opacityPct: number): string {
+  const base =
+    source === "accent" ? "var(--accent, #D76C6C)" :
+    source === "bg" ? "var(--bg, #ffffff)" :
+    source === "custom" ? customColor :
+    // auto — 섹션이 그 순간 실제로 쓰는 글자색을 따라간다. 배경이 밝든 어둡든 항상 대비가
+    // 생긴다. color-atelier 처럼 섹션 배경이 --accent 로 교대되는 테마에서 accent 를 고르면
+    // 카드와 배경이 같은 색이 되어 아예 보이지 않는데, 이 기본값은 그 함정을 피한다.
+    "currentColor"
+  const pct = Math.min(100, Math.max(0, opacityPct))
+  return `color-mix(in srgb, ${base} ${pct}%, transparent)`
+}
+
+function AccountCard({ entry, background }: { entry: CardEntry; background: string }) {
   const { isCopied, copy } = useCopyFeedback()
   const copied = isCopied()
   const numericValue = digitsOnly(entry.number)
 
-  const payBtn = (label: string, onClick: () => void, color: string, fg: string): React.ReactNode => (
+  // 목록형과 같은 아이콘을 쓴다 — 글자 버튼은 카드에서 가장 눈에 띄는 요소가 돼
+  // 정작 읽어야 할 예금주·계좌번호를 덮었다. 라벨은 aria-label/title 로 남긴다.
+  const payBtn = (label: string, onClick: () => void, style: React.CSSProperties, icon: React.ReactNode) => (
     <button
       onClick={(e) => { e.stopPropagation(); onClick() }}
-      style={{
-        flex: 1, padding: "5px 0", borderRadius: 4, cursor: "pointer", fontSize: 10.5,
-        border: `1px solid color-mix(in srgb, ${color} 45%, transparent)`,
-        background: `color-mix(in srgb, ${color} 14%, transparent)`, color: fg,
-      }}
+      aria-label={`${label}로 보내기`}
+      title={label}
+      style={style}
     >
-      {label}
+      {icon}
     </button>
   )
 
@@ -125,7 +146,7 @@ function AccountCard({ entry }: { entry: CardEntry }) {
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); copy(numericValue) } }}
       aria-label={`${entry.relation} ${entry.holder} 계좌번호 복사`}
       style={{
-        background: soft(10), padding: "12px 12px 10px", borderRadius: 4, cursor: "pointer",
+        background, padding: "12px 12px 10px", borderRadius: 4, cursor: "pointer",
         display: "flex", flexDirection: "column", gap: 8,
         outline: copied ? "1px solid currentColor" : "none",
         transition: "outline-color 200ms ease-out",
@@ -143,20 +164,24 @@ function AccountCard({ entry }: { entry: CardEntry }) {
           <span style={{ fontSize: 11, opacity: 0.55, flexShrink: 0 }}>{entry.bank}</span>
         </div>
       </div>
-      <div style={{ display: "flex", gap: 5 }}>
-        {payBtn("카카오페이", () => openPayApp("kakao", numericValue), "#FFE300", "inherit")}
-        {payBtn("토스", () => openPayApp("toss", numericValue), "#0064FF", "inherit")}
+      <div style={{ display: "flex", gap: 5, justifyContent: "flex-end" }}>
+        {payBtn("카카오페이", () => openPayApp("kakao", numericValue), iconBtnStyle(
+          "color-mix(in srgb, #FFE300 50%, transparent)", "color-mix(in srgb, #FFE300 16%, transparent)", "#3C1E1E"
+        ), <MessageCircle size={14} />)}
+        {payBtn("토스", () => openPayApp("toss", numericValue), iconBtnStyle(
+          "color-mix(in srgb, #0064FF 45%, transparent)", "color-mix(in srgb, #0064FF 14%, transparent)", "#0064FF"
+        ), <Send size={14} />)}
       </div>
     </div>
   )
 }
 
-function AccountCardColumn({ title, entries }: { title: string; entries: CardEntry[] }) {
+function AccountCardColumn({ title, entries, background }: { title: string; entries: CardEntry[]; background: string }) {
   if (entries.length === 0) return null
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
       <div style={{ fontSize: 12, textAlign: "center", paddingBottom: 6, borderBottom: `1px solid ${soft(25)}` }}>{title}</div>
-      {entries.map((e, i) => <AccountCard key={i} entry={e} />)}
+      {entries.map((e, i) => <AccountCard key={i} entry={e} background={background} />)}
     </div>
   )
 }
@@ -198,6 +223,11 @@ function AccountIsland({ data, raw, blockOverrides }: SlotProps) {
   // 카드형은 관계·이름·계좌번호·은행을 자리마다 나눠 놓아야 해서, 한 줄로 합쳐 쓰는
   // 목록형과 달리 원본 필드를 그대로 받는다.
   const isCard = blockOverrides?.account?.accountLayout === "card"
+  const cardBg = cardBackground(
+    blockOverrides?.account?.accountCardBg || ACCOUNT_CARD_BG_DEFAULT.source,
+    blockOverrides?.account?.accountCardBgColor || ACCOUNT_CARD_BG_DEFAULT.color,
+    blockOverrides?.account?.accountCardBgOpacity ?? ACCOUNT_CARD_BG_DEFAULT.opacity,
+  )
   const cardEntry = (relation: string, holder?: string, bank?: string, number?: string): CardEntry | null =>
     number ? { relation, holder: holder || "", bank: bank || "", number } : null
   const groomCards = [
@@ -227,8 +257,8 @@ function AccountIsland({ data, raw, blockOverrides }: SlotProps) {
       )}
       {showRows && isCard && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, alignItems: "start" }}>
-          <AccountCardColumn title="신랑측" entries={groomCards} />
-          <AccountCardColumn title="신부측" entries={brideCards} />
+          <AccountCardColumn title="신랑측" entries={groomCards} background={cardBg} />
+          <AccountCardColumn title="신부측" entries={brideCards} background={cardBg} />
         </div>
       )}
       {showRows && !isCard && groom && <AccountRow label="신랑측" value={groom} />}
