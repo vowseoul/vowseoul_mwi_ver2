@@ -86,6 +86,7 @@ export default function TemplateInvitationClient({
         width={size.w}
         height={size.h}
         preventZoom
+        fullBleed
       />
     </div>
   )

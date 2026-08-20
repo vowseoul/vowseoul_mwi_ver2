@@ -67,6 +67,13 @@ interface InvitationFrameProps {
   /** 핀치줌·더블탭 확대 차단. 실제 발행 페이지(하객용)에서만 켠다 — 편집기/미리보기에서는
    * 관리자가 레이아웃을 확대해 볼 수 있어야 하므로 기본 꺼짐. */
   preventZoom?: boolean
+  /** 프레임이 화면을 꽉 채우는가.
+   *
+   * 편집기·테마 미리보기에서는 이 프레임이 페이지 위에 얹힌 "기기 목업"이라 둥근 모서리와
+   * 그림자가 그 역할을 한다. 하지만 발행된 청첩장(§app/w/[slug])은 프레임 크기가 곧
+   * 뷰포트 크기여서, 같은 스타일이 화면 네 귀퉁이를 잘라내고 그림자는 화면 밖으로 나간다 —
+   * 실기기에서 모서리가 둥글게 깎여 보이는 원인이었다. 그 경우 이 값을 켜서 장식을 뺀다. */
+  fullBleed?: boolean
   /** 섹션 사이에 끼워 넣는 이미지. afterBlock 이 가리키는 [data-block] 섹션 바로 뒤에 삽입된다 */
   sectionImages?: SectionImage[]
   /** 값이 있으면 "코멘트 모드"로 전환 — [data-block] 클릭 시 그 블록 키를 알려주고, 그
@@ -189,6 +196,7 @@ export function InvitationFrame({
   width = 375,
   height = 720,
   preventZoom = false,
+  fullBleed = false,
   sectionImages = [],
   onBlockClick,
   scrollMotion,
@@ -819,8 +827,10 @@ export function InvitationFrame({
       height={height}
       style={{
         border: "none",
-        borderRadius: 12,
-        boxShadow: "0 8px 40px rgba(0,0,0,0.12)",
+        // 화면을 꽉 채울 때는 모서리를 깎지 않는다 — 잘려나가는 건 장식이 아니라 청첩장 내용이다
+        borderRadius: fullBleed ? 0 : 12,
+        boxShadow: fullBleed ? "none" : "0 8px 40px rgba(0,0,0,0.12)",
+        display: fullBleed ? "block" : undefined,
         background: "#fff",
       }}
     >
