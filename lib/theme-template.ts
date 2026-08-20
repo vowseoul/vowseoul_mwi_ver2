@@ -104,6 +104,11 @@ export const SIZE_TOKEN_FIELDS: { name: string; label: string; group: "typograph
   { name: "--text-label", label: "섹션 영문 소제목 크기", group: "typography", min: 10, max: 24 },
   { name: "--text-body", label: "본문 크기", group: "typography", min: 12, max: 22 },
   { name: "--text-caption", label: "작은 글씨 크기", group: "typography", min: 10, max: 18 },
+  // 아래 셋은 예전에 테마 CSS 에 px 로 박혀 있어 편집기에서 손댈 수 없던 텍스트들을
+  // 성격별로 묶은 것이다. 요소마다 토큰을 만들면 슬라이더가 테마당 열 개 넘게 쌓인다.
+  { name: "--text-number", label: "큰 숫자 · 강조 크기", group: "typography", min: 16, max: 56 },
+  { name: "--text-card-title", label: "카드 · 항목 제목 크기", group: "typography", min: 10, max: 28 },
+  { name: "--text-micro", label: "아주 작은 라벨 크기", group: "typography", min: 7, max: 16 },
   { name: "--section-py", label: "섹션 세로 여백", group: "layout", min: 16, max: 120 },
   { name: "--section-px", label: "섹션 가로 여백", group: "layout", min: 8, max: 48 },
   { name: "--content-gap", label: "요소 간 기본 간격", group: "layout", min: 8, max: 64 },

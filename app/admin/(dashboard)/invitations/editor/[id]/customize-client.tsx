@@ -22,7 +22,7 @@ import {
   extractTokenDefault,
   type FieldDef,
 } from "./field-defs"
-import { SortableBlockRow, DragHandle, SizeSliderField, BlockColorField, TextField, ImageField, GalleryUploadButton } from "./fields"
+import { SortableBlockRow, DragHandle, SizeSliderField, BlockColorField, TextField, ImageField, GalleryUploadButton, FontVariantFields } from "./fields"
 import {
   BLOCK_KEYS,
   BLOCK_LABEL_FALLBACK,
@@ -1444,6 +1444,7 @@ export default function CustomizeClient({
                     const value = typeof overrides[t.name] === "string" ? (overrides[t.name] as string) : ""
                     const placeholder = themeTokens[t.name] || "테마 기본값"
                     const matchedFontStack = fonts.map((f) => buildFontStack(f, t.name)).find((stack) => stack === value)
+                    const matchedFont = fonts.find((f) => buildFontStack(f, t.name) === value)
                     return (
                       <Field key={t.name}>
                         <FieldLabel>{t.label}</FieldLabel>
@@ -1465,6 +1466,7 @@ export default function CustomizeClient({
                               </Select>
                             )}
                             <Input value={value} onChange={(e) => setOverride(t.name, e.target.value)} placeholder={placeholder} />
+                            <FontVariantFields tokenName={t.name} font={matchedFont} overrides={overrides} setOverride={setOverride} clearOverride={clearOverride} />
                           </div>
                           {value && (
                             <Button type="button" variant="ghost" size="icon-sm" title="테마 기본값으로" onClick={() => clearOverride(t.name)}>

@@ -10,6 +10,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
 import { GripVertical, Image as ImageIcon, Loader2, Plus, X } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { parseFontAxes } from "@/lib/font-axes"
+import type { RegisteredFont } from "@/lib/fonts"
 import type { FieldDef } from "./field-defs"
 
 /**
@@ -197,4 +201,73 @@ export function GalleryUploadButton({ uploading, onSelect }: { uploading: boolea
       />
     </div>
   )
+}
+
+/**
+ * 선택한 폰트가 실제로 싣고 있는 변형(굵기 · 이탤릭)만 고르게 한다.
+ *
+ * 없는 변형을 고르게 두면 브라우저가 가짜 볼드/기울임으로 대충 그려서, 고른 대로
+ * 안 나오는데 원인은 화면에 안 보인다. 그래서 축이 없는 폰트(예: Aboreto)나 파일
+ * 업로드 폰트에서는 이 컨트롤 자체를 그리지 않는다 — 효과 없는 컨트롤은 버그로 읽힌다.
+ *
+ * 굵기는 문자열로 저장한다. 숫자로 넣으면 extractOverrideTokens 가 단위를 붙여
+ * `700px` 이 되고 font-weight 가 통째로 무시된다(§lib/theme-template.ts).
+ */
+export function FontVariantFields({ tokenName, font, overrides, setOverride, clearOverride }: {
+  tokenName: string
+  font: RegisteredFont | undefined
+  overrides: Record<string, unknown>
+  setOverride: (name: string, value: string) => void
+  clearOverride: (name: string) => void
+}) {
+  const axes = parseFontAxes(font?.embedCode)
+  const hasWeights = axes.weights.length > 1
+  if (!font || (!hasWeights && !axes.italic)) return null
+
+  const weightToken = `${tokenName}-weight`
+  const styleToken = `${tokenName}-style`
+  const weight = typeof overrides[weightToken] === "string" ? (overrides[weightToken] as string) : ""
+  const isItalic = overrides[styleToken] === "italic"
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed px-3 py-2">
+      <span className="text-xs text-muted-foreground">{font.name} 변형</span>
+      {hasWeights && (
+        <Select value={weight} onValueChange={(v) => setOverride(weightToken, v)}>
+          <SelectTrigger size="sm" className="w-[128px]">
+            <SelectValue placeholder="굵기 (기본)" />
+          </SelectTrigger>
+          <SelectContent>
+            {axes.weights.map((w) => (
+              <SelectItem key={w} value={String(w)} style={{ fontFamily: `'${font.family}', sans-serif`, fontWeight: w }}>
+                {w}{WEIGHT_LABEL[w] ? ` · ${WEIGHT_LABEL[w]}` : ""}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+      {axes.italic && (
+        <label className="flex cursor-pointer items-center gap-1.5 text-xs">
+          <Checkbox
+            checked={isItalic}
+            onCheckedChange={(c) => (c ? setOverride(styleToken, "italic") : clearOverride(styleToken))}
+          />
+          <span style={{ fontFamily: `'${font.family}', sans-serif`, fontStyle: "italic" }}>Italic</span>
+        </label>
+      )}
+      {(weight || isItalic) && (
+        <Button
+          type="button" variant="ghost" size="icon-sm" title="폰트 기본 변형으로"
+          onClick={() => { clearOverride(weightToken); clearOverride(styleToken) }}
+        >
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      )}
+    </div>
+  )
+}
+
+const WEIGHT_LABEL: Record<number, string> = {
+  100: "Thin", 200: "ExtraLight", 300: "Light", 400: "Regular",
+  500: "Medium", 600: "SemiBold", 700: "Bold", 800: "ExtraBold", 900: "Black",
 }
