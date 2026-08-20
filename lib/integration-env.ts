@@ -30,6 +30,25 @@ function readEnvLocal(): Record<string, string> {
 
 const env = { ...readEnvLocal(), ...process.env } as Record<string, string>
 
+/**
+ * .env.local 값을 process.env 로도 올린다.
+ *
+ * vitest 는 environment:"node" 로 돌아 Next 의 .env 로딩을 거치지 않는다. 그래서
+ * 이 파일의 클라이언트만 쓰는 테스트는 잘 돌지만, process.env 를 직접 읽는 모듈
+ * (lib/supabase-admin.ts → lib/rate-limit.ts 등)을 부르는 순간 "환경변수가 설정되지
+ * 않았습니다" 로 죽는다. 라우트가 실제로 쓰는 경로를 그대로 테스트하려면 필요하다.
+ *
+ * 이미 들어 있는 값은 덮지 않는다 — CI 나 셸에서 준 값이 우선이다.
+ */
+for (const key of [
+  "NEXT_PUBLIC_SUPABASE_URL",
+  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "DASHBOARD_SESSION_SECRET",
+]) {
+  if (!process.env[key] && env[key]) process.env[key] = env[key]
+}
+
 export const SUPABASE_URL = env.NEXT_PUBLIC_SUPABASE_URL
 export const SERVICE_ROLE_KEY = env.SUPABASE_SERVICE_ROLE_KEY
 export const ANON_KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY

@@ -13,8 +13,19 @@ import { createSupabaseAdminClient } from "./supabase-admin"
 const WINDOW_MS = 15 * 60 * 1000
 const MAX_ATTEMPTS = 10
 
-/** scope+identifier 조합이 최근 WINDOW_MS 안에 MAX_ATTEMPTS번을 넘겨 시도했으면 false */
-export async function checkRateLimit(scope: string, identifier: string): Promise<boolean> {
+/**
+ * scope+identifier 조합이 최근 WINDOW_MS 안에 max번을 넘겨 시도했으면 false.
+ *
+ * max 를 창구별로 달리 줄 수 있게 열어둔 이유: 인증 관문(기본값 10)과 달리 어떤
+ * 창구는 정상 사용자도 훨씬 자주 두드린다. 지오코딩(§app/api/geocode)이 그렇다 —
+ * 하객이 청첩장 지도를 열 때마다 호출되고, 같은 통신사 NAT 뒤 하객들이 하나의 IP 를
+ * 공유하므로 10회 제한을 그대로 쓰면 정상 하객의 지도가 먼저 깨진다.
+ */
+export async function checkRateLimit(
+  scope: string,
+  identifier: string,
+  max: number = MAX_ATTEMPTS,
+): Promise<boolean> {
   const supabase = createSupabaseAdminClient()
   const windowStart = new Date(Date.now() - WINDOW_MS).toISOString()
   const { count } = await supabase
@@ -24,7 +35,7 @@ export async function checkRateLimit(scope: string, identifier: string): Promise
     .eq("identifier", identifier)
     .gte("created_at", windowStart)
 
-  if ((count ?? 0) >= MAX_ATTEMPTS) return false
+  if ((count ?? 0) >= max) return false
 
   await supabase.from("rate_limit_attempts").insert({ scope, identifier })
   return true
