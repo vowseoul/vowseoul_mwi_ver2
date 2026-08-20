@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { soft, type SlotProps } from "./shared"
 import { parseWeddingDateTime } from "@/lib/ics"
+import { CALENDAR_BOX_DEFAULT } from "@/lib/theme-template"
 
 /* ----------------------------- Calendar ---------------------------- *
  * 달력 + D-day. 이전 버전 디자인(흰 카드 / 예식일 원형 강조 / DAYS·HOURS·MINUTES)을
@@ -127,6 +128,20 @@ function CalendarDayMarker({ day, accent, shape, size, textColor, svgColor, cust
     </div>
   )
 }
+/**
+ * "#bebebe" + 76 → "rgba(190, 190, 190, 0.76)".
+ * 3자리 축약형(#abc)도 받는다. 해석할 수 없으면 원문을 그대로 돌려준다 —
+ * 색을 못 읽었다고 배경을 투명하게 만들면 달력 글자가 배경에 묻힌다.
+ */
+function hexToRgba(hex: string, opacityPct: number): string {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim())
+  if (!m) return hex
+  const h = m[1].length === 3 ? m[1].split("").map((c) => c + c).join("") : m[1]
+  const n = parseInt(h, 16)
+  const a = Math.min(100, Math.max(0, opacityPct)) / 100
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`
+}
+
 function CalendarIsland({ accent, data, raw, blockOverrides }: SlotProps) {
   const dateStr = (typeof raw?.wedding_date === "string" ? raw.wedding_date : data.wedding_date) || ""
   const timeStr = (typeof raw?.wedding_time === "string" ? raw.wedding_time : data.wedding_time) || ""
@@ -137,6 +152,10 @@ function CalendarIsland({ accent, data, raw, blockOverrides }: SlotProps) {
   const dayTextColor = blockOverrides?.calendar?.calendarDayTextColor || "#ffffff"
   const daySvgColor = blockOverrides?.calendar?.calendarDaySvgColor || accent
   const dayCustomUrl = blockOverrides?.calendar?.calendarDayCustomShapeUrl
+  const boxColor = blockOverrides?.calendar?.calendarBoxColor || CALENDAR_BOX_DEFAULT.color
+  const boxOpacity = blockOverrides?.calendar?.calendarBoxOpacity ?? CALENDAR_BOX_DEFAULT.opacity
+  // 배경에만 알파를 먹인다 — 박스에 CSS opacity 를 주면 날짜 숫자와 강조 표시까지 흐려진다
+  const boxBackground = hexToRgba(boxColor, boxOpacity)
   const [now, setNow] = useState(() => new Date())
   // 폼 입력값(wedding_date/wedding_time) 기준 기본값 — 관리자가 편집기 "블럭" 카드에서 직접 문구로
   // 덮어쓸 수 있다(§customize-client.tsx calendarDateText/calendarTimeText).
@@ -161,7 +180,7 @@ function CalendarIsland({ accent, data, raw, blockOverrides }: SlotProps) {
 
   return (
     <div>
-      <div style={{ maxWidth: 320, margin: "0 auto", background: "#fff", padding: 16, color: "#000", borderRadius: 2, boxShadow: "0 4px 10px rgba(0,0,0,.05)" }}>
+      <div style={{ maxWidth: 320, margin: "0 auto", background: boxBackground, padding: 16, color: "#000", borderRadius: 2, boxShadow: "0 4px 10px rgba(0,0,0,.05)" }}>
         <div style={{ textAlign: "center", marginBottom: 24 }}>
           <p style={{ fontSize: 20, fontWeight: 500, letterSpacing: ".15em", textTransform: "uppercase", color: accent, fontFamily: "var(--font-en, inherit)" }}>
             {MONTHS_FULL[cal.month]}

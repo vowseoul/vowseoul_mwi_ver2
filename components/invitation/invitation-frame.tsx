@@ -783,12 +783,23 @@ export function InvitationFrame({
     )
   }, [doc, fontFaces])
 
-  // 개인정보처리방침 링크 — 테마 template.html을 건드리지 않고 문서 최하단에 공통 주입한다.
-  // 새 테마가 추가돼도 자동으로 붙는다(개인정보 보호법 제30조 고지 도달 경로).
+  // 개인정보처리방침 링크 — share 슬롯이 없는 테마를 위한 대비책이다.
+  //
+  // 원래는 테마와 무관하게 항상 문서 맨 끝에 붙였는데, 공유 블럭 아래에 맥락 없는 줄이
+  // 하나 더 생기는 모양이었다. 지금은 share 아일랜드가 블럭 안에 직접 그리고
+  // (§islands/share-island.tsx), 여기서는 그 블럭이 없을 때만 대신 붙인다 —
+  // 고지 도달 경로(개인정보 보호법 제30조)가 테마 구성에 좌우되면 안 된다.
+  const hasShareSlot = Boolean(slots.share)
   useEffect(() => {
     if (!doc) return
     const linkId = "vs-privacy-link"
-    if (doc.getElementById(linkId)) return
+    const existing = doc.getElementById(linkId)
+    if (hasShareSlot) {
+      // share 블럭을 켜면(편집기에서 실시간으로 바뀐다) 주입분은 중복이므로 걷어낸다
+      existing?.remove()
+      return
+    }
+    if (existing) return
     const link = doc.createElement("a")
     link.id = linkId
     link.href = "/privacy"
@@ -797,7 +808,7 @@ export function InvitationFrame({
     link.style.cssText =
       "display:block;text-align:center;margin:24px 0 14px;font-size:10px;opacity:.35;color:inherit;text-decoration:underline;"
     doc.body.appendChild(link)
-  }, [doc])
+  }, [doc, hasShareSlot])
 
   return (
     <iframe

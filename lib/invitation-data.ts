@@ -49,6 +49,54 @@ const MONTHS_EN = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP"
 const WEEKDAYS_KR = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"]
 
 /** 'YYYY-MM-DD' (+선택적 시간) 문자열을 로컬 자정 기준 Date 로 파싱 */
+/**
+ * 예식 시간 문자열을 "12PM" 형태로 정규화한다.
+ *
+ * 입력이 한 가지가 아니다. 폼의 시간 선택기를 쓰면 "12:00"/"13:00" 이 들어오지만,
+ * 예전 데이터와 직접 입력분에는 "낮 12시" 같은 한국어 표현이 그대로 남아 있다
+ * (실제 DB 에 둘 다 있다). 해석되면 영문 표기로 바꾸고, 아니면 원문을 그대로 둔다 —
+ * 못 읽었다고 시간을 지워버리면 고객이 적어 넣은 정보가 화면에서 사라진다.
+ *
+ * "00:00" 은 시간 없음으로 본다. 예식이 자정에 열리는 일은 없고, 시간을 고르지 않은
+ * 채 저장된 값이 이 형태로 남아 있다 — 그대로 두면 "12AM" 이라고 표시된다.
+ */
+export function formatWeddingTimeLabel(value: unknown): string {
+  const raw = typeof value === "string" ? value.trim() : ""
+  if (!raw) return ""
+
+  const hhmm = raw.match(/^(\d{1,2}):(\d{2})$/)
+  if (hhmm) {
+    const h = Number(hhmm[1])
+    const min = Number(hhmm[2])
+    if (h === 0 && min === 0) return ""
+    if (h > 23 || min > 59) return raw
+    return toAmPm(h, min)
+  }
+
+  // "낮 12시 30분", "오후 1시" 처럼 쓰는 경우. 오전/아침 만 AM 으로 보고 나머지 시간대
+  // 표현(낮·오후·저녁·밤)은 PM 으로 본다.
+  const kr = raw.match(/(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분)?/)
+  if (kr) {
+    let h = Number(kr[1])
+    const min = Number(kr[2] ?? 0)
+    if (h > 12 || min > 59) return raw
+    const isAm = /오전|아침/.test(raw)
+    const isPm = /오후|낮|저녁|밤/.test(raw)
+    if (!isAm && !isPm) return raw // 오전/오후가 없으면 12시간제인지 알 수 없다
+    if (isAm && h === 12) h = 0
+    else if (isPm && h !== 12) h += 12
+    return toAmPm(h, min)
+  }
+
+  return raw
+}
+
+function toAmPm(hour24: number, minute: number): string {
+  const suffix = hour24 < 12 ? "AM" : "PM"
+  const h12 = hour24 % 12 === 0 ? 12 : hour24 % 12
+  return minute === 0 ? `${h12}${suffix}` : `${h12}:${String(minute).padStart(2, "0")}${suffix}`
+}
+
 function parseWeddingDate(value: unknown): Date | null {
   if (typeof value !== "string" || !value) return null
   const datePart = value.slice(0, 10)
@@ -263,6 +311,13 @@ export function buildFieldData(rawInput: RawInvitationData, now = new Date()): F
     data.wedding_date_en = `${MONTHS_EN[m]} ${day}, ${y}`
     data.wedding_date_display = `${y}. ${String(m + 1).padStart(2, "0")}. ${String(day).padStart(2, "0")}`
     data.wedding_weekday = WEEKDAYS_KR[d.getDay()]
+    // 날짜+시간을 한 줄로 쓰는 테마용(§scripts/themes/color-atelier). wedding_date_display 를
+    // 그대로 두는 이유: 이미 네 테마가 전부 그 키를 쓰고 있어, 거기에 시간을 붙이면
+    // 시간을 원치 않는 테마까지 한꺼번에 바뀐다.
+    const timeLabel = formatWeddingTimeLabel(raw.wedding_time)
+    data.wedding_datetime_display = timeLabel
+      ? `${data.wedding_date_display}. ${timeLabel}`
+      : data.wedding_date_display
     data.wedding_dday = computeDday(d, now)
   }
 

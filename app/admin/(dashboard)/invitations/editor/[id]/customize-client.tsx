@@ -27,6 +27,7 @@ import {
   BLOCK_KEYS,
   BLOCK_LABEL_FALLBACK,
   buildThemeTokens,
+  CALENDAR_BOX_DEFAULT,
   extractBlockOrder,
   extractBlockOverrides,
   extractDisabledSlots,
@@ -1752,6 +1753,23 @@ export default function CustomizeClient({
                                   defaultValue="#ffffff"
                                   onChange={(v) => setBlockOverride(b.key, { calendarDayTextColor: v })}
                                   onReset={() => setBlockOverride(b.key, { calendarDayTextColor: undefined })}
+                                />
+
+                                <BlockColorField
+                                  label="달력 박스 배경색"
+                                  value={override?.calendarBoxColor}
+                                  defaultValue={CALENDAR_BOX_DEFAULT.color}
+                                  onChange={(v) => setBlockOverride(b.key, { calendarBoxColor: v })}
+                                  onReset={() => setBlockOverride(b.key, { calendarBoxColor: undefined })}
+                                />
+                                <SizeSliderField
+                                  label="달력 박스 배경 불투명도 (%)"
+                                  value={override?.calendarBoxOpacity}
+                                  defaultValue={CALENDAR_BOX_DEFAULT.opacity}
+                                  min={0}
+                                  max={100}
+                                  onChange={(v) => setBlockOverride(b.key, { calendarBoxOpacity: v })}
+                                  onReset={() => setBlockOverride(b.key, { calendarBoxOpacity: undefined })}
                                 />
                               </>
                             )}

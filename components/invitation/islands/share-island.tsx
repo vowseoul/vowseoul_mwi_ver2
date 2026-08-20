@@ -104,6 +104,21 @@ function ShareIsland({ accent, data }: SlotProps) {
           {copied ? "청첩장 주소가 복사되었습니다" : "청첩장 주소 공유하기"}
         </button>
       </div>
+      {/* 개인정보처리방침 — 예전에는 InvitationFrame 이 문서 맨 끝에 따로 붙였다. 공유 버튼
+          블럭과 로고 사이에 아무 맥락 없이 뜨는 줄이 하나 더 생기는 모양이라, 이 블럭 안으로
+          들여왔다. share 슬롯이 없는 테마에서는 InvitationFrame 이 여전히 대신 붙인다
+          (개인정보 보호법 제30조 고지 도달 경로를 테마 구성과 무관하게 보장해야 한다).
+          target="_top": iframe 안이라 지정하지 않으면 청첩장 프레임 안에서 열린다. */}
+      <a
+        href="/privacy"
+        target="_top"
+        style={{
+          display: "block", textAlign: "center", marginTop: 14,
+          fontSize: 10, opacity: 0.35, color: "inherit", textDecoration: "underline",
+        }}
+      >
+        개인정보처리방침
+      </a>
       <VowSeoulLogotype style={{ display: "block", width: 88, height: "auto", margin: "20px auto 0", opacity: 0.5 }} />
     </div>
   )

@@ -207,6 +207,11 @@ const BlockOverrideSchema = z.object({
   calendarDayTextColor: nonEmptyString,
   /** calendar 블럭 전용: 업로드한 SVG 모양에 입힐 색상(hex). 미설정 시 테마 accent 색 */
   calendarDaySvgColor: nonEmptyString,
+  /** calendar 블럭 전용: 달력 박스 배경색(hex). 미설정 시 CALENDAR_BOX_DEFAULT.color */
+  calendarBoxColor: nonEmptyString,
+  /** calendar 블럭 전용: 달력 박스 배경 불투명도(0~100). 미설정 시 CALENDAR_BOX_DEFAULT.opacity.
+   *  배경에만 적용한다 — CSS opacity 로 주면 날짜 숫자까지 함께 흐려진다 */
+  calendarBoxOpacity: finiteNumber,
   /** calendar 블럭 전용: 달력 그리드 아래 날짜 줄 텍스트. 미설정 시 wedding_date에서 "YYYY년 MM월 DD일"로 자동 계산 */
   calendarDateText: nonEmptyString,
   /** calendar 블럭 전용: 달력 그리드 아래 시간 줄 텍스트. 미설정 시 "요일 wedding_time"으로 자동 계산 */
@@ -222,6 +227,9 @@ const BlockOverrideSchema = z.object({
 }).partial()
 
 export type BlockOverride = z.infer<typeof BlockOverrideSchema>
+
+/** 달력 박스 배경 기본값 — 렌더러(calendar-island)와 편집기 슬라이더가 공유한다 */
+export const CALENDAR_BOX_DEFAULT = { color: "#bebebe", opacity: 76 } as const
 
 /**
  * customization_overrides(jsonb) 에서 blocks(블럭별 오버라이드 맵)를 추출한다.
