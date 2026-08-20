@@ -1765,7 +1765,8 @@ export default function CustomizeClient({
                                   onReset={() => setBlockOverride(b.key, { calendarBoxColor: undefined })}
                                 />
                                 <SizeSliderField
-                                  label="달력 박스 배경 불투명도 (%)"
+                                  label="달력 박스 배경 불투명도"
+                                  unit="%"
                                   value={override?.calendarBoxOpacity}
                                   defaultValue={CALENDAR_BOX_DEFAULT.opacity}
                                   min={0}
@@ -1774,6 +1775,29 @@ export default function CustomizeClient({
                                   onReset={() => setBlockOverride(b.key, { calendarBoxOpacity: undefined })}
                                 />
                               </>
+                            )}
+                            {b.key === "account" && (
+                              <Field className="border-t pt-4">
+                                <FieldLabel>계좌 표시 방식</FieldLabel>
+                                <RadioGroup
+                                  value={override?.accountLayout || "list"}
+                                  onValueChange={(v) => setBlockOverride(b.key, { accountLayout: v as "list" | "card" })}
+                                  className="flex flex-row gap-6"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <RadioGroupItem value="list" id={`${b.key}-layout-list`} />
+                                    <Label htmlFor={`${b.key}-layout-list`} className="font-normal cursor-pointer">목록형</Label>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <RadioGroupItem value="card" id={`${b.key}-layout-card`} />
+                                    <Label htmlFor={`${b.key}-layout-card`} className="font-normal cursor-pointer">2열 카드형</Label>
+                                  </div>
+                                </RadioGroup>
+                                <p className="text-xs text-muted-foreground">
+                                  카드형은 카드를 누르면 계좌번호가 복사됩니다. 예전 자유 입력으로 등록된 혼주 계좌는
+                                  은행·번호가 나뉘어 있지 않아 카드형에서도 기존 줄 형태로 표시됩니다.
+                                </p>
+                              </Field>
                             )}
                             {b.key === "greeting" && (
                               <>

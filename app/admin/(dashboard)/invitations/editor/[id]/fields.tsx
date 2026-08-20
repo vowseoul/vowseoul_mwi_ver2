@@ -55,12 +55,15 @@ export function DragHandle({ attributes, listeners }: Pick<ReturnType<typeof use
 }
 
 /** 사이즈 토큰 슬라이더 — 색 토큰 UI와 동일한 "미설정=테마 기본값, 값 있으면 되돌리기 버튼" 규칙을 따른다 */
-export function SizeSliderField({ label, value, defaultValue, min, max, onChange, onReset }: {
+export function SizeSliderField({ label, value, defaultValue, min, max, unit = "px", onChange, onReset }: {
   label: string
   value: number | undefined
   defaultValue: number
   min: number
   max: number
+  /** 값 옆에 붙일 단위. 대부분 px 지만 불투명도처럼 아닌 것도 있다 — 고정해두면
+   *  "76px 불투명도" 처럼 라벨과 값이 서로 다른 말을 한다 */
+  unit?: string
   onChange: (v: number) => void
   onReset: () => void
 }) {
@@ -71,7 +74,7 @@ export function SizeSliderField({ label, value, defaultValue, min, max, onChange
       <div className="flex items-center justify-between">
         <FieldLabel>{label}</FieldLabel>
         <span className={cn("text-xs tabular-nums", isSet ? "text-foreground" : "text-muted-foreground")}>
-          {current}px{!isSet && " · 기본값"}
+          {current}{unit}{!isSet && " · 기본값"}
         </span>
       </div>
       <div className="flex items-center gap-2">

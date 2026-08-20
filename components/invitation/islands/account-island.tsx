@@ -11,25 +11,26 @@ import { composeAccountText, isAccountFilled, parseAccountList } from "@/lib/acc
 function composeAccount(bank?: string, number?: string, holder?: string): string {
   return [bank, number, holder].filter(Boolean).join(" ")
 }
-function AccountRow({ label, value }: { label: string; value: string }) {
-  const { isCopied, copy: copyText } = useCopyFeedback()
-  const copied = isCopied()
-  const numericValue = value.replace(/[^0-9]/g, "")
-  const copy = () => copyText(numericValue)
-  // 계좌번호만 복사해두고 카카오페이/토스 앱을 열어준다 — 은행마다 다른 공식 송금 API 없이도
+/* 계좌번호만 복사해두고 카카오페이/토스 앱을 열어준다 — 은행마다 다른 공식 송금 API 없이도
   // 이 딥링크들로 앱이 열리므로, 사용자가 그 안에서 붙여넣기만 하면 된다. 계좌번호+금액을
   // 앱에 바로 채워 넣는 방식(예: supertoss://send?bank=..&accountNo=..)은 은행명을 각 앱의
   // 비공식 은행 코드로 정확히 매핑해야 해서 은행별로 조용히 틀린 화면이 열릴 위험이 있다 —
   // "복사 + 앱 열기"가 덜 매끄럽지만 모든 은행에서 항상 정확하게 동작한다.
-  // 데스크톱처럼 해당 앱이 없는 환경에서는 딥링크가 그냥 무시되고 복사만 남는다(항상 안전한 폴백).
-  const sendViaKakaoPay = () => {
-    navigator.clipboard?.writeText(numericValue)
-    window.location.href = "kakaotalk://kakaopay/home"
-  }
-  const sendViaToss = () => {
-    navigator.clipboard?.writeText(numericValue)
-    window.location.href = "supertoss://send"
-  }
+   데스크톱처럼 해당 앱이 없는 환경에서는 딥링크가 그냥 무시되고 복사만 남는다(항상 안전한 폴백). */
+function openPayApp(app: "kakao" | "toss", accountNumber: string) {
+  navigator.clipboard?.writeText(accountNumber)
+  window.location.href = app === "kakao" ? "kakaotalk://kakaopay/home" : "supertoss://send"
+}
+
+const digitsOnly = (value: string) => value.replace(/[^0-9]/g, "")
+
+function AccountRow({ label, value }: { label: string; value: string }) {
+  const { isCopied, copy: copyText } = useCopyFeedback()
+  const copied = isCopied()
+  const numericValue = digitsOnly(value)
+  const copy = () => copyText(numericValue)
+  const sendViaKakaoPay = () => openPayApp("kakao", numericValue)
+  const sendViaToss = () => openPayApp("toss", numericValue)
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${soft(25)}`, gap: 8 }}>
       <div style={{ textAlign: "left", minWidth: 0 }}>
@@ -86,7 +87,81 @@ function ExtraAccountRow({ label, value }: { label: string; value: string }) {
     </div>
   )
 }
-function AccountIsland({ data, raw }: SlotProps) {
+/* ------------------------- 카드형 레이아웃 ------------------------- *
+ * 목록형과 같은 데이터를 2열 카드로 보여준다. 목록형이 한 줄에 "은행 번호 예금주"를
+ * 붙여 쓰는 반면, 카드형은 관계·이름·계좌번호·은행을 자리마다 나눠 놓아 여러 계좌가
+ * 있을 때 눈으로 훑기 쉽다.
+ *
+ * 카드 전체가 복사 버튼이다 — 목록형은 작은 아이콘을 정확히 눌러야 했다.
+ * 안쪽 송금 버튼은 클릭이 카드까지 올라가지 않게 막는다(누르면 복사까지 같이 일어나
+ * "복사됨" 표시가 떠서 무엇이 눌렸는지 헷갈린다).
+ * ------------------------------------------------------------------ */
+
+interface CardEntry { relation: string; holder: string; bank: string; number: string }
+
+function AccountCard({ entry }: { entry: CardEntry }) {
+  const { isCopied, copy } = useCopyFeedback()
+  const copied = isCopied()
+  const numericValue = digitsOnly(entry.number)
+
+  const payBtn = (label: string, onClick: () => void, color: string, fg: string): React.ReactNode => (
+    <button
+      onClick={(e) => { e.stopPropagation(); onClick() }}
+      style={{
+        flex: 1, padding: "5px 0", borderRadius: 4, cursor: "pointer", fontSize: 10.5,
+        border: `1px solid color-mix(in srgb, ${color} 45%, transparent)`,
+        background: `color-mix(in srgb, ${color} 14%, transparent)`, color: fg,
+      }}
+    >
+      {label}
+    </button>
+  )
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => copy(numericValue)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); copy(numericValue) } }}
+      aria-label={`${entry.relation} ${entry.holder} 계좌번호 복사`}
+      style={{
+        background: soft(10), padding: "12px 12px 10px", borderRadius: 4, cursor: "pointer",
+        display: "flex", flexDirection: "column", gap: 8,
+        outline: copied ? "1px solid currentColor" : "none",
+        transition: "outline-color 200ms ease-out",
+      }}
+    >
+      <div>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 6 }}>
+          <span style={{ fontSize: 11, opacity: 0.55 }}>{entry.relation}</span>
+          <span style={{ fontSize: 13, fontWeight: 600 }}>{entry.holder}</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 6, marginTop: 4 }}>
+          <span style={{ fontSize: 11.5, letterSpacing: "-0.01em", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {copied ? "복사되었습니다" : entry.number}
+          </span>
+          <span style={{ fontSize: 11, opacity: 0.55, flexShrink: 0 }}>{entry.bank}</span>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 5 }}>
+        {payBtn("카카오페이", () => openPayApp("kakao", numericValue), "#FFE300", "inherit")}
+        {payBtn("토스", () => openPayApp("toss", numericValue), "#0064FF", "inherit")}
+      </div>
+    </div>
+  )
+}
+
+function AccountCardColumn({ title, entries }: { title: string; entries: CardEntry[] }) {
+  if (entries.length === 0) return null
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+      <div style={{ fontSize: 12, textAlign: "center", paddingBottom: 6, borderBottom: `1px solid ${soft(25)}` }}>{title}</div>
+      {entries.map((e, i) => <AccountCard key={i} entry={e} />)}
+    </div>
+  )
+}
+
+function AccountIsland({ data, raw, blockOverrides }: SlotProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const groom = composeAccount(data.account_groom_bank, data.account_groom_number, data.account_groom_holder)
   const bride = composeAccount(data.account_bride_bank, data.account_bride_number, data.account_bride_holder)
@@ -120,8 +195,22 @@ function AccountIsland({ data, raw }: SlotProps) {
   const [open, setOpen] = useState(false)
   const showRows = !collapsible || open
 
+  // 카드형은 관계·이름·계좌번호·은행을 자리마다 나눠 놓아야 해서, 한 줄로 합쳐 쓰는
+  // 목록형과 달리 원본 필드를 그대로 받는다.
+  const isCard = blockOverrides?.account?.accountLayout === "card"
+  const cardEntry = (relation: string, holder?: string, bank?: string, number?: string): CardEntry | null =>
+    number ? { relation, holder: holder || "", bank: bank || "", number } : null
+  const groomCards = [
+    cardEntry("신랑", data.account_groom_holder, data.account_groom_bank, data.account_groom_number),
+    ...groomRows.map((a) => cardEntry("신랑 혼주", a.holder, a.bank, a.number)),
+  ].filter((e): e is CardEntry => e !== null)
+  const brideCards = [
+    cardEntry("신부", data.account_bride_holder, data.account_bride_bank, data.account_bride_number),
+    ...brideRows.map((a) => cardEntry("신부 혼주", a.holder, a.bank, a.number)),
+  ].filter((e): e is CardEntry => e !== null)
+
   return (
-    <div ref={rootRef} style={{ textAlign: "left", maxWidth: 320, margin: "0 auto" }}>
+    <div ref={rootRef} style={{ textAlign: "left", maxWidth: isCard ? 400 : 320, margin: "0 auto" }}>
       {collapsible && hasAny && (
         <button
           onClick={() => setOpen((v) => !v)}
@@ -136,16 +225,24 @@ function AccountIsland({ data, raw }: SlotProps) {
           <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 200ms ease-out" }} />
         </button>
       )}
-      {showRows && groom && <AccountRow label="신랑측" value={groom} />}
-      {showRows && bride && <AccountRow label="신부측" value={bride} />}
+      {showRows && isCard && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, alignItems: "start" }}>
+          <AccountCardColumn title="신랑측" entries={groomCards} />
+          <AccountCardColumn title="신부측" entries={brideCards} />
+        </div>
+      )}
+      {showRows && !isCard && groom && <AccountRow label="신랑측" value={groom} />}
+      {showRows && !isCard && bride && <AccountRow label="신부측" value={bride} />}
       {/* 혼주 계좌도 계좌마다 한 줄씩 — 본인 계좌와 똑같이 계좌번호만 복사되고
           카카오페이·토스 버튼도 함께 붙는다 */}
-      {showRows && groomRows.map((a, i) => (
+      {showRows && !isCard && groomRows.map((a, i) => (
         <AccountRow key={`g${i}`} label="신랑측 혼주" value={composeAccountText(a)} />
       ))}
-      {showRows && brideRows.map((a, i) => (
+      {showRows && !isCard && brideRows.map((a, i) => (
         <AccountRow key={`b${i}`} label="신부측 혼주" value={composeAccountText(a)} />
       ))}
+      {/* 예전 자유 입력(문자열)으로 발행된 혼주 계좌는 은행·번호가 나뉘어 있지 않아 카드로
+          만들 수 없다 — 카드형에서도 이 항목만 기존 줄 형태로 남긴다 */}
       {showRows && extraGroomText && <ExtraAccountRow label="신랑측 혼주" value={extraGroomText} />}
       {showRows && extraBrideText && <ExtraAccountRow label="신부측 혼주" value={extraBrideText} />}
     </div>

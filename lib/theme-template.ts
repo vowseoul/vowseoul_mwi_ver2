@@ -221,6 +221,8 @@ const BlockOverrideSchema = z.object({
   calendarDateText: nonEmptyString,
   /** calendar 블럭 전용: 달력 그리드 아래 시간 줄 텍스트. 미설정 시 "요일 wedding_time"으로 자동 계산 */
   calendarTimeText: nonEmptyString,
+  /** account 블럭 전용: 계좌 표시 방식. 미설정 시 기존 목록형("list") */
+  accountLayout: z.enum(["list", "card"]),
   /** greeting 블럭 전용: 인사말 아이콘 모양 (미설정 시 하트) */
   greetingIconShape: z.enum(["heart", "custom"]),
   /** greeting 블럭 전용: greetingIconShape가 'custom'일 때 사용할 업로드 이미지 URL */
