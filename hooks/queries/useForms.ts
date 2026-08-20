@@ -418,108 +418,78 @@ export function useSaveTemplateFieldsMutation() {
 }
 
 // 5. Fetch form instance by slug (for public client use)
+/**
+ * 서버 라우트를 거쳐 읽는다 — anon 키로 form_instances 를 직접 조회하지 않는다.
+ *
+ * 예전에는 이 자리에서 form_submissions(답변 전체)와 customers(신랑신부 이름)를
+ * 임베드로 함께 받아왔고, 그게 비밀번호 확인보다 먼저 도착했다. 이제 라우트가
+ * 잠금해제 쿠키를 보고 답변을 줄지 말지 결정한다(§app/api/form-instance/route.ts).
+ *
+ * 잠긴 응답은 { locked: true } 와 잠금 화면에 필요한 최소 필드만 담고 있다.
+ */
 export function useFormInstanceBySlugQuery(slug: string) {
   return useQuery({
     queryKey: ['form-instance-by-slug', slug],
     queryFn: async () => {
       if (!slug) return null
-      // access_password는 select 하지 않는다 — 실제 값을 브라우저로 보내지 않기 위함
-      // (검증은 app/api/form-auth/route.ts가 서버에서 대신한다). "설정 여부"만은
-      // 자동 잠금해제 판정에 필요해 계산된 컬럼(has_password)으로 받는다
-      // (§20260811020000_form_instance_password_security.sql).
-      const { data, error } = await supabase
-        .from('form_instances')
-        .select(`
-          id,
-          customer_id,
-          template_id,
-          fields_snapshot,
-          unique_url_slug,
-          status,
-          expires_at,
-          created_at,
-          has_password,
-          customer:customer_id (
-            id,
-            groom_name,
-            bride_name,
-            wedding_date
-          ),
-          form_submissions (
-            id,
-            data,
-            is_complete,
-            updated_at,
-            consent_agreed_at,
-            consent_version
-          )
-        `)
-        .eq('unique_url_slug', slug)
-        .single()
-
-      if (error) throw error
-      // 명시적 컬럼 목록으로 바꾸면서 postgrest-js가 문자열만으로 타입을 추론하기
-      // 시작해 customer 임베드를 배열로 잡는다(실제로는 to-one이라 런타임엔 항상
-      // 단일 객체) — Database 제네릭 없이 쓰는 이 프로젝트 전역 관례대로 any로 둔다.
-      return data as any
+      const res = await fetch(`/api/form-instance?slug=${encodeURIComponent(slug)}`)
+      if (!res.ok) throw new Error('양식을 찾을 수 없습니다.')
+      return (await res.json()) as any
     },
     enabled: !!slug,
   })
 }
 
 // 6. Submit public form response mutation
+/**
+ * 임시저장·제출 — anon 으로 DB 를 직접 건드리지 않고 서버 라우트를 거친다.
+ *
+ * 읽기만 서버로 옮기고 쓰기는 남기려 했지만 성립하지 않았다. PostgREST 의 upsert 는
+ * 충돌 검사에, update 는 WHERE 절에 각각 SELECT 권한을 요구해서(둘 다 401 로 실제
+ * 확인) 쓰기를 anon 에 남기려면 읽기도 함께 열어둬야 했다 — 그러면 닫으려던 답변
+ * 유출이 그대로 남는다.
+ *
+ * instanceId/customerId 를 더 이상 클라이언트가 정하지 않는다. 슬러그로 서버가 찾은
+ * 값을 되받아 뒤이은 /api/form-submit 호출에 쓴다.
+ */
 export function useSubmitFormMutation() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({
-      instanceId,
-      customerId,
+      slug,
       data,
       isComplete,
       consentAgreedAt,
       consentVersion,
     }: {
-      instanceId: string
-      customerId: string
+      slug: string
       data: any
       isComplete: boolean
       /** 정보 수집 동의 시각/버전 — app/form/[slug]/page.tsx의 동의 화면 통과 시에만 전달된다 */
       consentAgreedAt?: string
       consentVersion?: string
     }) => {
-      // 1. Upsert form_submissions
-      const { error: submissionError } = await supabase
-        .from('form_submissions')
-        .upsert([{
-          form_instance_id: instanceId,
-          customer_id: customerId,
-          data: data,
-          is_complete: isComplete,
-          missing_fields: [],
-          ...(consentAgreedAt ? { consent_agreed_at: consentAgreedAt, consent_version: consentVersion } : {}),
-        }], { onConflict: 'form_instance_id' })
+      const res = await fetch('/api/form-answers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug, data, isComplete, consentAgreedAt, consentVersion }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || '저장하지 못했습니다.')
+      }
+      const { instanceId, customerId } = await res.json()
 
-      if (submissionError) throw submissionError
-
-      // 2. Update form_instances status to 'completed'
       if (isComplete) {
-        const { error: instanceError } = await supabase
-          .from('form_instances')
-          .update({ status: 'completed' })
-          .eq('id', instanceId)
-
-        if (instanceError) throw instanceError
-
-        // 3. Update customer details using the submitted form fields.
-        // customers 는 RLS 상 authenticated 만 쓸 수 있어 공개 폼(anon)에서는
-        // 직접 update 할 수 없다 — service_role 을 쓰는 서버 라우트를 대신 호출한다.
-        const res = await fetch('/api/form-submit', {
+        // customers 갱신·알림은 기존 라우트가 담당한다. 여기에 넘기는 id 는 서버가
+        // 슬러그로 찾아 돌려준 값이다.
+        const done = await fetch('/api/form-submit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ instanceId, customerId, data }),
         })
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}))
+        if (!done.ok) {
+          const body = await done.json().catch(() => ({}))
           throw new Error(body.error || '고객 정보를 갱신하지 못했습니다.')
         }
       }
@@ -527,7 +497,7 @@ export function useSubmitFormMutation() {
       return true
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['form-instance-by-slug', variables.instanceId] })
+      queryClient.invalidateQueries({ queryKey: ['form-instance-by-slug', variables.slug] })
     },
   })
 }

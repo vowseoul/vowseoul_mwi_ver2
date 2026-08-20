@@ -31,14 +31,7 @@ const EXPECTED_ANON_SELECT: Record<string, AnonAccess> = {
   // --- 하객·고객이 로그인 없이 읽어야 하는 것 ---
   bgms: "open",                    // 청첩장 배경음악 목록
   themes: "open",                  // 공개 템플릿 갤러리
-  form_instances: "open",          // 공개 폼(/form/[slug]) — 단 access_password 컬럼은 제외(아래 별도 검사)
   settings: "open",                // 일부 키만(아래 별도 검사)
-
-  // --- 알려진 미해결 항목 ---
-  // 폼 답변 전체가 익명에게 열려 있다. 20260814000000 주석이 "소유권 검증 강화는
-  // Phase 2로 별도 추적한다"고 남긴 그 항목이다. 고칠 때 이 줄을 "blocked" 로
-  // 바꾸면 되고, 그때까지는 현 상태를 정확히 적어둔다 — 모르는 것과 알고 미룬 것은 다르다.
-  form_submissions: "open",
 
   // --- 나머지 전부 ---
   account_info: "blocked",
@@ -49,6 +42,10 @@ const EXPECTED_ANON_SELECT: Record<string, AnonAccess> = {
   customers: "blocked",
   faqs: "blocked",
   field_library: "blocked",
+  // 공개 폼(/form/[slug])이 읽고 쓰지만 전부 서버 라우트를 거친다 — 브라우저는
+  // anon 키로 이 두 표를 건드리지 않는다(§app/api/form-instance, form-answers).
+  form_instances: "blocked",
+  form_submissions: "blocked",
   form_template_fields: "blocked",
   form_template_versions: "blocked",
   form_templates: "blocked",
@@ -69,13 +66,6 @@ const EXPECTED_ANON_SELECT: Record<string, AnonAccess> = {
   visit_logs: "blocked",
 }
 
-/**
- * 익명 조회에 쓸 컬럼. 기본은 '*' 인데 form_instances 만 예외다 —
- * '*' 는 access_password 까지 요구해 401 이 난다. 그게 정상이고, 앱도 같은 이유로
- * FORM_INSTANCE_COLUMNS 로 명시 조회한다(§hooks/queries/useForms.ts).
- */
-const PROBE_COLUMN: Record<string, string> = { form_instances: "id" }
-
 /** 익명에게 열려 있어야 하는 settings 키 — 공개 페이지(약관·개인정보·청첩장)가 읽는다 */
 const PUBLIC_SETTINGS_KEYS = ["data_retention", "fonts", "is_feature_open"]
 
@@ -83,12 +73,13 @@ let available = false
 beforeAll(() => { available = supabaseAvailable() })
 
 async function counts(table: string) {
-  const col = PROBE_COLUMN[table] ?? "*"
   const [anon, admin] = await Promise.all([
-    anonClient().from(table).select(col, { count: "exact", head: true }),
+    anonClient().from(table).select("*", { count: "exact", head: true }),
     adminClient().from(table).select("*", { count: "exact", head: true }),
   ])
-  return { anon: anon.count ?? 0, admin: admin.count ?? 0, anonError: anon.error }
+  // head:true 요청은 응답 본문이 없어 supabase-js 가 error.code 를 채우지 못한다
+  // (권한 거부여도 { message: "" } 만 온다). 그래서 HTTP 상태로 판정한다.
+  return { anon: anon.count ?? 0, admin: admin.count ?? 0, anonStatus: anon.status }
 }
 
 describe("표별 익명 접근 범위", () => {
@@ -103,7 +94,7 @@ describe("표별 익명 접근 범위", () => {
   for (const [table, expected] of Object.entries(EXPECTED_ANON_SELECT)) {
     it(`${table} — 익명에게 ${expected === "open" ? "열려 있다" : "닫혀 있다"}`, async (ctx) => {
       if (!available) return ctx.skip()
-      const { anon, admin, anonError } = await counts(table)
+      const { anon, admin, anonStatus } = await counts(table)
 
       if (admin === 0) {
         // 행이 없으면 "막혀서 0" 과 "원래 0" 을 구분할 수 없다. 통과시키면 거짓 안심이 된다.
@@ -111,9 +102,17 @@ describe("표별 익명 접근 범위", () => {
       }
 
       if (expected === "blocked") {
-        expect(anonError, `${table}: 익명 조회가 오류 없이 통과했는지 확인`).toBeNull()
-        expect(anon, `${table}: service_role 은 ${admin}행을 보는데 익명도 ${anon}행을 본다`).toBe(0)
+        // 막히는 방식이 둘이다: 권한 자체가 없으면 401 로 거부되고, 권한은 있는데
+        // RLS 가 거르면 200 에 0행이 온다. 둘 다 "익명은 못 읽는다"이다. 그 외의
+        // 상태(404 처럼 표가 사라진 경우)로 0행이 나오면 검사가 무의미하므로 가른다.
+        if (anonStatus === 401 || anonStatus === 403) {
+          expect(anonStatus, `${table}: 권한으로 차단됨`).toBeGreaterThanOrEqual(401)
+        } else {
+          expect(anonStatus, `${table}: 예상치 못한 응답 상태`).toBeLessThan(300)
+          expect(anon, `${table}: service_role 은 ${admin}행을 보는데 익명도 ${anon}행을 본다`).toBe(0)
+        }
       } else {
+        expect(anonStatus, `${table}: 공개돼야 하는데 ${anonStatus} 로 거부됐다`).toBeLessThan(300)
         expect(anon, `${table}: 공개돼야 하는데 익명이 한 행도 못 본다`).toBeGreaterThan(0)
       }
     }, 30000)
@@ -146,13 +145,12 @@ describe("form_instances.access_password 컬럼 차단", () => {
     expect(error).not.toBeNull()
   }, 30000)
 
-  it("공개 폼이 쓰는 컬럼은 여전히 읽힌다", async (ctx) => {
+  it("공개 폼이 읽던 컬럼도 이제 익명에게는 닫혀 있다", async (ctx) => {
     if (!available) return ctx.skip()
-    const { data, error } = await anonSelect(
-      "id, customer_id, unique_url_slug, status, expires_at, has_password"
-    )
-    expect(error).toBeNull()
-    expect(data).not.toBeNull()
+    // 공개 폼은 이 값들을 /api/form-instance 를 통해 받는다 — 브라우저가 DB 를
+    // 직접 읽지 않으므로, 익명에게 열어둘 이유가 남아 있지 않다.
+    const { error } = await anonSelect("id, unique_url_slug, status, has_password")
+    expect(error?.code).toBe("42501")
   }, 30000)
 
   it("has_password 가 실제 비밀번호 설정 여부와 일치한다", async (ctx) => {
@@ -165,6 +163,30 @@ describe("form_instances.access_password 컬럼 차단", () => {
         r.has_password !== (r.access_password != null && r.access_password !== "")
     )
     expect(mismatched).toHaveLength(0)
+  }, 30000)
+})
+
+describe("공개 폼 표는 익명이 쓸 수도 없다", () => {
+  // 읽기만 막고 쓰기를 남기려던 게 원래 계획이었는데, PostgREST 는 쓰기에도 읽기
+  // 권한을 요구해서(upsert 는 충돌 검사에, update 는 WHERE 절에) 분할이 성립하지
+  // 않았다. 결국 둘 다 서버 라우트로 옮겼으므로 쓰기 차단도 함께 고정한다.
+  it("form_submissions 에 직접 쓸 수 없다", async (ctx) => {
+    if (!available) return ctx.skip()
+    const { error } = await anonClient().from("form_submissions").insert({
+      form_instance_id: "00000000-0000-0000-0000-000000000000",
+      customer_id: "00000000-0000-0000-0000-000000000000",
+      data: {},
+    })
+    // 권한 거부여야 한다. 외래키 위반(23503)이 나면 INSERT 자체는 허용됐다는 뜻이다.
+    expect(error?.code).toBe("42501")
+  }, 30000)
+
+  it("form_instances 의 status 를 직접 바꿀 수 없다", async (ctx) => {
+    if (!available) return ctx.skip()
+    const { error } = await anonClient()
+      .from("form_instances").update({ status: "completed" })
+      .eq("id", "00000000-0000-0000-0000-000000000000")
+    expect(error?.code).toBe("42501")
   }, 30000)
 })
 

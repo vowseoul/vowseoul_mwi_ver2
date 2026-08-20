@@ -118,7 +118,7 @@ function SupportContact({ email }: { email: string }) {
 }
 
 function PublicFormContent({ slug }: { slug: string }) {
-  const { data: instance, isLoading, error } = useFormInstanceBySlugQuery(slug)
+  const { data: instance, isLoading, error, refetch } = useFormInstanceBySlugQuery(slug)
   const submitMutation = useSubmitFormMutation()
   const { data: bgmLibrary } = useBgmLibraryQuery()
 
@@ -257,7 +257,9 @@ function PublicFormContent({ slug }: { slug: string }) {
   // Initialize password lock & form values
   useEffect(() => {
     if (instance) {
-      if (!instance.has_password) {
+      // 서버가 잠금해제 쿠키까지 보고 내린 판정을 그대로 따른다. 비밀번호가 없는 폼도,
+      // 이미 통과해 쿠키를 가진 폼도 locked:false 로 내려온다.
+      if (!instance.locked) {
         setIsUnlocked(true)
       }
       
@@ -346,7 +348,9 @@ function PublicFormContent({ slug }: { slug: string }) {
         body: JSON.stringify({ slug, password }),
       })
       if (res.ok) {
-        setIsUnlocked(true)
+        // 로컬 플래그만 켜면 화면은 열리는데 답변이 비어 있다 — 잠긴 응답에는
+        // 폼 구성도 기존 답변도 없기 때문이다. 쿠키를 받은 상태로 다시 받아온다.
+        await refetch()
         setPasswordError('')
       } else {
         setPasswordError('비밀번호가 올바르지 않습니다. 다시 확인해주세요.')
@@ -638,8 +642,7 @@ function PublicFormContent({ slug }: { slug: string }) {
     // Server DB save
     try {
       await submitMutation.mutateAsync({
-        instanceId: instance.id,
-        customerId: instance.customer_id,
+        slug,
         data: formValues,
         isComplete: false,
         consentAgreedAt: consentAgreedAt ?? undefined,
@@ -703,8 +706,7 @@ function PublicFormContent({ slug }: { slug: string }) {
     setSubmitting(true)
     try {
       await submitMutation.mutateAsync({
-        instanceId: instance.id,
-        customerId: instance.customer_id,
+        slug,
         data: formValues,
         isComplete: true,
         consentAgreedAt: consentAgreedAt ?? undefined,

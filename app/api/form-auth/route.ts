@@ -3,6 +3,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { passwordMatches } from "@/lib/dashboard-session"
 import { verifyPassword, isHashedDashboardPassword } from "@/lib/dashboard-password"
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit"
+import { createFormToken, formCookieName } from "@/lib/form-session"
 
 /**
  * 정보 수집 폼(/form/[slug]) 비밀번호 검증.
@@ -10,6 +11,10 @@ import { checkRateLimit, getClientIp } from "@/lib/rate-limit"
  * 이전에는 useFormInstanceBySlugQuery가 access_password를 select('*')로 그대로
  * 브라우저에 내려보내 클라이언트에서 문자열 비교했다 — 네트워크 탭에 실제 비밀번호가
  * 노출됐다. 이제 비교는 여기서만 일어나고, 값 자체는 클라이언트로 전달되지 않는다.
+ *
+ * 통과하면 서명된 httpOnly 쿠키를 발급한다 — 폼 내용과 이미 제출한 답변은 그 쿠키를
+ * 가진 요청에만 내려간다(§app/api/form-instance/route.ts). 이전에는 통과 여부가
+ * 클라이언트 상태일 뿐이라 답변이 비밀번호 확인 전에 이미 브라우저에 도착해 있었다.
  *
  * access_password는 이제 새로 발행되는 폼부터 PBKDF2 해시로 저장된다
  * (§app/admin/(dashboard)/forms/publish/page.tsx, lib/dashboard-password.ts —
@@ -38,7 +43,7 @@ export async function POST(request: Request) {
   const supabase = createSupabaseAdminClient()
   const { data: instance } = await supabase
     .from("form_instances")
-    .select("access_password")
+    .select("id, access_password")
     .eq("unique_url_slug", slug)
     .maybeSingle()
 
@@ -46,7 +51,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "양식을 찾을 수 없습니다." }, { status: 404 })
   }
   if (!instance.access_password) {
-    return NextResponse.json({ ok: true })
+    return unlockedResponse(instance.id)
   }
   const stored = instance.access_password
   const matches = isHashedDashboardPassword(stored)
@@ -56,5 +61,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "비밀번호가 올바르지 않습니다." }, { status: 401 })
   }
 
-  return NextResponse.json({ ok: true })
+  return unlockedResponse(instance.id)
+}
+
+function unlockedResponse(instanceId: string) {
+  const { token, maxAge } = createFormToken(instanceId)
+  const res = NextResponse.json({ ok: true })
+  res.cookies.set(formCookieName(instanceId), token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge,
+  })
+  return res
 }
