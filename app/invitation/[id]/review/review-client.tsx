@@ -154,6 +154,7 @@ export default function ReviewClient({
           intro={intro}
           width={Math.min(size.w, 480)}
           height={size.h - 44 - 60}
+          fullBleed
           onBlockClick={commentMode ? (key) => setActiveBlock(key) : undefined}
         />
       </div>
