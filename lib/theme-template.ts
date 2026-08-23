@@ -247,7 +247,9 @@ const BlockOverrideSchema = z.object({
 export type BlockOverride = z.infer<typeof BlockOverrideSchema>
 
 /** 달력 박스 배경 기본값 — 렌더러(calendar-island)와 편집기 슬라이더가 공유한다 */
-export const CALENDAR_BOX_DEFAULT = { color: "#bebebe", opacity: 76 } as const
+// 기본값을 바꿀 때는 기존 청첩장에 현재 값을 명시적으로 박아 넣은 뒤 바꿔야 한다 —
+// 오버라이드가 없는 청첩장은 이 값을 따라가므로, 그냥 바꾸면 이미 발행된 것까지 함께 변한다.
+export const CALENDAR_BOX_DEFAULT = { color: "#ffffff", opacity: 25 } as const
 
 /**
  * 블럭별 배경 농담(濃淡) — customization_overrides.blockTint.

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { supabase } from "@/lib/supabase"
-import { uploadImage } from "@/lib/image-upload"
+import { uploadImage, SHARE_THUMBNAIL_OPTIONS, isShareThumbnailField } from "@/lib/image-upload"
 import { InvitationFrame, type TokenMap } from "@/components/invitation/invitation-frame"
 import { ScaledPreview } from "@/components/ui/scaled-preview"
 import { buildSlots } from "@/components/invitation/slot-registry"
@@ -508,7 +508,12 @@ export default function CustomizeClient({
   const uploadImageField = async (key: string, file: File) => {
     setUploadingKey(key)
     try {
-      const url = await uploadImage(file, "invitations/content")
+      // 공유 썸네일은 목록에서 작게 보이는 그림이라 갤러리 사진과 같은 크기가 필요 없다
+      const url = await uploadImage(
+        file,
+        "invitations/content",
+        isShareThumbnailField(key) ? SHARE_THUMBNAIL_OPTIONS : undefined,
+      )
       setField(key, url)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "이미지 업로드에 실패했습니다.")
@@ -774,7 +779,7 @@ export default function CustomizeClient({
       {/* 편집 */}
       <div className="order-2 min-w-0 pb-24 xl:order-1 xl:h-full xl:max-w-3xl xl:overflow-y-auto xl:pb-0 xl:pr-1">
         <div className="mb-6">
-          <h1 className="text-2xl font-semibold text-foreground">청첩장 커스터마이즈</h1>
+          <h1 className="text-2xl font-semibold text-foreground">청첩장 편집기</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {groom && bride ? `${groom} ♥ ${bride}` : "청첩장"}
           </p>

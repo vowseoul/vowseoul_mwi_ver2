@@ -43,7 +43,7 @@ import {
   Plus
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { uploadImage } from '@/lib/image-upload'
+import { uploadImage, SHARE_THUMBNAIL_OPTIONS, isShareThumbnailField } from '@/lib/image-upload'
 import { Logo } from '@/components/logo'
 import { Checkbox } from '@/components/ui/checkbox'
 import { supabase } from '@/lib/supabase'
@@ -181,7 +181,7 @@ function PublicFormContent({ slug }: { slug: string }) {
       const results = await Promise.all(
         files.map(async (file) => {
           try {
-            return await uploadImage(file, 'forms/submissions')
+            return await uploadImage(file, 'forms/submissions', isShareThumbnailField(fieldKey) ? SHARE_THUMBNAIL_OPTIONS : undefined)
           } catch (err) {
             toast.error(err instanceof Error ? err.message : `'${file.name}' 업로드에 실패했습니다.`)
             return null

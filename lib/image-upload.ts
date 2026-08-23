@@ -25,6 +25,20 @@ const DEFAULTS: Required<CompressOptions> = {
   quality: 0.85,
 }
 
+/**
+ * 카카오 공유 썸네일 전용 프리셋.
+ *
+ * 공유 카드는 목록에서 작게 보이는 그림이라 갤러리 사진과 같은 2000px 이 필요 없다.
+ * 실제로 한 청첩장의 공유 이미지가 15MB 였는데, 그만큼이 공유될 때마다 오간다.
+ * 카카오 권장 규격이 800×400 이므로 장변 1200px 이면 고해상도 화면에서도 충분하다.
+ */
+export const SHARE_THUMBNAIL_OPTIONS: CompressOptions = { maxDimension: 1200, quality: 0.8 }
+
+/** 이 필드에 올라가는 이미지는 공유 썸네일로 쓰인다 */
+export function isShareThumbnailField(fieldKey: string): boolean {
+  return fieldKey === "kakao_share_img" || fieldKey === "kakaoThumbnail"
+}
+
 /** 리사이즈가 의미 없는 형식 — 벡터이거나 애니메이션이 깨진다 */
 const SKIP_COMPRESSION = ["image/svg+xml", "image/gif"]
 

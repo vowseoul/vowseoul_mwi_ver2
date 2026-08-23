@@ -554,11 +554,29 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
     )
   }
 
-  if (error || !customer) {
+  // 조회 실패와 "그런 고객이 없음"을 나눈다 — 한 문장으로 묶으면 담당자가 무엇을 해야 할지
+  // 알 수 없다. 지워진 고객이면 목록으로 돌아가는 게 맞고, 통신이 실패한 거라면 필요한 건
+  // 다시 시도다(돌아가봐야 목록도 같은 이유로 비어 있다).
+  if (error) {
     return (
-      <div className="w-full h-[60vh] flex flex-col items-center justify-center">
-        <p className="text-destructive font-semibold">고객을 찾을 수 없거나 에러가 발생했습니다.</p>
-        <Button className="mt-4" asChild>
+      <div className="w-full h-[60vh] flex flex-col items-center justify-center gap-4">
+        <p className="text-destructive font-semibold">고객 정보를 불러오지 못했습니다.</p>
+        <div className="flex gap-2">
+          <Button onClick={() => window.location.reload()}>다시 시도</Button>
+          <Button variant="outline" asChild>
+            <Link href="/admin/customers">목록으로</Link>
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!customer) {
+    return (
+      <div className="w-full h-[60vh] flex flex-col items-center justify-center gap-4">
+        <p className="font-semibold">이 고객을 찾을 수 없습니다.</p>
+        <p className="text-sm text-muted-foreground">삭제되었거나 주소가 잘못되었을 수 있습니다.</p>
+        <Button asChild>
           <Link href="/admin/customers">목록으로 돌아가기</Link>
         </Button>
       </div>

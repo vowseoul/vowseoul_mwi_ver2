@@ -318,7 +318,7 @@ export default function AssetsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">에셋 및 템플릿 관리</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">에셋 관리</h1>
         <p className="text-muted-foreground">테마, 문구, BGM을 관리합니다.</p>
       </div>
 
