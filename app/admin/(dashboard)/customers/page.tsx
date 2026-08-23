@@ -5,7 +5,7 @@ import { useDocumentTitle } from "@/lib/use-document-title"
 import React, { useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import {
   Table,
@@ -32,6 +32,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
   useCustomersQuery,
+  useDeletedCustomersQuery,
+  usePurgeCustomersMutation,
   useDeleteCustomerMutation,
   Customer
 } from '@/hooks/queries/useCustomers'
@@ -52,6 +54,7 @@ import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
 import { logAuditEvent } from '@/lib/audit-log'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
+import { Checkbox } from '@/components/ui/checkbox'
 
 export default function CustomersPage() {
   useDocumentTitle("고객 관리")
@@ -400,6 +403,105 @@ export default function CustomersPage() {
           </Button>
         </div>
       )}
+
+      <DeletedCustomersPanel />
     </div>
+  )
+}
+
+/**
+ * 삭제 대기 고객 — 목록에서 지운 고객은 deleted_at 만 찍힌 채 어디에도 보이지 않았다.
+ * 되돌릴 수도, 완전히 지울 수도 없어 계속 쌓이기만 했다.
+ *
+ * 기본은 접혀 있다. 자주 쓰는 기능이 아니고, 되돌릴 수 없는 삭제가 목록 화면에 늘
+ * 펼쳐져 있는 것 자체가 위험하다.
+ */
+function DeletedCustomersPanel() {
+  const [open, setOpen] = useState(false)
+  const [selected, setSelected] = useState<string[]>([])
+  const { data: deleted = [], isLoading } = useDeletedCustomersQuery(open)
+  const purge = usePurgeCustomersMutation()
+
+  const daysSince = (iso: string | null) =>
+    iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86400000) : 0
+
+  const toggle = (id: string) =>
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+
+  const handlePurge = async () => {
+    const names = deleted.filter((c) => selected.includes(c.id))
+      .map((c) => `${c.groom_name ?? ''} & ${c.bride_name ?? ''}`.trim()).join(', ')
+    const ok = await confirmDialog({
+      title: `${selected.length}명을 완전히 삭제할까요?`,
+      description: `${names}
+
+청첩장·폼 응답·하객 데이터까지 함께 지워지며 되돌릴 수 없습니다.`,
+      destructive: true,
+      confirmText: '완전 삭제',
+    })
+    if (!ok) return
+    try {
+      const res = await purge.mutateAsync(selected)
+      setSelected([])
+      toast.success(`${res.purged}명을 완전히 삭제했습니다.`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '완전 삭제에 실패했습니다.')
+    }
+  }
+
+  return (
+    <Card className="mt-8">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <CardTitle className="text-base font-medium">삭제 대기 고객</CardTitle>
+            <CardDescription>
+              목록에서 삭제한 고객입니다. 아직 데이터가 남아 있어 되돌릴 수 있습니다.
+            </CardDescription>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setOpen((v) => !v)}>
+            {open ? '접기' : '열기'}
+          </Button>
+        </div>
+      </CardHeader>
+      {open && (
+        <CardContent className="space-y-3">
+          {isLoading ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">불러오는 중…</p>
+          ) : deleted.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">삭제 대기 중인 고객이 없습니다.</p>
+          ) : (
+            <>
+              <div className="divide-y divide-border rounded-md border">
+                {deleted.map((c) => (
+                  <label key={c.id} className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm">
+                    <Checkbox checked={selected.includes(c.id)} onCheckedChange={() => toggle(c.id)} />
+                    <span className="min-w-0 flex-1 truncate">
+                      {c.groom_name || '미지정'} &amp; {c.bride_name || '미지정'}
+                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                      삭제 후 {daysSince(c.deleted_at)}일
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs text-muted-foreground">
+                  {selected.length > 0 ? `${selected.length}명 선택됨` : '지울 고객을 선택하세요.'}
+                </span>
+                <Button
+                  variant="outline" size="sm"
+                  className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                  disabled={selected.length === 0 || purge.isPending}
+                  onClick={handlePurge}
+                >
+                  {purge.isPending ? '삭제 중…' : '선택 항목 완전 삭제'}
+                </Button>
+              </div>
+            </>
+          )}
+        </CardContent>
+      )}
+    </Card>
   )
 }

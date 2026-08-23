@@ -164,6 +164,49 @@ export function useUpdateCustomerMutation() {
 }
 
 // 5. Delete customer mutation (soft delete)
+/**
+ * 삭제 대기(소프트 삭제) 고객 목록.
+ *
+ * 기본 목록은 deleted_at 이 없는 것만 보여주므로, 지운 고객은 화면 어디에도 나타나지
+ * 않는다 — 되돌릴 수도, 완전히 지울 수도 없는 상태로 계속 쌓였다. 고객 관리 화면
+ * 아래에서 이 목록을 열어 골라 지운다.
+ */
+export function useDeletedCustomersQuery(enabled: boolean) {
+  return useQuery({
+    queryKey: ['customers', 'deleted'],
+    enabled,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .not('deleted_at', 'is', null)
+        .order('deleted_at', { ascending: true })
+      if (error) throw error
+      return data as Customer[]
+    },
+  })
+}
+
+/** 완전 삭제 — 되돌릴 수 없다. 여러 표를 가로지르므로 서버 라우트가 처리한다 */
+export function usePurgeCustomersMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (customerIds: string[]) => {
+      const res = await fetch('/api/admin/purge-customer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerIds }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || '완전 삭제에 실패했습니다.')
+      return json as { purged: number }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customers'] })
+    },
+  })
+}
+
 export function useDeleteCustomerMutation() {
   const queryClient = useQueryClient()
 

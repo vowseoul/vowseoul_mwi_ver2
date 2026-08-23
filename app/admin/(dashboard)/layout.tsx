@@ -40,7 +40,7 @@ const navItems = [
   { href: '/admin/assets', label: '에셋 관리', icon: Palette },
   { href: '/admin/statistics', label: '통계', icon: BarChart3 },
   { href: '/admin/inquiries', label: '문의 관리', icon: HelpCircle },
-  { href: '/admin/settings', label: '시스템 설정', icon: Settings },
+  { href: '/admin/settings', label: '시스템 설정', icon: Settings, adminOnly: true },
 ]
 
 /** useLinkStatus()는 자신을 감싼 <Link>의 진행중 여부를 읽으므로 Link 내부에서만 호출할 수 있다.
@@ -59,10 +59,14 @@ export default function AdminLayout({
   const { setAuth, fetchData } = useAppStore()
   const [authChecking, setAuthChecking] = React.useState(true)
   const [authorized, setAuthorized] = React.useState(false)
+  const [role, setRole] = React.useState<string | null>(null)
 
   useEffect(() => {
     fetchData()
   }, [fetchData])
+
+  /** 시스템 설정은 운영자만 — 눌러봐야 되돌려보내지는 메뉴를 보여줄 이유가 없다 */
+  const visibleNavItems = navItems.filter((item) => !item.adminOnly || role === 'ADMIN')
 
   useEffect(() => {
     async function checkAdminAuth() {
@@ -80,13 +84,16 @@ export default function AdminLayout({
           .eq('id', user.id)
           .single()
 
-        if (profileError || profile?.role !== 'ADMIN') {
-          console.error('Not authorized as admin:', profileError)
-          // Attempt sign out since they are not an admin
+        // 등록된 직원이면 통과시킨다. 예전에는 ADMIN 만 들여보내 디자이너 계정이
+        // 로그인 직후 다시 로그아웃되었다. 시스템 설정만 운영자 전용이고,
+        // 그 판정은 여기(메뉴 숨김)와 proxy.ts(주소 직접 입력 차단) 양쪽에서 한다.
+        if (profileError || !profile?.role) {
+          console.error('Not authorized as staff:', profileError)
           await supabase.auth.signOut()
           window.location.href = '/admin/login'
           return
         }
+        setRole(profile.role)
 
         setAuth(true, true)
         setAuthorized(true)
@@ -131,7 +138,7 @@ export default function AdminLayout({
         </div>
         <nav className="p-4">
           <ul className="space-y-1">
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const isActive = pathname === item.href || 
                 (item.href !== '/admin' && pathname.startsWith(item.href))
               return (
@@ -168,7 +175,7 @@ export default function AdminLayout({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-48">
-                {navItems.map((item) => (
+                {visibleNavItems.map((item) => (
                   <DropdownMenuItem key={item.href} asChild>
                     <Link href={item.href} className="flex items-center gap-2">
                       <NavIcon icon={item.icon} />
