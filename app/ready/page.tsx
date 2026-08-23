@@ -1,5 +1,11 @@
 import Link from "next/link"
 import { Globe, ArrowRight } from "lucide-react"
+import type { Metadata } from "next"
+
+/** 탭·북마크에서 구분되도록 화면마다 제목을 준다 (§app/templates/layout.tsx) */
+export const metadata: Metadata = {
+  title: "준비 중 | VOW SEOUL",
+}
 
 export default function ReadyPage() {
   return (

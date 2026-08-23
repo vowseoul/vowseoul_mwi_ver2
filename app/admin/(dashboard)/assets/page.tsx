@@ -19,6 +19,7 @@ import { fontPreviewStyle, fontFileFormatLabel, extractGoogleFontFamily, type Re
 import { useInjectFontFaces } from '@/lib/use-font-faces'
 import { Plus, Play, Pause, Trash2, Upload, Loader2, CheckCircle2 } from 'lucide-react'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
+import { toast } from 'sonner'
 import { uploadFile, deleteFile } from '@/lib/storage'
 import { uploadImage } from '@/lib/image-upload'
 import Link from 'next/link'
@@ -97,7 +98,7 @@ export default function AssetsPage() {
     if (!e.target.files || e.target.files.length === 0) return
     const file = e.target.files[0]
     if (!/\.(ttf|otf|woff2?|eot)$/i.test(file.name)) {
-      alert('TTF/OTF/WOFF/WOFF2 형식의 폰트 파일만 업로드할 수 있습니다.')
+      toast.error('TTF/OTF/WOFF/WOFF2 형식의 폰트 파일만 업로드할 수 있습니다.')
       if (e.target) e.target.value = ''
       return
     }
@@ -106,7 +107,7 @@ export default function AssetsPage() {
       const url = await uploadFile(file, 'fonts')
       setFontFileUrl(url)
     } catch (err) {
-      alert('폰트 파일 업로드에 실패했습니다.')
+      toast.error('폰트 파일 업로드에 실패했습니다.')
     } finally {
       setIsUploadingFont(false)
       if (e.target) e.target.value = ''
@@ -114,9 +115,9 @@ export default function AssetsPage() {
   }
 
   const handleSaveFont = async (): Promise<boolean> => {
-    if (!newFontName || !newFontFamily) { alert('폰트명과 폰트 패밀리명을 입력해주세요.'); return false }
-    if (fontType === 'embed' && !embedCode) { alert('웹 폰트 임베드 코드를 입력해주세요.'); return false }
-    if (fontType === 'file' && !fontFileUrl) { alert('폰트 파일을 업로드해주세요.'); return false }
+    if (!newFontName || !newFontFamily) { toast.error('폰트명과 폰트 패밀리명을 입력해주세요.'); return false }
+    if (fontType === 'embed' && !embedCode) { toast.error('웹 폰트 임베드 코드를 입력해주세요.'); return false }
+    if (fontType === 'file' && !fontFileUrl) { toast.error('폰트 파일을 업로드해주세요.'); return false }
 
     try {
       // 구글 폰트 임베드는 @import가 실제로 등록하는 family 이름이 정해져 있다 — 직접 입력한
@@ -147,7 +148,7 @@ export default function AssetsPage() {
       return true
     } catch (err) {
       console.error('Save font error:', err)
-      alert('폰트 저장에 실패했습니다.')
+      toast.error('폰트 저장에 실패했습니다.')
       return false
     }
   }
@@ -173,7 +174,7 @@ export default function AssetsPage() {
       await fetchFonts()
     } catch (err) {
       console.error('Delete font error:', err)
-      alert('폰트 삭제에 실패했습니다.')
+      toast.error('폰트 삭제에 실패했습니다.')
     }
   }
 
@@ -236,7 +237,7 @@ export default function AssetsPage() {
       const url = await uploadImage(e.target.files[0], 'theme-thumbnails')
       setThemeImageUrl(url)
     } catch (err) {
-      alert('테마 이미지 업로드에 실패했습니다.')
+      toast.error('테마 이미지 업로드에 실패했습니다.')
     } finally {
       setIsUploadingTheme(false)
       if (e.target) e.target.value = ''
@@ -254,7 +255,7 @@ export default function AssetsPage() {
       const url = await uploadFile(e.target.files[0], 'bgm')
       setBgmUrl(url)
     } catch (err) {
-      alert('BGM 파일 업로드에 실패했습니다.')
+      toast.error('BGM 파일 업로드에 실패했습니다.')
     } finally {
       setIsUploadingBgm(false)
       if (e.target) e.target.value = ''
@@ -262,7 +263,7 @@ export default function AssetsPage() {
   }
 
   const handleSaveBgm = async (): Promise<boolean> => {
-    if (!bgmUrl || !newBgmName) { alert('음원 파일과 곡명을 입력해주세요.'); return false }
+    if (!bgmUrl || !newBgmName) { toast.error('음원 파일과 곡명을 입력해주세요.'); return false }
     // bgms.id 는 uuid 컬럼이라 유효한 UUID 형식이어야 한다 ('bgm_'+타임스탬프는 삽입이 실패함).
     const newBgm = {
       id: editingBgmId || crypto.randomUUID(),
@@ -275,7 +276,7 @@ export default function AssetsPage() {
     }
     const { error } = await supabase.from('bgms').upsert(newBgm)
     if (error) {
-      alert('BGM 저장에 실패했습니다.')
+      toast.error('BGM 저장에 실패했습니다.')
       console.error(error)
       return false
     }
@@ -289,7 +290,7 @@ export default function AssetsPage() {
     if (!(await confirmDialog({ title: '이 BGM을 삭제하시겠습니까?', destructive: true, confirmText: '삭제' }))) return
     const { error } = await supabase.from('bgms').delete().eq('id', id)
     if (error) {
-      alert('BGM 삭제에 실패했습니다.')
+      toast.error('BGM 삭제에 실패했습니다.')
     } else {
       fetchBgms()
     }

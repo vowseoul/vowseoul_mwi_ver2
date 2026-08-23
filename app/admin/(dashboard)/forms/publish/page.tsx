@@ -357,7 +357,7 @@ export default function FormPublishPage() {
     <Suspense fallback={
       <div className="w-full h-[60vh] flex flex-col items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        <p className="text-muted-foreground text-sm mt-4">데이터 로딩 중...</p>
+        <p className="text-muted-foreground text-sm mt-4">불러오는 중…</p>
       </div>
     }>
       <FormPublishContent />

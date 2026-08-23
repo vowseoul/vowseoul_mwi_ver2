@@ -514,7 +514,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
       return
     }
     if (!publicSlug.trim()) {
-      toast.error('접속 숏링크 주소(slug)를 입력해주세요.')
+      toast.error('접속 링크 주소를 입력해주세요.')
       return
     }
 
@@ -1151,7 +1151,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                         </Field>
 
                         <Field>
-                          <FieldLabel>접속 숏링크 주소 (slug) *</FieldLabel>
+                          <FieldLabel>접속 링크 주소 *</FieldLabel>
                           <Input
                             value={publicSlug}
                             onChange={(e) => setPublicSlug(e.target.value)}

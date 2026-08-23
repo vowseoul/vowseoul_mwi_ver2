@@ -290,7 +290,7 @@ export default function CustomersPage() {
           </div>
 
           {/* 데스크톱/태블릿 테이블 — sm 이상에서만 보인다 */}
-          <div className="hidden sm:block">
+          <div className="hidden sm:block overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>

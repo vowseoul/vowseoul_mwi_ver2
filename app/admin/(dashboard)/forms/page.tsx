@@ -981,7 +981,7 @@ export default function FormTemplatesPage() {
             {isLoading ? (
               <CardListSkeleton rows={6} />
             ) : error ? (
-              <p className="py-8 text-center text-sm text-destructive">템플릿 로딩 중 오류가 발생했습니다.</p>
+              <p className="py-8 text-center text-sm text-destructive">템플릿을 불러오지 못했습니다.</p>
             ) : filteredTemplates?.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">등록된 폼 템플릿이 없습니다.</p>
             ) : (
@@ -1096,7 +1096,7 @@ export default function FormTemplatesPage() {
               ) : error ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-8 text-destructive">
-                    템플릿 로딩 중 오류가 발생했습니다.
+                    템플릿을 불러오지 못했습니다.
                   </TableCell>
                 </TableRow>
               ) : filteredTemplates?.length === 0 ? (

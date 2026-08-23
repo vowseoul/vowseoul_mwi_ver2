@@ -120,7 +120,7 @@ export default function InvitationsListPage() {
       return
     }
     if (!publicSlug.trim()) {
-      toast.error('접속 숏링크 주소(slug)를 입력해주세요.')
+      toast.error('접속 링크 주소를 입력해주세요.')
       return
     }
 
@@ -415,7 +415,7 @@ export default function InvitationsListPage() {
           </div>
 
           {/* 데스크톱/태블릿 테이블 — sm 이상에서만 보인다 */}
-          <div className="hidden sm:block">
+          <div className="hidden sm:block overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>

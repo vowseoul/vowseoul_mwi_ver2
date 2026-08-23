@@ -12,8 +12,8 @@ import {
 import { ArrowLeft, Box, LayoutGrid, Loader2, Sparkles, HelpCircle } from 'lucide-react'
 
 export default function BlockLibraryPage() {
-  const { data: blocks, isLoading: isLoadingBlocks } = useBlockLibraryQuery()
-  const { data: variants, isLoading: isLoadingVariants } = useBlockVariantsQuery()
+  const { data: blocks, isLoading: isLoadingBlocks, isError: blocksFailed } = useBlockLibraryQuery()
+  const { data: variants, isLoading: isLoadingVariants, isError: variantsFailed } = useBlockVariantsQuery()
 
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
 
@@ -31,7 +31,18 @@ export default function BlockLibraryPage() {
     return (
       <div className="w-full h-[60vh] flex flex-col items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        <p className="text-muted-foreground text-sm mt-4">블럭 라이브러리를 로드하고 있습니다...</p>
+        <p className="text-muted-foreground text-sm mt-4">블럭 라이브러리를 불러오는 중…</p>
+      </div>
+    )
+  }
+
+  // 조회 실패를 빈 목록으로 보여주면 "등록된 블럭이 없다"로 읽힌다 — 담당자가 없는 줄 알고
+  // 새로 만들기 시작하는 쪽이 더 나쁘다.
+  if (blocksFailed || variantsFailed) {
+    return (
+      <div className="w-full h-[60vh] flex flex-col items-center justify-center gap-3">
+        <p className="text-sm text-destructive">블럭 라이브러리를 불러오지 못했습니다.</p>
+        <Button variant="outline" size="sm" onClick={() => window.location.reload()}>다시 시도</Button>
       </div>
     )
   }

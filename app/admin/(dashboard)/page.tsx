@@ -36,8 +36,13 @@ function toDateStr(d: Date) {
 
 export default function AdminDashboard() {
   const { orders } = useAppStore()
-  const { data: recentCustomersData } = useCustomersQuery({}, 1, 5)
+  const { data: recentCustomersData, isError: recentCustomersFailed } = useCustomersQuery({}, 1, 5)
   const recentCustomers = recentCustomersData?.data || []
+  // 조회에 실패해도 빈 배열이라 "등록된 고객이 없습니다" 가 그대로 떴다 — 아무것도
+  // 없는 것과 못 불러온 것은 담당자가 취해야 할 행동이 다르다.
+  const recentCustomersEmptyText = recentCustomersFailed
+    ? "고객 목록을 불러오지 못했습니다. 새로고침해 주세요."
+    : "등록된 고객이 없습니다."
 
   // 실제 결제는 네이버 스마트스토어에서 앱 밖에서 이뤄지므로, 여기서는
   // "오늘 등록된 주문"을 집계한다(§1-B orders 재정의 참고).
@@ -309,7 +314,7 @@ export default function AdminDashboard() {
               </div>
             ))}
             {recentCustomers.length === 0 && (
-              <p className="py-6 text-center text-sm text-muted-foreground">등록된 고객이 없습니다.</p>
+              <p className={`py-6 text-center text-sm ${recentCustomersFailed ? "text-destructive" : "text-muted-foreground"}`}>{recentCustomersEmptyText}</p>
             )}
           </div>
 
@@ -341,8 +346,8 @@ export default function AdminDashboard() {
                 ))}
                 {recentCustomers.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-muted-foreground">
-                      등록된 고객이 없습니다.
+                    <td colSpan={5} className={`py-8 text-center ${recentCustomersFailed ? "text-destructive" : "text-muted-foreground"}`}>
+                      {recentCustomersEmptyText}
                     </td>
                   </tr>
                 )}
