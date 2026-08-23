@@ -28,9 +28,13 @@ import {
   BLOCK_LABEL_FALLBACK,
   buildThemeTokens,
   ACCOUNT_CARD_BG_DEFAULT,
+  BLOCK_TINT_DEFAULT_OPACITY,
   BLOCK_TINT_PATTERNS,
+  BLOCK_TINT_STEP_LABELS,
   CALENDAR_BOX_DEFAULT,
   extractBlockTint,
+  extractBlockTintOpacity,
+  type BlockTintStep,
   extractBlockOrder,
   extractBlockOverrides,
   extractDisabledSlots,
@@ -236,6 +240,9 @@ export default function CustomizeClient({
   /** 블럭별 배경 농담 — 테마 메인 배경은 그대로 두고 섹션마다 한 겹 덮는다 */
   const [blockTint, setBlockTint] = useState<string>(
     () => extractBlockTint(invitation.customization_overrides)
+  )
+  const [blockTintOpacity, setBlockTintOpacity] = useState(
+    () => extractBlockTintOpacity(invitation.customization_overrides)
   )
   /** 스크롤 모션 — 고객 셀프편집 화면(edit-client.tsx)에서도 동일 값을 바꿀 수 있다 */
   const [scrollMotion, setScrollMotion] = useState<ScrollMotionSettings>(
@@ -644,7 +651,7 @@ export default function CustomizeClient({
       .from("invitations")
       .update({
         content_data: contentPayload,
-        customization_overrides: { ...preservedOverrideKeys, ...cleanTokens, disabled_slots: disabledSlots, blocks: blockOverrides, sectionImages, scrollMotion, intro, introEnabled: intro.enabled, blockTint },
+        customization_overrides: { ...preservedOverrideKeys, ...cleanTokens, disabled_slots: disabledSlots, blocks: blockOverrides, sectionImages, scrollMotion, intro, introEnabled: intro.enabled, blockTint, blockTintOpacity },
         block_order: fullBlockOrder,
         bgm_url: bgmUrl || null,
         theme_version_id: themeVersionId,
@@ -1470,9 +1477,28 @@ export default function CustomizeClient({
                       </RadioGroup>
                       <p className="text-xs text-muted-foreground">
                         배경색은 그대로 두고 섹션마다 한 겹 덮어 경계를 만듭니다.
-                        A는 기본 배경, B는 흰색 40%, C는 검정 5%입니다.
+                        A·B는 흰색, C는 검정을 덮으며 농도는 아래에서 조절합니다.
                       </p>
                     </Field>
+
+                    <div className="mt-4 grid grid-cols-1 gap-4 border-t pt-4">
+                      {(Object.keys(BLOCK_TINT_DEFAULT_OPACITY) as BlockTintStep[]).map((step) => (
+                        <SizeSliderField
+                          key={step}
+                          label={BLOCK_TINT_STEP_LABELS[step]}
+                          unit="%"
+                          value={blockTintOpacity[step] === BLOCK_TINT_DEFAULT_OPACITY[step] ? undefined : blockTintOpacity[step]}
+                          defaultValue={BLOCK_TINT_DEFAULT_OPACITY[step]}
+                          min={0}
+                          max={100}
+                          onChange={(v) => setBlockTintOpacity((prev) => ({ ...prev, [step]: v }))}
+                          onReset={() => setBlockTintOpacity((prev) => ({ ...prev, [step]: BLOCK_TINT_DEFAULT_OPACITY[step] }))}
+                        />
+                      ))}
+                      <p className="text-xs text-muted-foreground">
+                        0%면 그 단계는 아무것도 덮지 않습니다 — A의 기본값이 0%인 이유입니다.
+                      </p>
+                    </div>
                   </div>
                 )}
               </CardContent>
@@ -2220,6 +2246,7 @@ export default function CustomizeClient({
               fontFaces={fontFaces}
               blockOverrides={blockOverrides}
               blockTint={blockTint}
+              blockTintOpacity={blockTintOpacity}
               blockOrder={fullBlockOrder}
               hiddenBlocks={hiddenBlocks}
               sectionImages={sectionImages}

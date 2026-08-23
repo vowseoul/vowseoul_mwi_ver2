@@ -3,7 +3,7 @@ import { redirect, notFound } from 'next/navigation'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { dashboardCookieName, verifyDashboardToken } from '@/lib/dashboard-session'
 import { mergeInvitationRaw } from '@/lib/invitation-data'
-import { buildInvitationTokens, extractBlockOverrides, extractBlockTint, extractDisabledSlots, extractSectionImages, getHiddenBlocks, type ThemeRow } from '@/lib/theme-template'
+import { buildInvitationTokens, extractBlockOverrides, extractBlockTint, extractBlockTintOpacity, extractDisabledSlots, extractSectionImages, getHiddenBlocks, type ThemeRow } from '@/lib/theme-template'
 import { extractScrollMotion } from '@/lib/scroll-motion'
 import { extractIntroSettings } from '@/lib/intro-settings'
 import { fetchRegisteredFonts, resolveFontFaces } from '@/lib/fonts'
@@ -88,6 +88,7 @@ export default async function InvitationReviewPage({ params }: { params: Promise
       disabledSlots={disabledSlots}
       blockOverrides={extractBlockOverrides(invitation.customization_overrides)}
       blockTint={extractBlockTint(invitation.customization_overrides)}
+      blockTintOpacity={extractBlockTintOpacity(invitation.customization_overrides)}
       hiddenBlocks={getHiddenBlocks(disabledSlots)}
       sectionImages={extractSectionImages(invitation.customization_overrides)}
       scrollMotion={extractScrollMotion(invitation.customization_overrides)}

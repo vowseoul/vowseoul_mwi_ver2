@@ -264,20 +264,31 @@ export const CALENDAR_BOX_DEFAULT = { color: "#bebebe", opacity: 76 } as const
  * 그런 테마에서는 편집기가 이 설정을 아예 보여주지 않는다 — 겹쳐 칠하면 의도한
  * 교대가 뭉개지고, 무엇보다 효과 없는 컨트롤은 버그로 읽힌다.
  */
-export const BLOCK_TINT_STEPS = {
-  A: null,
-  B: "linear-gradient(rgba(255,255,255,.4), rgba(255,255,255,.4))",
-  C: "linear-gradient(rgba(0,0,0,.05), rgba(0,0,0,.05))",
-} as const
+/**
+ * 각 단계가 덮을 색. 농도는 관리자가 조절하고 색은 고정한다 — 색까지 열면 "블럭별
+ * 배경 농담"이 아니라 섹션마다 배경색을 따로 칠하는 기능이 되고, 그건 테마가 할 일이다.
+ *
+ * A 도 흰색을 쓰되 기본 농도가 0 이라 아무것도 덮지 않는다(= 테마 기본 배경 그대로).
+ * 0 일 때는 오버레이 자체를 얹지 않아 흔적이 남지 않는다.
+ */
+export const BLOCK_TINT_STEP_COLORS = { A: "255,255,255", B: "255,255,255", C: "0,0,0" } as const
 
-export const BLOCK_TINT_PATTERNS: { value: string; label: string; steps: ("A" | "B" | "C")[] }[] = [
+export type BlockTintStep = keyof typeof BLOCK_TINT_STEP_COLORS
+
+export const BLOCK_TINT_DEFAULT_OPACITY: Record<BlockTintStep, number> = { A: 0, B: 40, C: 5 }
+
+export const BLOCK_TINT_STEP_LABELS: Record<BlockTintStep, string> = {
+  A: "A · 기본 배경",
+  B: "B · 밝게",
+  C: "C · 어둡게",
+}
+
+export const BLOCK_TINT_PATTERNS: { value: string; label: string; steps: BlockTintStep[] }[] = [
   { value: "none", label: "기본 배경색 (통일)", steps: ["A"] },
   { value: "abac", label: "A-B-A-C 반복", steps: ["A", "B", "A", "C"] },
   { value: "abab", label: "A-B-A-B 반복", steps: ["A", "B", "A", "B"] },
   { value: "acac", label: "A-C-A-C 반복", steps: ["A", "C", "A", "C"] },
 ]
-
-export type BlockTintPattern = string
 
 /** customization_overrides.blockTint 를 안전하게 읽는다 (모르는 값은 'none') */
 export function extractBlockTint(overrides: unknown): string {
@@ -286,10 +297,34 @@ export function extractBlockTint(overrides: unknown): string {
   return typeof v === "string" && BLOCK_TINT_PATTERNS.some((p) => p.value === v) ? v : "none"
 }
 
+/** customization_overrides.blockTintOpacity 를 안전하게 읽는다 (없거나 범위를 벗어나면 기본값) */
+export function extractBlockTintOpacity(overrides: unknown): Record<BlockTintStep, number> {
+  const out = { ...BLOCK_TINT_DEFAULT_OPACITY }
+  const raw = (overrides && typeof overrides === "object")
+    ? (overrides as Record<string, unknown>).blockTintOpacity
+    : null
+  if (raw && typeof raw === "object") {
+    for (const step of Object.keys(out) as BlockTintStep[]) {
+      const v = (raw as Record<string, unknown>)[step]
+      if (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 100) out[step] = v
+    }
+  }
+  return out
+}
+
 /** 패턴 이름 → 보이는 섹션 순서대로 적용할 오버레이 목록 (null 이면 덮지 않음) */
-export function blockTintOverlays(pattern: string): (string | null)[] {
+export function blockTintOverlays(
+  pattern: string,
+  opacity: Record<BlockTintStep, number> = BLOCK_TINT_DEFAULT_OPACITY,
+): (string | null)[] {
   const found = BLOCK_TINT_PATTERNS.find((p) => p.value === pattern) ?? BLOCK_TINT_PATTERNS[0]
-  return found.steps.map((step) => BLOCK_TINT_STEPS[step])
+  return found.steps.map((step) => {
+    const pct = Math.min(100, Math.max(0, opacity[step] ?? BLOCK_TINT_DEFAULT_OPACITY[step]))
+    if (pct <= 0) return null
+    const rgb = BLOCK_TINT_STEP_COLORS[step]
+    const a = (pct / 100).toFixed(3)
+    return `linear-gradient(rgba(${rgb},${a}), rgba(${rgb},${a}))`
+  })
 }
 
 /** 계좌 카드 배경 기본값 — 렌더러(account-island)와 편집기가 공유한다 */

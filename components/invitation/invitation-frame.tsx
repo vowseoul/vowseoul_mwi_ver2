@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { buildFontFaceRule, joinFontFaceCss } from "@/lib/fonts"
 import { SCROLL_MOTION_INTENSITY_PARAMS, DEFAULT_SCROLL_MOTION, type ScrollMotionSettings } from "@/lib/scroll-motion"
-import { blockTintOverlays } from "@/lib/theme-template"
+import { blockTintOverlays, BLOCK_TINT_DEFAULT_OPACITY, type BlockTintStep } from "@/lib/theme-template"
 import { DEFAULT_INTRO_SETTINGS, hasIntroContent, type IntroSettings } from "@/lib/intro-settings"
 import type { BlockOverride, SectionImage } from "@/lib/theme-template"
 
@@ -70,6 +70,8 @@ interface InvitationFrameProps {
   preventZoom?: boolean
   /** 블럭별 배경 농담 패턴 (§lib/theme-template.ts BLOCK_TINT_PATTERNS). 미설정 시 "none" */
   blockTint?: string
+  /** 단계별 농도(0~100). 미설정 시 BLOCK_TINT_DEFAULT_OPACITY */
+  blockTintOpacity?: Record<BlockTintStep, number>
   /** 프레임이 화면을 꽉 채우는가.
    *
    * 편집기·테마 미리보기에서는 이 프레임이 페이지 위에 얹힌 "기기 목업"이라 둥근 모서리와
@@ -198,10 +200,15 @@ function applyAltClasses(doc: Document, hiddenBlocks: string[]) {
  * applyAltClasses 와 같은 이유로 hiddenBlocks 가 바뀔 때마다 다시 계산한다: 중간 블럭을
  * 끄면 순서가 밀려 A-B-A-C 가 어긋나기 때문이다.
  */
-function applyBlockTint(doc: Document, hiddenBlocks: string[], pattern: string) {
+function applyBlockTint(
+  doc: Document,
+  hiddenBlocks: string[],
+  pattern: string,
+  opacity: Record<BlockTintStep, number>,
+) {
   const sections = doc.querySelectorAll<HTMLElement>("[data-block]")
   const selfAlternating = doc.querySelector("[data-alt][data-block]") !== null
-  const overlays = blockTintOverlays(pattern)
+  const overlays = blockTintOverlays(pattern, opacity)
   let i = 0
   sections.forEach((el) => {
     el.style.removeProperty("background-image")
@@ -229,6 +236,7 @@ export function InvitationFrame({
   preventZoom = false,
   fullBleed = false,
   blockTint = "none",
+  blockTintOpacity = BLOCK_TINT_DEFAULT_OPACITY,
   sectionImages = [],
   onBlockClick,
   scrollMotion,
@@ -396,8 +404,8 @@ export function InvitationFrame({
   useEffect(() => {
     if (!doc) return
     applyAltClasses(doc, hiddenBlocks)
-    applyBlockTint(doc, hiddenBlocks, blockTint)
-  }, [doc, hiddenBlocks, blockOrder, blockTint])
+    applyBlockTint(doc, hiddenBlocks, blockTint, blockTintOpacity)
+  }, [doc, hiddenBlocks, blockOrder, blockTint, blockTintOpacity])
 
   // 블럭 타이틀/영문 소제목 바인딩 — 빈 값이면 템플릿 기본 텍스트로 되돌아간다. 공백만 입력한
   // 경우는 truthy라 그대로 빈칸처럼 보이는 값이 적용된다(의도적으로 구분되는 상태 — 완전히

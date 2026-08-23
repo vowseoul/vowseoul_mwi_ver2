@@ -30,6 +30,7 @@ export default function ReviewClient({
   disabledSlots = [],
   blockOverrides = {},
   blockTint = "none",
+  blockTintOpacity,
   hiddenBlocks = [],
   sectionImages = [],
   scrollMotion,
@@ -46,6 +47,7 @@ export default function ReviewClient({
   blockOverrides?: BlockOverrideMap
   /** 블럭별 배경 농담 패턴 (customization_overrides.blockTint) */
   blockTint?: string
+  blockTintOpacity?: Record<string, number>
   hiddenBlocks?: string[]
   sectionImages?: SectionImage[]
   scrollMotion?: ScrollMotionSettings
@@ -159,6 +161,7 @@ export default function ReviewClient({
           height={size.h - 44 - 60}
           fullBleed
           blockTint={blockTint}
+          blockTintOpacity={blockTintOpacity as never}
           onBlockClick={commentMode ? (key) => setActiveBlock(key) : undefined}
         />
       </div>

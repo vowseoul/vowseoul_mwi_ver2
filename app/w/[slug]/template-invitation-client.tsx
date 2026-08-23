@@ -24,6 +24,7 @@ export default function TemplateInvitationClient({
   disabledSlots = [],
   blockOverrides = {},
   blockTint = "none",
+  blockTintOpacity,
   blockOrder,
   hiddenBlocks = [],
   sectionImages = [],
@@ -41,6 +42,7 @@ export default function TemplateInvitationClient({
   blockOverrides?: BlockOverrideMap
   /** 블럭별 배경 농담 패턴 (customization_overrides.blockTint) */
   blockTint?: string
+  blockTintOpacity?: Record<string, number>
   /** 블럭 노출 순서 (invitations.block_order). 없으면 테마 기본 순서 */
   blockOrder?: string[]
   /** disabledSlots 중 섹션 전체를 감춰야 하는 블럭 키 (getHiddenBlocks) */
@@ -91,6 +93,7 @@ export default function TemplateInvitationClient({
         preventZoom
         fullBleed
         blockTint={blockTint}
+        blockTintOpacity={blockTintOpacity as never}
       />
     </div>
   )
