@@ -106,6 +106,12 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
 
   // State to hold the current builder list
   const [selectedFields, setSelectedFields] = useState<any[]>([])
+  /** 펼쳐둔 단계 — 기본은 전부 접힘.
+   *  필드가 40개 가까이 되면 단계 구분 없이 세로로 쌓여, 중간을 고치려면 계속 스크롤해야 했다.
+   *  접힌 상태에서도 섹션·필드 수가 보이므로 어느 단계를 열지 바로 고를 수 있다. */
+  const [expandedPages, setExpandedPages] = useState<string[]>([])
+  const togglePage = (title: string) =>
+    setExpandedPages((prev) => (prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title]))
   /** 방금 추가되거나 이동된 필드 — 잠깐 배경을 강조해 "이게 방금 바뀐 행"임을 보여준다(Feedback) */
   const [highlightFieldKey, setHighlightFieldKey] = useState<string | null>(null)
   const flashHighlight = (fieldKey: string) => {
@@ -825,6 +831,17 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                     {/* Page Header */}
                     <div className="bg-muted px-4 py-3 border-b border-border flex items-center justify-between">
                       <div className="flex items-center gap-2 flex-1 max-w-md">
+                        <button
+                          type="button"
+                          onClick={() => togglePage(page.title)}
+                          aria-expanded={expandedPages.includes(page.title)}
+                          aria-label={`단계 ${pIdx + 1} ${expandedPages.includes(page.title) ? '접기' : '펼치기'}`}
+                          className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-background"
+                        >
+                          <ChevronDown
+                            className={cn('h-4 w-4 transition-transform', expandedPages.includes(page.title) ? '' : '-rotate-90')}
+                          />
+                        </button>
                         <span className="text-xs font-bold text-muted-foreground shrink-0">단계 {pIdx + 1}:</span>
                         <input
                           key={`page-input-${page.title}`}
@@ -863,8 +880,19 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                       </div>
                     </div>
 
+                    {/* 접혀 있을 때도 무엇이 들어 있는지는 보여준다 — 그래야 어느 단계를 열지 고른다 */}
+                    {!expandedPages.includes(page.title) && (
+                      <button
+                        type="button"
+                        onClick={() => togglePage(page.title)}
+                        className="w-full px-4 py-3 text-left text-xs text-muted-foreground hover:bg-muted/50"
+                      >
+                        섹션 {page.sections.length}개 · 필드 {page.sections.reduce((n, sec) => n + sec.fields.length, 0)}개
+                      </button>
+                    )}
+
                     {/* Page Content: Sections List */}
-                    <div className="p-4 space-y-4">
+                    <div className={cn('p-4 space-y-4', expandedPages.includes(page.title) ? '' : 'hidden')}>
                       {page.sections.map((section, sIdx) => (
                         <div
                           key={`section-${sIdx}`}
