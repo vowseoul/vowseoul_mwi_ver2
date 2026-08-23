@@ -44,6 +44,7 @@ import {
   type ThemeRow,
 } from "@/lib/theme-template"
 import { extractScrollMotion, type ScrollMotionSettings } from "@/lib/scroll-motion"
+import { writeToClipboard } from "@/lib/use-copy-feedback"
 import { extractIntroSettings, DEFAULT_INTRO_SETTINGS, INTRO_MODES, INTRO_ALIGNS, INTRO_FONT_SIZE_MIN, INTRO_FONT_SIZE_MAX, type IntroSettings } from "@/lib/intro-settings"
 import { ScrollMotionField } from "@/components/invitation/scroll-motion-field"
 import { buildFontStack, fetchRegisteredFonts, fontPreviewStyle, resolveFontFaces, type RegisteredFont } from "@/lib/fonts"
@@ -688,7 +689,7 @@ export default function CustomizeClient({
   const auditLogsQuery = useAuditLogsQuery(invitationId)
 
   // "검수 요청 보내기" — 알림톡 자동발송은 아직 없어서(§FEATURE_ROADMAP.md §9, 별도 비용 발생)
-  // 이번 라운드에는 링크+비밀번호를 클립보드에 복사해 관리자가 직접 전달하는 방식으로 시작한다.
+  // 이번 라운드에는 링크를 클립보드에 복사해 관리자가 직접 전달하는 방식으로 시작한다.
   const sendReviewRequest = async () => {
     if (!publicSlug) return
     setSendingReview(true)
@@ -702,9 +703,16 @@ export default function CustomizeClient({
       setReviewStatus("in_review")
       setReviewRound(nextRound)
 
-      const text = `${window.location.origin}/review/${publicSlug}\n비밀번호: 등록된 고객 연락처 뒷 4자리`
-      await navigator.clipboard.writeText(text)
-      toast.success("검수 링크가 복사되었습니다. (비밀번호는 등록된 고객 연락처 뒷 4자리입니다) 고객에게 전달해주세요.")
+      // 링크만 복사한다. 예전에는 뒤에 비밀번호 안내를 줄바꿈으로 붙였는데, 카카오톡에
+      // 붙여넣으면 그 줄까지 한 덩어리로 인식돼 주소가
+      //   .../review/vow-hlwh0s%20비밀번호:%20등록된%20고객%20연락처%20뒷%204자리
+      // 처럼 깨진 링크가 됐다. 안내 문구는 토스트로만 남긴다 — 관리자는 보고, 링크는 깨끗하다.
+      const copied = await writeToClipboard(`${window.location.origin}/review/${publicSlug}`)
+      toast.success(
+        copied
+          ? "검수 링크가 복사되었습니다. 비밀번호는 등록된 고객 연락처 뒷 4자리입니다."
+          : "검수 요청을 보냈습니다. 링크 복사에 실패했으니 주소창에서 직접 복사해주세요.",
+      )
       const { data: userData } = await supabase.auth.getUser()
       logAuditEvent(supabase, {
         invitationId,

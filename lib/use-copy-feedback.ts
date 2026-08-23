@@ -21,7 +21,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
  * 하객 대부분이 카카오톡 인앱 브라우저로 청첩장을 연다 — 계좌번호 복사가 조용히
  * 안 되는 건 이 앱에서 가장 아픈 자리다.
  */
-async function writeToClipboard(text: string): Promise<boolean> {
+export async function writeToClipboard(text: string): Promise<boolean> {
   if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
     try {
       await navigator.clipboard.writeText(text)

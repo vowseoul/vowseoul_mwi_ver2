@@ -167,8 +167,35 @@ const PARENTS_DECEASED_OPTION_TO_KEY: Record<string, string> = {
   "신부측 어머니": "bride_mother_deceased",
 }
 
+/**
+ * 값이 base64 data URI 인가.
+ *
+ * 폼의 이미지 업로드는 이제 Storage 를 거쳐 URL 만 저장하지만(§app/form/[slug]/page.tsx),
+ * 그 수정 이전에 제출된 form_submissions 행에는 base64 원본이 그대로 남아 있다. 실제로
+ * 한 행이 20MB 짜리 kakao_share_img 를 들고 있었다. 초안 생성·폼 동기화는 폼 값을 그대로
+ * content_data 로 복사하고 og_meta 에도 같은 값을 넣으므로, 그 행 하나 때문에 40MB 짜리
+ * PATCH 가 만들어져 요청이 끝나지 않고 "Failed to fetch" 로 죽었다.
+ *
+ * 그래서 이 길목에서 걸러낸다. 두 함수가 초안 생성(useCreateInvitationMutation)과 폼
+ * 동기화(handleSyncFormToInvitation) 양쪽의 공통 경로라, 여기 한 곳만 막으면 둘 다 낫는다.
+ * 이미 쌓인 데이터는 scripts/migrate-base64-images.mjs 가 Storage 로 옮긴다.
+ */
+export function isDataUri(value: unknown): boolean {
+  return typeof value === "string" && value.startsWith("data:")
+}
+
 export function buildContentDataFromForm(rawFormData: RawInvitationData): RawInvitationData {
-  const out: RawInvitationData = { ...rawFormData }
+  const out: RawInvitationData = {}
+  for (const [k, v] of Object.entries(rawFormData)) {
+    // base64 원본은 content_data 로 옮기지 않는다 — 렌더링도 저장도 감당하지 못한다
+    if (isDataUri(v)) continue
+    if (Array.isArray(v)) {
+      const cleaned = v.filter((item) => !isDataUri(item))
+      out[k] = cleaned as RawInvitationData[string]
+      continue
+    }
+    out[k] = v
+  }
   for (const [contentKey, formKeys] of FORM_TO_CONTENT_KEY_ALIASES) {
     if (out[contentKey] != null && out[contentKey] !== "") continue
     for (const formKey of formKeys) {
@@ -202,7 +229,8 @@ export function deriveOgMetaFromForm(rawFormData: RawInvitationData): { title?: 
   const out: { title?: string; description?: string; image?: string } = {}
   if (typeof title === "string" && title) out.title = title
   if (typeof description === "string" && description) out.description = description
-  if (typeof image === "string" && image) out.image = image
+  // base64 원본은 og_meta 에도 넣지 않는다 — 카카오 공유 미리보기는 URL 만 읽는다
+  if (typeof image === "string" && image && !isDataUri(image)) out.image = image
   return Object.keys(out).length > 0 ? out : null
 }
 

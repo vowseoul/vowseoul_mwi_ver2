@@ -133,3 +133,38 @@ describe("resolveBgmUrlFromSnapshot", () => {
     expect(resolveBgmUrlFromSnapshot([{ field_key: "not_bgm" }], "a.mp3")).toBeNull()
   })
 })
+
+describe('base64 원본 걸러내기', () => {
+  // 실제로 form_submissions 한 행의 kakao_share_img 가 20MB base64 였다. 초안 생성이
+  // 그 값을 content_data 와 og_meta 양쪽에 복사해 40MB PATCH 를 만들었고, 요청이
+  // 끝나지 않다가 "Failed to fetch" 로 죽었다.
+  const bigDataUri = 'data:image/jpeg;base64,' + 'A'.repeat(2000)
+
+  it('content_data 로 옮길 때 data URI 값을 버린다', () => {
+    const out = buildContentDataFromForm({
+      kakao_share_img: bigDataUri,
+      main_image: 'https://cdn.example.com/main.jpg',
+      groom_name: '김민준',
+    })
+    expect('kakao_share_img' in out).toBe(false)
+    expect(out.main_image).toBe('https://cdn.example.com/main.jpg')
+    expect(out.groom_name).toBe('김민준')
+  })
+
+  it('배열 안에 섞인 data URI 도 걸러내고 나머지는 남긴다', () => {
+    const out = buildContentDataFromForm({
+      gallery_images: ['https://cdn.example.com/a.jpg', bigDataUri, 'https://cdn.example.com/b.jpg'],
+    })
+    expect(out.gallery_images).toEqual(['https://cdn.example.com/a.jpg', 'https://cdn.example.com/b.jpg'])
+  })
+
+  it('og_meta 에도 data URI 를 넣지 않는다', () => {
+    const meta = deriveOgMetaFromForm({ kakao_share_title: '제목', kakao_share_img: bigDataUri })
+    expect(meta).toEqual({ title: '제목' })
+  })
+
+  it('정상 URL 은 그대로 통과시킨다', () => {
+    const meta = deriveOgMetaFromForm({ kakao_share_img: 'https://cdn.example.com/k.jpg' })
+    expect(meta).toEqual({ image: 'https://cdn.example.com/k.jpg' })
+  })
+})
