@@ -33,8 +33,10 @@ import {
 
 export default function StatisticsPage() {
   useDocumentTitle("통계")
+  // 차트는 "오늘 포함 7일"(오늘-6 ~ 오늘)을 그리는데 이 범위는 오늘-7 로 시작해
+  // 헤더에는 8일치가 적혀 있었다. 화면 위아래가 서로 다른 기간을 말하고 있었다.
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({
-    from: subDays(new Date(), 7),
+    from: subDays(new Date(), 6),
     to: new Date(),
   })
 
@@ -222,7 +224,10 @@ export default function StatisticsPage() {
 
   // Calculate RSVP Activation rate
   const rsvpActiveCount = invitations.filter(inv => inv.content_data?.rsvpEnabled !== false).length
-  const rsvpActivationRate = invitations.length > 0 ? Math.round((rsvpActiveCount / invitations.length) * 100) : 100
+  // 청첩장이 한 건도 없으면 비율이 정의되지 않는다 — 예전에는 그때도 100% 라고 적었다.
+  const rsvpActivationRate = invitations.length > 0
+    ? Math.round((rsvpActiveCount / invitations.length) * 100)
+    : null
 
   if (isLoading) {
     return (
@@ -339,7 +344,7 @@ export default function StatisticsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{rsvpActivationRate}%</div>
+            <div className="text-3xl font-bold">{rsvpActivationRate === null ? '—' : `${rsvpActivationRate}%`}</div>
             <p className="mt-1 text-xs text-muted-foreground">
               RSVP 기능 사용 비율
             </p>

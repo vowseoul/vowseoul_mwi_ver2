@@ -1,5 +1,7 @@
 "use client"
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import { useEffect, useMemo, useState } from "react"
 import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes-warning"
 import { useParams } from "next/navigation"
@@ -45,6 +47,7 @@ function extractMarkers(html: string): { fields: string[]; slots: string[] } {
 }
 
 export default function TemplateThemeEditor() {
+  useDocumentTitle("템플릿 편집기")
   const params = useParams()
   const id = String(params.id)
 

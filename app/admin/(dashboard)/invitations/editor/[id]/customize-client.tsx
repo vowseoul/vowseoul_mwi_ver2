@@ -2202,7 +2202,7 @@ export default function CustomizeClient({
         {/* 버튼이 6개라 좁은 화면에서는 한 줄에 안 들어간다. 줄바꿈(flex-wrap)을 쓰면 바가
             2~3줄로 높아져 편집 패널의 pb-24(96px)를 넘어 내용을 가리므로, 높이는 한 줄로
             유지한 채 가로 스크롤시킨다 — 가장 많이 쓰는 "저장"이 맨 앞이라 항상 보인다. */}
-        <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 overflow-x-auto border-t bg-background px-4 py-4 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] [&>*]:shrink-0 lg:left-64 lg:px-6 xl:sticky xl:inset-x-auto xl:left-auto xl:z-auto xl:mt-6 xl:overflow-x-visible xl:px-0 xl:shadow-none">
+        <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 overflow-x-auto border-t bg-background px-4 py-4 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] [&>*]:shrink-0 lg:left-64 lg:px-6 xl:sticky xl:inset-x-auto xl:left-auto xl:z-auto xl:mt-6 xl:flex-wrap xl:overflow-x-visible xl:px-0 xl:shadow-none">
           <SaveButton onSave={save} className="gap-2" />
           {publicSlug && (
             <Button variant="outline" asChild>

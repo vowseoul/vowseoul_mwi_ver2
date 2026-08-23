@@ -1,5 +1,7 @@
 'use client'
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import React, { useState, useEffect, use } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -62,6 +64,7 @@ function formatTimeTextValue(val: any): string {
 }
 
 export default function FormResponsePage({ params }: { params: Promise<{ instanceId: string }> }) {
+  useDocumentTitle("폼 응답")
   const { instanceId } = use(params)
   const router = useRouter()
 

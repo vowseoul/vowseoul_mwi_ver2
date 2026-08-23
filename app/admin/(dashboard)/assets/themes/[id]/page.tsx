@@ -1,5 +1,7 @@
 'use client'
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -28,6 +30,7 @@ import { buildFieldData } from '@/lib/invitation-data'
 import { SAMPLE_RAW } from '@/lib/sample-invitation'
 
 export default function ThemeEditorPage() {
+  useDocumentTitle("테마 상세")
   const params = useParams()
   const router = useRouter()
   const themeId = params.id as string

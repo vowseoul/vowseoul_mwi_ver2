@@ -1,5 +1,7 @@
 'use client'
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import React, { useState, useEffect, use } from 'react'
 import { useUnsavedChangesWarning } from '@/lib/use-unsaved-changes-warning'
 import Link from 'next/link'
@@ -90,6 +92,7 @@ const getDefaultFieldBlocks = () => [
 ]
 
 export default function FormBuilderPage({ params }: { params: Promise<{ templateId: string }> }) {
+  useDocumentTitle("폼 빌더")
   const { templateId } = use(params)
   const router = useRouter()
 
