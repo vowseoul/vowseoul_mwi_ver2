@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { buildFontFaceRule, joinFontFaceCss } from "@/lib/fonts"
 import { SCROLL_MOTION_INTENSITY_PARAMS, DEFAULT_SCROLL_MOTION, type ScrollMotionSettings } from "@/lib/scroll-motion"
+import { blockTintOverlays } from "@/lib/theme-template"
 import { DEFAULT_INTRO_SETTINGS, hasIntroContent, type IntroSettings } from "@/lib/intro-settings"
 import type { BlockOverride, SectionImage } from "@/lib/theme-template"
 
@@ -67,6 +68,8 @@ interface InvitationFrameProps {
   /** 핀치줌·더블탭 확대 차단. 실제 발행 페이지(하객용)에서만 켠다 — 편집기/미리보기에서는
    * 관리자가 레이아웃을 확대해 볼 수 있어야 하므로 기본 꺼짐. */
   preventZoom?: boolean
+  /** 블럭별 배경 농담 패턴 (§lib/theme-template.ts BLOCK_TINT_PATTERNS). 미설정 시 "none" */
+  blockTint?: string
   /** 프레임이 화면을 꽉 채우는가.
    *
    * 편집기·테마 미리보기에서는 이 프레임이 페이지 위에 얹힌 "기기 목업"이라 둥근 모서리와
@@ -183,6 +186,34 @@ function applyAltClasses(doc: Document, hiddenBlocks: string[]) {
   })
 }
 
+/**
+ * 블럭별 배경 농담 — 보이는 [data-block] 섹션 순서대로 오버레이를 얹는다.
+ *
+ * background-color 를 바꾸지 않고 background-image 로 한 겹 덮는다. 테마가 어떤 색을
+ * 쓰든, 섹션 배경이 이미지든 그라데이션이든 그대로 통하고, 설정을 끄면 흔적이 남지 않는다.
+ *
+ * 자체적으로 배경을 교대하는 테마([data-alt] 를 쓰는 color-atelier)는 건드리지 않는다 —
+ * 그 위에 또 덮으면 의도한 교대가 뭉개진다.
+ *
+ * applyAltClasses 와 같은 이유로 hiddenBlocks 가 바뀔 때마다 다시 계산한다: 중간 블럭을
+ * 끄면 순서가 밀려 A-B-A-C 가 어긋나기 때문이다.
+ */
+function applyBlockTint(doc: Document, hiddenBlocks: string[], pattern: string) {
+  const sections = doc.querySelectorAll<HTMLElement>("[data-block]")
+  const selfAlternating = doc.querySelector("[data-alt][data-block]") !== null
+  const overlays = blockTintOverlays(pattern)
+  let i = 0
+  sections.forEach((el) => {
+    el.style.removeProperty("background-image")
+    const key = el.getAttribute("data-block")
+    if (key && hiddenBlocks.includes(key)) return
+    if (selfAlternating || pattern === "none") { i++; return }
+    const overlay = overlays[i % overlays.length]
+    if (overlay) el.style.setProperty("background-image", overlay)
+    i++
+  })
+}
+
 export function InvitationFrame({
   template,
   data,
@@ -197,6 +228,7 @@ export function InvitationFrame({
   height = 720,
   preventZoom = false,
   fullBleed = false,
+  blockTint = "none",
   sectionImages = [],
   onBlockClick,
   scrollMotion,
@@ -364,7 +396,8 @@ export function InvitationFrame({
   useEffect(() => {
     if (!doc) return
     applyAltClasses(doc, hiddenBlocks)
-  }, [doc, hiddenBlocks, blockOrder])
+    applyBlockTint(doc, hiddenBlocks, blockTint)
+  }, [doc, hiddenBlocks, blockOrder, blockTint])
 
   // 블럭 타이틀/영문 소제목 바인딩 — 빈 값이면 템플릿 기본 텍스트로 되돌아간다. 공백만 입력한
   // 경우는 truthy라 그대로 빈칸처럼 보이는 값이 적용된다(의도적으로 구분되는 상태 — 완전히

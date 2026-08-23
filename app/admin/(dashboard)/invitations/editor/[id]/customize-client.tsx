@@ -28,7 +28,9 @@ import {
   BLOCK_LABEL_FALLBACK,
   buildThemeTokens,
   ACCOUNT_CARD_BG_DEFAULT,
+  BLOCK_TINT_PATTERNS,
   CALENDAR_BOX_DEFAULT,
+  extractBlockTint,
   extractBlockOrder,
   extractBlockOverrides,
   extractDisabledSlots,
@@ -231,6 +233,10 @@ export default function CustomizeClient({
     () => extractSectionImages(invitation.customization_overrides)
   )
 
+  /** 블럭별 배경 농담 — 테마 메인 배경은 그대로 두고 섹션마다 한 겹 덮는다 */
+  const [blockTint, setBlockTint] = useState<string>(
+    () => extractBlockTint(invitation.customization_overrides)
+  )
   /** 스크롤 모션 — 고객 셀프편집 화면(edit-client.tsx)에서도 동일 값을 바꿀 수 있다 */
   const [scrollMotion, setScrollMotion] = useState<ScrollMotionSettings>(
     () => extractScrollMotion(invitation.customization_overrides)
@@ -426,6 +432,12 @@ export default function CustomizeClient({
       (t) => t.type === "font" || (typeof css === "string" && css.includes(`var(${t.name}`))
     )
   }, [activeThemeRow])
+  /** 테마가 스스로 섹션 배경을 교대하면(color-atelier 의 data-alt) 이 설정은 대상이 아니다 —
+   *  그 위에 또 덮으면 의도한 교대가 뭉개지고, 효과 없는 컨트롤은 버그로 읽힌다 */
+  const supportsBlockTint = useMemo(
+    () => !(activeThemeRow.template_html || "").includes("data-alt"),
+    [activeThemeRow]
+  )
   const typographySizeTokens = useMemo(() => visibleSizeTokens.filter((t) => t.group === "typography"), [visibleSizeTokens])
   const layoutSizeTokens = useMemo(() => visibleSizeTokens.filter((t) => t.group === "layout"), [visibleSizeTokens])
   const sizeTokenDefaults = useMemo(() => {
@@ -632,7 +644,7 @@ export default function CustomizeClient({
       .from("invitations")
       .update({
         content_data: contentPayload,
-        customization_overrides: { ...preservedOverrideKeys, ...cleanTokens, disabled_slots: disabledSlots, blocks: blockOverrides, sectionImages, scrollMotion, intro, introEnabled: intro.enabled },
+        customization_overrides: { ...preservedOverrideKeys, ...cleanTokens, disabled_slots: disabledSlots, blocks: blockOverrides, sectionImages, scrollMotion, intro, introEnabled: intro.enabled, blockTint },
         block_order: fullBlockOrder,
         bgm_url: bgmUrl || null,
         theme_version_id: themeVersionId,
@@ -1439,6 +1451,30 @@ export default function CustomizeClient({
                     )
                   })}
                 </div>
+
+                {supportsBlockTint && (
+                  <div className="mt-5 border-t pt-5">
+                    <Field>
+                      <FieldLabel>블럭별 배경 농담</FieldLabel>
+                      <RadioGroup
+                        value={blockTint}
+                        onValueChange={setBlockTint}
+                        className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+                      >
+                        {BLOCK_TINT_PATTERNS.map((p) => (
+                          <div key={p.value} className="flex items-center gap-2">
+                            <RadioGroupItem value={p.value} id={`tint-${p.value}`} />
+                            <Label htmlFor={`tint-${p.value}`} className="font-normal cursor-pointer">{p.label}</Label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                      <p className="text-xs text-muted-foreground">
+                        배경색은 그대로 두고 섹션마다 한 겹 덮어 경계를 만듭니다.
+                        A는 기본 배경, B는 흰색 40%, C는 검정 5%입니다.
+                      </p>
+                    </Field>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -2183,6 +2219,7 @@ export default function CustomizeClient({
               slots={previewSlots}
               fontFaces={fontFaces}
               blockOverrides={blockOverrides}
+              blockTint={blockTint}
               blockOrder={fullBlockOrder}
               hiddenBlocks={hiddenBlocks}
               sectionImages={sectionImages}

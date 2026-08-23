@@ -249,6 +249,49 @@ export type BlockOverride = z.infer<typeof BlockOverrideSchema>
 /** 달력 박스 배경 기본값 — 렌더러(calendar-island)와 편집기 슬라이더가 공유한다 */
 export const CALENDAR_BOX_DEFAULT = { color: "#bebebe", opacity: 76 } as const
 
+/**
+ * 블럭별 배경 농담(濃淡) — customization_overrides.blockTint.
+ *
+ * 테마의 메인 배경색은 그대로 두고, 섹션마다 흰색/검정을 옅게 덮어 경계를 만든다.
+ * 배경색을 바꾸는 게 아니라 위에 한 겹 얹는 방식이라(background-image 오버레이)
+ * 테마가 어떤 색을 쓰든, 섹션이 이미지든 그라데이션이든 그대로 통한다.
+ *
+ *   A  덮지 않음 (테마 기본 배경)
+ *   B  + #ffffff 40%
+ *   C  + #000000 5%
+ *
+ * color-atelier 는 이미 --accent 로 섹션 배경을 교대하므로(vs-alt-a/b) 대상이 아니다.
+ * 그런 테마에서는 편집기가 이 설정을 아예 보여주지 않는다 — 겹쳐 칠하면 의도한
+ * 교대가 뭉개지고, 무엇보다 효과 없는 컨트롤은 버그로 읽힌다.
+ */
+export const BLOCK_TINT_STEPS = {
+  A: null,
+  B: "linear-gradient(rgba(255,255,255,.4), rgba(255,255,255,.4))",
+  C: "linear-gradient(rgba(0,0,0,.05), rgba(0,0,0,.05))",
+} as const
+
+export const BLOCK_TINT_PATTERNS: { value: string; label: string; steps: ("A" | "B" | "C")[] }[] = [
+  { value: "none", label: "기본 배경색 (통일)", steps: ["A"] },
+  { value: "abac", label: "A-B-A-C 반복", steps: ["A", "B", "A", "C"] },
+  { value: "abab", label: "A-B-A-B 반복", steps: ["A", "B", "A", "B"] },
+  { value: "acac", label: "A-C-A-C 반복", steps: ["A", "C", "A", "C"] },
+]
+
+export type BlockTintPattern = string
+
+/** customization_overrides.blockTint 를 안전하게 읽는다 (모르는 값은 'none') */
+export function extractBlockTint(overrides: unknown): string {
+  if (!overrides || typeof overrides !== "object") return "none"
+  const v = (overrides as Record<string, unknown>).blockTint
+  return typeof v === "string" && BLOCK_TINT_PATTERNS.some((p) => p.value === v) ? v : "none"
+}
+
+/** 패턴 이름 → 보이는 섹션 순서대로 적용할 오버레이 목록 (null 이면 덮지 않음) */
+export function blockTintOverlays(pattern: string): (string | null)[] {
+  const found = BLOCK_TINT_PATTERNS.find((p) => p.value === pattern) ?? BLOCK_TINT_PATTERNS[0]
+  return found.steps.map((step) => BLOCK_TINT_STEPS[step])
+}
+
 /** 계좌 카드 배경 기본값 — 렌더러(account-island)와 편집기가 공유한다 */
 export const ACCOUNT_CARD_BG_DEFAULT = { source: "auto", color: "#bebebe", opacity: 12 } as const
 
