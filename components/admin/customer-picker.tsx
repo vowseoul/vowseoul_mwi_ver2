@@ -31,11 +31,15 @@ export function CustomerPicker({
   onChange,
   filters = {},
   placeholder = '고객 검색 후 선택',
+  emptyText = '표시할 고객이 없습니다.',
   emptyOption,
   id,
 }: {
   value: string
   onChange: (customerId: string, customer: CustomerPickerValue | null) => void
+  /** 검색 전에 결과가 0건일 때 보여줄 문구. filters 로 좁혀 쓰는 화면은 왜 비었는지
+   *  알려줘야 한다 — 그냥 "고객이 없습니다" 는 등록된 고객이 하나도 없다는 뜻으로 읽힌다 */
+  emptyText?: string
   /** status 등 추가 조건 (검색어는 이 컴포넌트가 직접 넣는다) */
   filters?: Omit<CustomerFilters, 'search'>
   placeholder?: string
@@ -119,7 +123,7 @@ export function CustomerPicker({
 
           {customers.length === 0 ? (
             <p className="px-2 py-6 text-center text-xs text-muted-foreground">
-              {debounced ? '검색 결과가 없습니다.' : '표시할 고객이 없습니다.'}
+              {debounced ? '검색 결과가 없습니다.' : emptyText}
             </p>
           ) : (
             customers.map((c) => (

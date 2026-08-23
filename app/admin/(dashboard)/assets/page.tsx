@@ -22,6 +22,7 @@ import { useInjectFontFaces } from '@/lib/use-font-faces'
 import { Plus, Play, Pause, Trash2, Upload, Loader2, CheckCircle2 } from 'lucide-react'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
 import { toast } from 'sonner'
+import { useToggleThemeActiveMutation } from '@/hooks/queries/useThemes'
 import { uploadFile, deleteFile } from '@/lib/storage'
 import { uploadImage } from '@/lib/image-upload'
 import Link from 'next/link'
@@ -30,14 +31,10 @@ export default function AssetsPage() {
   useDocumentTitle("에셋 관리")
   const [activeTab, setActiveTab] = useState('themes')
   const [playingBgm, setPlayingBgm] = useState<string | null>(null)
-  const [themeEnabled, setThemeEnabled] = useState<Record<string, boolean>>({
-    'classic-white': true,
-    'romantic-rose': true,
-    'modern-minimal': true,
-    'garden-greenery': true,
-    'elegant-navy': false,
-    'sunset-warmth': true,
-  })
+  // 테마 켜기/끄기는 themes.is_active 에 저장한다. 예전에는 로컬 state 였고, 심지어
+  // 실제 테마 id 와 무관한 목업 키('classic-white' 등)로 채워져 있었다 — 껐다가
+  // 새로고침하면 다시 켜지고, 그 값을 읽는 곳도 없었다.
+  const toggleThemeActive = useToggleThemeActiveMutation()
   const [themes, setThemes] = useState<MockTheme[]>([])
   const [isLoadingThemes, setIsLoadingThemes] = useState(true)
   const [bgms, setBgms] = useState<any[]>([])
@@ -403,10 +400,18 @@ export default function AssetsPage() {
                               </div>
                             </Link>
                           <Switch
-                            checked={themeEnabled[theme.id] ?? true}
-                            onCheckedChange={(checked) => 
-                              setThemeEnabled({ ...themeEnabled, [theme.id]: checked })
-                            }
+                            aria-label={`${theme.name} 테마 사용`}
+                            checked={theme.is_active !== false}
+                            disabled={toggleThemeActive.isPending}
+                            onCheckedChange={(checked) => {
+                              toggleThemeActive.mutate(
+                                { themeId: theme.id, isActive: checked },
+                                {
+                                  onSuccess: () => { fetchThemes(); toast.success(checked ? `${theme.name} 테마를 사용합니다.` : `${theme.name} 테마를 숨겼습니다.`) },
+                                  onError: () => toast.error('테마 상태를 바꾸지 못했습니다.'),
+                                },
+                              )
+                            }}
                           />
                         </div>
                       </div>

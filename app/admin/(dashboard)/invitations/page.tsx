@@ -64,7 +64,7 @@ import { toast } from 'sonner'
 export default function InvitationsListPage() {
   useDocumentTitle("청첩장 관리")
   const { data: invitations, isLoading, error } = useInvitationsQuery()
-  const { data: themes } = useThemesQuery()
+  const { data: themes } = useThemesQuery({ activeOnly: true })
 
   const createMutation = useCreateInvitationMutation()
   const statusMutation = useUpdateInvitationStatusMutation()
@@ -222,6 +222,7 @@ export default function InvitationsListPage() {
                     onChange={(id) => setCustomerId(id)}
                     filters={{ status: 'form_completed' }}
                     placeholder="고객 검색 후 선택"
+                    emptyText="정보 입력을 완료한 고객이 아직 없습니다."
                     emptyOption={{ value: 'none', label: '임시 고객으로 생성 (고객 선택 없음)' }}
                   />
                 </Field>

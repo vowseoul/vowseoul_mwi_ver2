@@ -92,18 +92,42 @@ export function useBlockVariantsQuery() {
 // =========================================================================
 // 2. Themes Hooks
 // =========================================================================
-export function useThemesQuery() {
+/**
+ * 테마 목록.
+ *
+ * activeOnly 를 켜면 비활성 테마를 뺀다 — 초안 생성처럼 "지금 고를 수 있는 것"을 보여주는
+ * 화면용이다. 에셋 관리(테마를 켜고 끄는 화면)는 기본값 그대로 전부 받아야 한다. 거기서
+ * 걸러버리면 한 번 끈 테마를 다시 켤 방법이 사라진다 — 폼 템플릿에서 같은 함정을 겪었다
+ * (§hooks/queries/useForms.ts useFormTemplatesQuery).
+ */
+export function useThemesQuery(options: { activeOnly?: boolean } = {}) {
+  const { activeOnly = false } = options
   return useQuery({
-    queryKey: ['themes'],
+    queryKey: ['themes', activeOnly],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('themes')
         .select('*')
         .is('deleted_at', null)
-        .order('created_at', { ascending: false })
+      if (activeOnly) query = query.eq('is_active', true)
 
+      const { data, error } = await query.order('created_at', { ascending: false })
       if (error) throw error
       return data as Theme[]
+    },
+  })
+}
+
+/** 테마 켜기/끄기 — 에셋 관리의 토글이 쓴다 */
+export function useToggleThemeActiveMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ themeId, isActive }: { themeId: string; isActive: boolean }) => {
+      const { error } = await supabase.from('themes').update({ is_active: isActive }).eq('id', themeId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['themes'] })
     },
   })
 }

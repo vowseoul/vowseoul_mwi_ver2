@@ -230,7 +230,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
   const [isSubmitting, setIsSubmitting] = useState(false)
   const { isCopied, copy: copyText } = useCopyFeedback()
 
-  const { data: themes } = useThemesQuery()
+  const { data: themes } = useThemesQuery({ activeOnly: true })
   const createInviteMutation = useCreateInvitationMutation()
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [selectedThemeId, setSelectedThemeId] = useState('')
@@ -657,6 +657,14 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                       />
+                      {/* 대시보드·검수 링크의 기본 비밀번호가 이 연락처 뒷 4자리다
+                          (§lib/dashboard-password.ts). 비어 있으면 조용히 0000 으로 떨어지는데,
+                          담당자는 "뒷 4자리" 라고 안내하게 되므로 고객이 못 들어간다. */}
+                      {!phone.trim() && (
+                        <p className="text-xs text-amber-600">
+                          연락처가 없으면 대시보드·검수 링크 비밀번호가 0000 으로 설정됩니다.
+                        </p>
+                      )}
                     </Field>
 
                     <Field>
@@ -921,6 +929,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                       <Input
                         value={`${baseUrl}/form/${formInstance.unique_url_slug}`}
                         readOnly
+                        title={`${baseUrl}/form/${formInstance.unique_url_slug}`}
                         className="text-xs h-9 bg-muted"
                       />
                       <Button
@@ -1022,6 +1031,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                       <Input
                         value={`${baseUrl}/w/${invitation.public_slug}`}
                         readOnly
+                        title={`${baseUrl}/w/${invitation.public_slug}`}
                         className="text-xs h-9 bg-muted"
                       />
                       <Button
@@ -1043,6 +1053,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                       <Input
                         value={`${baseUrl}/dashboard/${invitation.public_slug}`}
                         readOnly
+                        title={`${baseUrl}/dashboard/${invitation.public_slug}`}
                         className="text-xs h-9 bg-muted"
                       />
                       <Button

@@ -560,25 +560,6 @@ export default function AdminSettingsPage() {
               <CardDescription>사이트 기본 정보를 설정합니다</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="siteName">사이트 이름</Label>
-                  <Input id="siteName" defaultValue="VOW SEOUL" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="siteUrl">사이트 URL</Label>
-                  <Input id="siteUrl" defaultValue="https://vowseoul.com" />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="siteDescription">사이트 설명</Label>
-                <Textarea 
-                  id="siteDescription" 
-                  defaultValue="프리미엄 모바일 청첩장 서비스"
-                  rows={3}
-                />
-              </div>
-              <Separator />
               <div className="space-y-4">
                 <h4 className="text-sm font-medium">로고 설정</h4>
                 <p className="text-xs text-muted-foreground">사이트 상단 네비게이션 및 다양한 화면에 표시될 로고 이미지(SVG 권장)를 설정합니다.</p>
@@ -642,20 +623,6 @@ export default function AdminSettingsPage() {
                     <p className="text-xs text-muted-foreground">이 기능을 끄면 청첩장 제작 등 일반 기능 접속 시 준비중 페이지로 이동합니다</p>
                   </div>
                   <Switch checked={isFeatureOpen} onCheckedChange={setIsFeatureOpen} />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">점검 모드</p>
-                    <p className="text-xs text-muted-foreground">점검 중에는 사용자가 서비스에 접근할 수 없습니다</p>
-                  </div>
-                  <Switch />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">신규 가입 허용</p>
-                    <p className="text-xs text-muted-foreground">새로운 회원 가입을 허용합니다</p>
-                  </div>
-                  <Switch defaultChecked />
                 </div>
               </div>
               <div className="flex justify-end">

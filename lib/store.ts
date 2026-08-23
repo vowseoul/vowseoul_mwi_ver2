@@ -4,6 +4,8 @@ import { supabase, logSupabaseError } from './supabase'
 export interface MockTheme {
   id: string
   name: string
+  /** themes.is_active — 에셋 관리의 켜기/끄기. 없으면(샘플 데이터) 켜진 것으로 본다 */
+  is_active?: boolean
   thumbnail: string
   tags: string[]
   colorSets: { id: string; name: string; colors: string[] }[]
