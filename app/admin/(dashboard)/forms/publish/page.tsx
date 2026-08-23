@@ -1,5 +1,7 @@
 'use client'
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import React, { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -353,6 +355,7 @@ function FormPublishContent() {
 }
 
 export default function FormPublishPage() {
+  useDocumentTitle("폼 발행")
   return (
     <Suspense fallback={
       <div className="w-full h-[60vh] flex flex-col items-center justify-center">

@@ -1,5 +1,7 @@
 'use client'
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import { useState, useEffect } from 'react'
 import { supabase, logSupabaseError } from '@/lib/supabase'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -30,6 +32,7 @@ import {
 
 
 export default function StatisticsPage() {
+  useDocumentTitle("통계")
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({
     from: subDays(new Date(), 7),
     to: new Date(),

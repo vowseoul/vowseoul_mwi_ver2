@@ -1,5 +1,7 @@
 'use client'
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -25,6 +27,7 @@ import { uploadImage } from '@/lib/image-upload'
 import Link from 'next/link'
 
 export default function AssetsPage() {
+  useDocumentTitle("에셋 관리")
   const [activeTab, setActiveTab] = useState('themes')
   const [playingBgm, setPlayingBgm] = useState<string | null>(null)
   const [themeEnabled, setThemeEnabled] = useState<Record<string, boolean>>({

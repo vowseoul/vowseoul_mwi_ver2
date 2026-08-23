@@ -1,5 +1,7 @@
 'use client'
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import React, { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -50,6 +52,7 @@ import { cn } from '@/lib/utils'
 
 
 export default function FormTemplatesPage() {
+  useDocumentTitle("폼 관리")
   const queryClient = useQueryClient()
   const { data: templates, isLoading, error } = useFormTemplatesQuery()
   const createMutation = useCreateFormTemplateMutation()

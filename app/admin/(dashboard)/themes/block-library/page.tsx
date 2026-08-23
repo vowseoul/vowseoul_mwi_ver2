@@ -1,5 +1,7 @@
 'use client'
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import React, { useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -12,6 +14,7 @@ import {
 import { ArrowLeft, Box, LayoutGrid, Loader2, Sparkles, HelpCircle } from 'lucide-react'
 
 export default function BlockLibraryPage() {
+  useDocumentTitle("블럭 라이브러리")
   const { data: blocks, isLoading: isLoadingBlocks, isError: blocksFailed } = useBlockLibraryQuery()
   const { data: variants, isLoading: isLoadingVariants, isError: variantsFailed } = useBlockVariantsQuery()
 

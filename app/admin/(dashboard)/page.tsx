@@ -1,5 +1,7 @@
 'use client'
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import Link from 'next/link'
 import { useMemo } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -35,6 +37,7 @@ function toDateStr(d: Date) {
 }
 
 export default function AdminDashboard() {
+  useDocumentTitle("대시보드")
   const { orders } = useAppStore()
   const { data: recentCustomersData, isError: recentCustomersFailed } = useCustomersQuery({}, 1, 5)
   const recentCustomers = recentCustomersData?.data || []
@@ -50,6 +53,14 @@ export default function AdminDashboard() {
   const todaysOrders = orders.filter(o => o.createdAt === todayStr)
   const todayPayments = todaysOrders.length
   const todayRevenue = todaysOrders.reduce((sum, o) => sum + (o.amount || 0), 0)
+  // 전일 대비 — 예전에는 "+12%"/"+8%" 가 화면에 그대로 박혀 있었다. 실제 값이 0건·0원인
+  // 날에도 "+12% 증가" 라고 표시돼 지표를 믿고 볼 수 없었다. orders 에 createdAt 과 amount 가
+  // 이미 있으므로 진짜로 계산한다.
+  const yesterdayStr = toDateStr(new Date(Date.now() - 24 * 60 * 60 * 1000))
+  const yesterdaysOrders = orders.filter(o => o.createdAt === yesterdayStr)
+  const yesterdayPayments = yesterdaysOrders.length
+  const yesterdayRevenue = yesterdaysOrders.reduce((sum, o) => sum + (o.amount || 0), 0)
+
   const thisWeekWeddings = orders.filter(o => {
     const weddingDate = new Date(o.weddingDate)
     const now = new Date()
@@ -119,9 +130,7 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{todayPayments}건</div>
-            <p className="text-xs text-muted-foreground">
-              <span className="text-green-600">+12%</span> 전일 대비
-            </p>
+            <DeltaFromYesterday today={todayPayments} yesterday={yesterdayPayments} unit="건" />
           </CardContent>
         </Card>
 
@@ -134,9 +143,7 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{todayRevenue.toLocaleString()}원</div>
-            <p className="text-xs text-muted-foreground">
-              <span className="text-green-600">+8%</span> 전일 대비
-            </p>
+            <DeltaFromYesterday today={todayRevenue} yesterday={yesterdayRevenue} unit="원" />
           </CardContent>
         </Card>
 
@@ -357,5 +364,26 @@ export default function AdminDashboard() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+/**
+ * 전일 대비 증감. 어제가 0이면 퍼센트가 정의되지 않으므로 그때는 실제 건수를 그대로 쓴다 —
+ * 0을 기준으로 한 "+100%" 는 숫자만 그럴듯하고 아무 의미가 없다.
+ */
+function DeltaFromYesterday({ today, yesterday, unit }: { today: number; yesterday: number; unit: string }) {
+  if (yesterday === 0) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        어제 0{unit} · 오늘 {today.toLocaleString()}{unit}
+      </p>
+    )
+  }
+  const pct = Math.round(((today - yesterday) / yesterday) * 100)
+  const tone = pct > 0 ? "text-green-600" : pct < 0 ? "text-destructive" : "text-muted-foreground"
+  return (
+    <p className="text-xs text-muted-foreground">
+      <span className={tone}>{pct > 0 ? "+" : ""}{pct}%</span> 전일 대비
+    </p>
   )
 }

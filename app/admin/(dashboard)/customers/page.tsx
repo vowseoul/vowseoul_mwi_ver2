@@ -1,5 +1,7 @@
 'use client'
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import React, { useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -52,6 +54,7 @@ import { logAuditEvent } from '@/lib/audit-log'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
 
 export default function CustomersPage() {
+  useDocumentTitle("고객 관리")
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('all')

@@ -1,5 +1,7 @@
 'use client'
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import React, { useState, useEffect, use } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -53,6 +55,7 @@ import { toast } from 'sonner'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
 
 export default function CustomerDetailPage({ params }: { params: Promise<{ customerId: string }> }) {
+  useDocumentTitle("고객 상세")
   const { customerId } = use(params)
 
   const { data: customer, isLoading, error } = useCustomerQuery(customerId)

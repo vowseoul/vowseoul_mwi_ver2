@@ -1,5 +1,7 @@
 'use client'
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import React, { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -166,6 +168,7 @@ const ALL_CATEGORIES: FieldLibraryItem['category'][] = [
 ]
 
 export default function FieldLibraryPage() {
+  useDocumentTitle("폼 필드 관리")
   const { data: fields, isLoading, error } = useFieldsQuery()
   const createMutation = useCreateFieldMutation()
   const updateMutation = useUpdateFieldMutation()

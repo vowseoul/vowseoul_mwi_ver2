@@ -1,5 +1,7 @@
 'use client'
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -21,6 +23,7 @@ import { ArrowLeft, Save, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 export default function NewCustomerPage() {
+  useDocumentTitle("신규 고객 등록")
   const router = useRouter()
   const createMutation = useCreateCustomerMutation()
   const { data: profiles, isLoading: isLoadingProfiles } = useProfilesQuery()

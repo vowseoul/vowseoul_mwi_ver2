@@ -1,4 +1,9 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+import type { Metadata } from "next"
+
+/** 서버 컴포넌트라 metadata 를 직접 쓴다. 나머지 관리자 화면은 'use client' 라
+ *  useDocumentTitle 훅을 쓴다(§lib/use-document-title.ts) */
+export const metadata: Metadata = { title: "문의 관리 | VOW SEOUL" }
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import InquiryStatusSelect from "./status-select"

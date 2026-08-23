@@ -1,5 +1,7 @@
 'use client'
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import React, { useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -60,6 +62,7 @@ import {
 import { toast } from 'sonner'
 
 export default function InvitationsListPage() {
+  useDocumentTitle("청첩장 관리")
   const { data: invitations, isLoading, error } = useInvitationsQuery()
   const { data: themes } = useThemesQuery()
 
@@ -243,7 +246,7 @@ export default function InvitationsListPage() {
 
                 {/* Public Slug */}
                 <Field>
-                  <FieldLabel htmlFor="publicSlug">하객 접속 링크 (Slug) *</FieldLabel>
+                  <FieldLabel htmlFor="publicSlug">하객 접속 링크 주소 *</FieldLabel>
                   <Input
                     id="publicSlug"
                     value={publicSlug}
@@ -400,7 +403,7 @@ export default function InvitationsListPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-8 text-[11px] text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                      className="h-8 text-[11px] text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
                       onClick={() => setDeleteTarget({
                         id: inv.id,
                         name: `${inv.customer?.groom_name || '신랑'} & ${inv.customer?.bride_name || '신부'}`
@@ -420,7 +423,7 @@ export default function InvitationsListPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>신랑 & 신부</TableHead>
-                <TableHead>접속 링크 (Slug)</TableHead>
+                <TableHead>접속 링크 주소</TableHead>
                 <TableHead className="text-center">상태</TableHead>
                 <TableHead className="text-center">검수</TableHead>
                 <TableHead>예식 예정일</TableHead>
@@ -555,7 +558,7 @@ export default function InvitationsListPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-8 text-[11px] text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                          className="h-8 text-[11px] text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
                           onClick={() => setDeleteTarget({
                             id: inv.id,
                             name: `${inv.customer?.groom_name || '신랑'} & ${inv.customer?.bride_name || '신부'}`
@@ -627,7 +630,7 @@ export default function InvitationsListPage() {
           </DialogHeader>
           <FieldGroup className="mt-2">
             <Field>
-              <FieldLabel htmlFor="editedSlug">접속 링크 (Slug)</FieldLabel>
+              <FieldLabel htmlFor="editedSlug">접속 링크 주소</FieldLabel>
               <Input
                 id="editedSlug"
                 value={editedSlug}

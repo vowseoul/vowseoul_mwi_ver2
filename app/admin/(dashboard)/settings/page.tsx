@@ -1,5 +1,7 @@
 "use client"
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { SaveButton } from "@/components/ui/save-button"
@@ -45,6 +47,7 @@ import { confirmDialog } from "@/components/ui/confirm-dialog"
 import PaperTypesCard from "./paper-types-card"
 
 export default function AdminSettingsPage() {
+  useDocumentTitle("시스템 설정")
   const [isFeatureOpen, setIsFeatureOpen] = useState(true)
 
   const queryClient = useQueryClient()
