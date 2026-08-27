@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -47,6 +48,7 @@ import {
 import { toast } from 'sonner'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
 import { cn } from '@/lib/utils'
+import { moveFieldsInList, pageOf, sectionOf } from '@/lib/form-builder-layout'
 
 const getDefaultFieldBlocks = () => [
   {
@@ -113,10 +115,10 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
   const togglePage = (title: string) =>
     setExpandedPages((prev) => (prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title]))
   /** 방금 추가되거나 이동된 필드 — 잠깐 배경을 강조해 "이게 방금 바뀐 행"임을 보여준다(Feedback) */
-  const [highlightFieldKey, setHighlightFieldKey] = useState<string | null>(null)
-  const flashHighlight = (fieldKey: string) => {
-    setHighlightFieldKey(fieldKey)
-    setTimeout(() => setHighlightFieldKey((cur) => (cur === fieldKey ? null : cur)), 1200)
+  const [highlightKeys, setHighlightKeys] = useState<string[]>([])
+  const flashHighlight = (...keys: string[]) => {
+    setHighlightKeys(keys)
+    setTimeout(() => setHighlightKeys((cur) => (cur === keys ? [] : cur)), 1200)
   }
   const [searchQuery, setSearchQuery] = useState('')
   const [choicesInputs, setChoicesInputs] = useState<Record<string, string>>({})
@@ -131,10 +133,14 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
   const [emptySections, setEmptySections] = useState<Record<string, string[]>>({})
   const [expandedFieldId, setExpandedFieldId] = useState<string | null>(null)
 
-  // Native drag & drop state
-  const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
+  // Native drag & drop state — 여러 개를 한 번에 옮길 수 있어 배열로 잡는다
+  const [draggingIndices, setDraggingIndices] = useState<number[]>([])
   const [dragOverSection, setDragOverSection] = useState<{ page: string; section: string } | null>(null)
   const [dragOverFieldOriginalIndex, setDragOverFieldOriginalIndex] = useState<number | null>(null)
+  /** 골라 둔 필드 — 한 칸씩 옮기면 순서를 다시 맞추는 데 더 오래 걸리는 묶음을 한 번에 옮긴다 */
+  const [checkedIds, setCheckedIds] = useState<string[]>([])
+  const toggleChecked = (id: string) =>
+    setCheckedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
 
   // 이탈 경고 — handleSave가 실제로 저장하는 필드 배치(selectedFields)만 비교한다.
   // emptyPages/emptySections는 저장되지 않는 화면 전용 상태라 지문에서 제외한다.
@@ -514,43 +520,33 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
     toast.success(`"${trimmed}" 섹션이 추가되었습니다.`)
   }
 
-  const handleMoveFieldTo = (fromIndex: number, toPage: string, toSection: string, targetFieldIndexInSection?: number) => {
-    const updated = [...selectedFields]
-    const [movedField] = updated.splice(fromIndex, 1)
-    
-    movedField.options = {
-      ...(movedField.options || {}),
-      page_title: toPage,
-      section_title: toSection
-    }
-    
-    let insertIndex = -1
-    const sectionFields = updated.filter(f => 
-      (f.options?.page_title?.trim() || '기본 페이지') === toPage &&
-      (f.options?.section_title?.trim() || '기본 섹션') === toSection
+  /** 필드 여러 개를 한 섹션으로 옮긴다 (자리 계산은 §lib/form-builder-layout.ts) */
+  const moveFields = (fromIndices: number[], toPage: string, toSection: string, targetOriginalIndex?: number) => {
+    if (fromIndices.length === 0) return
+    setSelectedFields(moveFieldsInList(selectedFields, fromIndices, toPage, toSection, targetOriginalIndex))
+    setCheckedIds([])
+    flashHighlight(...fromIndices.map((i) => selectedFields[i].field_key))
+  }
+
+  /**
+   * 섹션 순서 변경 — 섹션의 위치는 필드 배열 순서에서 나오므로 두 섹션의 필드 묶음을 통째로 맞바꾼다.
+   * 빈 섹션은 항상 마지막에 그려지므로(§getPagesAndSections) 필드가 있는 섹션끼리만 다룬다.
+   */
+  const handleMoveSection = (pageTitle: string, sectionTitle: string, dir: -1 | 1) => {
+    const pages = getPagesAndSections()
+    const page = pages.find((p) => p.title === pageTitle)
+    if (!page) return
+
+    const filled = page.sections.filter((sec) => sec.fields.length > 0)
+    const i = filled.findIndex((sec) => sec.title === sectionTitle)
+    const j = i + dir
+    if (i < 0 || j < 0 || j >= filled.length) return
+    ;[filled[i], filled[j]] = [filled[j], filled[i]]
+    page.sections = [...filled, ...page.sections.filter((sec) => sec.fields.length === 0)]
+
+    setSelectedFields(
+      pages.flatMap((p) => p.sections.flatMap((sec) => sec.fields.map((f) => selectedFields[f.originalIndex]))),
     )
-    
-    if (sectionFields.length === 0) {
-      const pageFields = updated.filter(f => (f.options?.page_title?.trim() || '기본 페이지') === toPage)
-      if (pageFields.length > 0) {
-        const lastPageField = pageFields[pageFields.length - 1]
-        insertIndex = updated.indexOf(lastPageField) + 1
-      } else {
-        insertIndex = updated.length
-      }
-    } else {
-      if (targetFieldIndexInSection !== undefined && targetFieldIndexInSection < sectionFields.length) {
-        const targetField = sectionFields[targetFieldIndexInSection]
-        insertIndex = updated.indexOf(targetField)
-      } else {
-        const lastSectionField = sectionFields[sectionFields.length - 1]
-        insertIndex = updated.indexOf(lastSectionField) + 1
-      }
-    }
-    
-    updated.splice(insertIndex, 0, movedField)
-    setSelectedFields(updated)
-    flashHighlight(movedField.field_key)
   }
 
   const handleSave = async (): Promise<boolean> => {
@@ -603,6 +599,9 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
       f.category.toLowerCase().includes(term)
     )
   }) || []
+
+  const checkedFields = selectedFields.filter((f) => checkedIds.includes(f.field_library_id))
+  const pageSectionPairs = getPagesAndSections().flatMap((p) => p.sections.map((sec) => ({ page: p.title, section: sec.title })))
 
   const groupedFields: Record<string, any[]> = {}
   filteredFields.forEach((f) => {
@@ -818,6 +817,38 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                 + 새 단계 추가
               </Button>
             </CardHeader>
+
+            {/* 여러 개를 골랐을 때만 나온다 — 드래그가 어려운 긴 목록에서는 이 드롭다운이 유일하게 확실한 이동 수단이다 */}
+            {checkedFields.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 border-b border-border bg-primary/5 px-4 py-2">
+                <span className="text-xs font-semibold text-primary">{checkedFields.length}개 선택됨</span>
+                <Select
+                  value=""
+                  onValueChange={(val) => {
+                    const pair = pageSectionPairs[Number(val)]
+                    if (!pair) return
+                    moveFields(checkedFields.map((f) => selectedFields.indexOf(f)), pair.page, pair.section)
+                    toast.success(`${checkedFields.length}개 필드를 ${pair.page} > ${pair.section}(으)로 옮겼습니다.`)
+                  }}
+                >
+                  <SelectTrigger className="h-7 w-56 bg-background text-xs" aria-label="선택한 필드를 옮길 섹션">
+                    <SelectValue placeholder="옮길 섹션 선택..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {pageSectionPairs.map((pair, i) => (
+                      <SelectItem key={`${pair.page}-${pair.section}`} value={String(i)}>
+                        {pair.page} &gt; {pair.section}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className="text-[11px] text-muted-foreground">드래그해도 함께 움직입니다.</span>
+                <Button type="button" variant="ghost" size="sm" className="ml-auto h-7 text-xs" onClick={() => setCheckedIds([])}>
+                  선택 해제
+                </Button>
+              </div>
+            )}
+
             <CardContent className="p-4 flex-1 overflow-y-auto space-y-6 scrollbar-hide bg-muted/50">
               {selectedFields.length === 0 ? (
                 <div className="h-[40vh] flex flex-col items-center justify-center text-center text-muted-foreground border-2 border-dashed border-border rounded-xl">
@@ -901,11 +932,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                             setDragOverSection({ page: page.title, section: section.title })
                           }}
                           onDragLeave={() => setDragOverSection(null)}
-                          onDrop={() => {
-                            if (draggingIndex !== null) {
-                              handleMoveFieldTo(draggingIndex, page.title, section.title)
-                            }
-                          }}
+                          onDrop={() => moveFields(draggingIndices, page.title, section.title)}
                           className={cn(
                             "rounded-lg border border-dashed border-border/60 bg-muted/10 p-3 transition-colors",
                             dragOverSection?.page === page.title && dragOverSection?.section === section.title && "border-primary bg-primary/5 ring-2 ring-primary/20"
@@ -948,6 +975,38 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                 </SelectContent>
                               </Select>
 
+                              {section.fields.length > 0 && (() => {
+                                // 빈 섹션은 늘 마지막에 그려지므로 순서를 바꿀 수 있는 건 필드가 있는 섹션뿐이다
+                                const filled = page.sections.filter((sec) => sec.fields.length > 0)
+                                const oIdx = filled.findIndex((sec) => sec.title === section.title)
+                                return (
+                                  <>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      disabled={oIdx <= 0}
+                                      onClick={() => handleMoveSection(page.title, section.title, -1)}
+                                      className="h-6 w-6"
+                                      aria-label="섹션 위로 이동"
+                                    >
+                                      <ChevronUp className="w-3 h-3" />
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      disabled={oIdx === filled.length - 1}
+                                      onClick={() => handleMoveSection(page.title, section.title, 1)}
+                                      className="h-6 w-6"
+                                      aria-label="섹션 아래로 이동"
+                                    >
+                                      <ChevronDown className="w-3 h-3" />
+                                    </Button>
+                                  </>
+                                )
+                              })()}
+
                               <Button
                                 type="button"
                                 variant="ghost"
@@ -969,9 +1028,14 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                 <div
                                   key={field.field_library_id}
                                   draggable
-                                  onDragStart={() => setDraggingIndex(field.originalIndex)}
+                                  onDragStart={() => setDraggingIndices(
+                                    // 체크해 둔 행을 잡으면 체크한 것 전부가 함께 움직인다
+                                    checkedIds.includes(field.field_library_id) && checkedFields.length > 1
+                                      ? checkedFields.map((cf) => selectedFields.indexOf(cf))
+                                      : [field.originalIndex],
+                                  )}
                                   onDragEnd={() => {
-                                    setDraggingIndex(null)
+                                    setDraggingIndices([])
                                     setDragOverSection(null)
                                     setDragOverFieldOriginalIndex(null)
                                   }}
@@ -982,39 +1046,27 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                   }}
                                   onDrop={(e) => {
                                     e.stopPropagation()
-                                    if (draggingIndex !== null && draggingIndex !== field.originalIndex) {
-                                      const updated = [...selectedFields]
-                                      const [movedField] = updated.splice(draggingIndex, 1)
-                                      
-                                      movedField.options = {
-                                        ...(movedField.options || {}),
-                                        page_title: page.title,
-                                        section_title: section.title
-                                      }
-                                      
-                                      let targetIdx = field.originalIndex
-                                      if (draggingIndex < field.originalIndex) {
-                                        targetIdx = field.originalIndex - 1
-                                      }
-                                      
-                                      updated.splice(targetIdx, 0, movedField)
-                                      setSelectedFields(updated)
-                                      flashHighlight(movedField.field_key)
-                                    }
-                                    setDraggingIndex(null)
+                                    moveFields(draggingIndices, page.title, section.title, field.originalIndex)
+                                    setDraggingIndices([])
                                     setDragOverSection(null)
                                     setDragOverFieldOriginalIndex(null)
                                   }}
                                   className={cn(
                                     "flex flex-col border border-border rounded-lg bg-card shadow-xs transition-all duration-700 overflow-hidden",
-                                    draggingIndex === field.originalIndex && "opacity-40 border-dashed border-primary",
+                                    draggingIndices.includes(field.originalIndex) && "opacity-40 border-dashed border-primary",
                                     dragOverFieldOriginalIndex === field.originalIndex && "border-primary bg-primary/5 ring-1 ring-primary/30",
-                                    highlightFieldKey === field.field_key && "bg-primary/10"
+                                    highlightKeys.includes(field.field_key) && "bg-primary/10"
                                   )}
                                 >
                                   {/* Field Summary Row */}
                                   <div className="flex items-center justify-between p-2 hover:bg-muted/5 transition-colors">
                                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                      <Checkbox
+                                        checked={checkedIds.includes(field.field_library_id)}
+                                        onCheckedChange={() => toggleChecked(field.field_library_id)}
+                                        aria-label={`${field.label_override || field.label} 선택`}
+                                        className="shrink-0"
+                                      />
                                       <div className="cursor-grab text-muted-foreground active:cursor-grabbing shrink-0 text-sm font-mono select-none px-1">
                                         ⠿
                                       </div>
@@ -1425,36 +1477,57 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                       <div className="pt-2.5 border-t border-border/40 flex flex-col gap-1.5">
                                         <span className="text-[10px] font-semibold text-primary">하위 질문 연동 설정</span>
                                         <div className="flex flex-wrap items-center gap-3">
-                                          <div className="flex items-center gap-1.5 min-w-[150px] flex-1">
-                                            <span className="text-[10px] font-medium text-muted-foreground shrink-0">상위 질문:</span>
-                                            <Select
-                                              value={field.options?.parent_field_key || 'none'}
-                                              onValueChange={(val) => {
-                                                const currentOpts = typeof field.options === 'string' ? JSON.parse(field.options || '{}') : (field.options || {})
-                                                const updatedOptions = { 
-                                                  ...currentOpts, 
-                                                  parent_field_key: val === 'none' ? null : val,
-                                                  parent_trigger_option: val === 'none' ? null : (currentOpts.parent_trigger_option || '')
-                                                }
-                                                handleUpdateFieldProperty(field.field_library_id, 'options', updatedOptions)
-                                              }}
-                                            >
-                                              <SelectTrigger className="h-6 text-[10px] bg-background px-2">
-                                                <SelectValue placeholder="선택 안 함" />
-                                              </SelectTrigger>
-                                              <SelectContent className="text-xs">
-                                                <SelectItem value="none">선택 안 함 (최상위 질문)</SelectItem>
-                                                {selectedFields
-                                                  .filter(f => f.field_library_id !== field.field_library_id && (f.field_type === 'select' || f.field_type === 'rselect' || f.field_type === 'toggle'))
-                                                  .map(f => (
-                                                    <SelectItem key={f.field_key} value={f.field_key}>
-                                                      {f.label_override || f.label} ({f.field_key})
-                                                    </SelectItem>
-                                                  ))
-                                                }
-                                              </SelectContent>
-                                            </Select>
-                                          </div>
+                                          {(() => {
+                                            // 같은 섹션 질문을 위로 올린다 — 하위 질문은 거의 언제나 바로 위 질문에 딸린다
+                                            const candidates = selectedFields.filter(
+                                              (f) => f.field_library_id !== field.field_library_id
+                                                && (f.field_type === 'select' || f.field_type === 'rselect' || f.field_type === 'toggle'),
+                                            )
+                                            const inThisSection = (f: any) => pageOf(f) === page.title && sectionOf(f) === section.title
+                                            const ordered = [...candidates.filter(inThisSection), ...candidates.filter((f) => !inThisSection(f))]
+
+                                            /** 상위 질문을 정하면 활성화 조건도 함께 정한다 — 따로 고르게 두면 빈 값으로 저장되기 쉽다 */
+                                            const setParent = (key: string | null) => {
+                                              const currentOpts = typeof field.options === 'string' ? JSON.parse(field.options || '{}') : (field.options || {})
+                                              const parent = selectedFields.find((f) => f.field_key === key)
+                                              const choices: string[] = parent?.field_type === 'toggle' ? ['예', '아니오'] : (parent?.options?.choices || [])
+                                              handleUpdateFieldProperty(field.field_library_id, 'options', {
+                                                ...currentOpts,
+                                                parent_field_key: key,
+                                                parent_trigger_option: key === null
+                                                  ? null
+                                                  : (choices.length === 0 || choices.includes('예') ? '예' : (currentOpts.parent_trigger_option || '')),
+                                              })
+                                            }
+
+                                            return (
+                                              <div className="flex items-center gap-1.5 min-w-[150px] flex-1">
+                                                <span className="text-[10px] font-medium text-muted-foreground shrink-0">상위 질문:</span>
+                                                <Select
+                                                  value={field.options?.parent_field_key || 'none'}
+                                                  onOpenChange={(open) => {
+                                                    // 열자마자 같은 섹션의 첫 질문을 잡아 준다. 다른 섹션 질문뿐이면 손대지 않는다.
+                                                    if (!open || field.options?.parent_field_key) return
+                                                    const nearest = ordered[0]
+                                                    if (nearest && inThisSection(nearest)) setParent(nearest.field_key)
+                                                  }}
+                                                  onValueChange={(val) => setParent(val === 'none' ? null : val)}
+                                                >
+                                                  <SelectTrigger className="h-6 text-[10px] bg-background px-2">
+                                                    <SelectValue placeholder="선택 안 함" />
+                                                  </SelectTrigger>
+                                                  <SelectContent className="text-xs">
+                                                    <SelectItem value="none">선택 안 함 (최상위 질문)</SelectItem>
+                                                    {ordered.map((f) => (
+                                                      <SelectItem key={f.field_key} value={f.field_key}>
+                                                        {f.label_override || f.label} ({f.field_key}){inThisSection(f) ? ' · 같은 섹션' : ''}
+                                                      </SelectItem>
+                                                    ))}
+                                                  </SelectContent>
+                                                </Select>
+                                              </div>
+                                            )
+                                          })()}
 
                                           {(() => {
                                             const parentField = selectedFields.find((pf) => pf.field_key === field.options?.parent_field_key)

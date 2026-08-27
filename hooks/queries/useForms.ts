@@ -188,7 +188,8 @@ export function useFormTemplatesQuery(options: { activeOnly?: boolean } = {}) {
 
       if (activeOnly) query = query.eq('is_active', true)
 
-      const { data, error } = await query.order('created_at', { ascending: false })
+      // 이름순 — 목록에서도 발행 화면에서도 찾는 기준은 만든 날짜가 아니라 이름이다
+      const { data, error } = await query.order('name')
 
       if (error) throw error
       return data as FormTemplate[]
