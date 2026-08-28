@@ -51,9 +51,11 @@ DROP POLICY IF EXISTS "form_submissions read by staff" ON public.form_submission
 CREATE POLICY "form_submissions read by staff" ON public.form_submissions
   FOR SELECT TO authenticated USING (true);
 
+DROP POLICY IF EXISTS "form_submissions write by staff" ON public.form_submissions;
 CREATE POLICY "form_submissions write by staff" ON public.form_submissions
   FOR INSERT TO authenticated WITH CHECK (true);
 
+DROP POLICY IF EXISTS "form_submissions edit by staff" ON public.form_submissions;
 CREATE POLICY "form_submissions edit by staff" ON public.form_submissions
   FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
 

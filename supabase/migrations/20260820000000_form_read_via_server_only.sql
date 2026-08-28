@@ -39,6 +39,7 @@
 -- — 방명록에서 겪은 것과 같은 함정이다(RETURNING/충돌검사가 SELECT 를 끌어들인다).
 -- ---------------------------------------------------------------------------
 DROP POLICY IF EXISTS "form_instances public read" ON public.form_instances;
+DROP POLICY IF EXISTS "form_instances read by staff" ON public.form_instances;
 
 CREATE POLICY "form_instances read by staff" ON public.form_instances
   FOR SELECT TO authenticated USING (true);
@@ -46,6 +47,7 @@ CREATE POLICY "form_instances read by staff" ON public.form_instances
 REVOKE SELECT ON public.form_instances FROM anon;
 
 DROP POLICY IF EXISTS "form_submissions public read" ON public.form_submissions;
+DROP POLICY IF EXISTS "form_submissions read by staff" ON public.form_submissions;
 
 CREATE POLICY "form_submissions read by staff" ON public.form_submissions
   FOR SELECT TO authenticated USING (true);
