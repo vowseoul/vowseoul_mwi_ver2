@@ -3,7 +3,9 @@ import { redirect, notFound } from 'next/navigation'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { dashboardCookieName, verifyDashboardToken } from '@/lib/dashboard-session'
 import { mergeInvitationRaw } from '@/lib/invitation-data'
-import { buildInvitationTokens, extractBlockOverrides, extractDisabledSlots, extractSectionImages, getHiddenBlocks, type ThemeRow } from '@/lib/theme-template'
+import { buildInvitationTokens, extractBlockOverrides, extractBlockTint, extractBlockTintOpacity, extractDisabledSlots, extractSectionImages, getHiddenBlocks, type ThemeRow } from '@/lib/theme-template'
+import { extractScrollMotion } from '@/lib/scroll-motion'
+import { extractIntroSettings } from '@/lib/intro-settings'
 import { fetchRegisteredFonts, resolveFontFaces } from '@/lib/fonts'
 import ReviewClient from './review-client'
 
@@ -27,6 +29,7 @@ export default async function InvitationReviewPage({ params }: { params: Promise
     .from('invitations')
     .select('*')
     .eq('id', id)
+    .is('deleted_at', null)
     .maybeSingle()
 
   if (error) console.error('review: invitation lookup failed:', error.message)
@@ -84,8 +87,12 @@ export default async function InvitationReviewPage({ params }: { params: Promise
       fontFaces={resolveFontFaces(tokens, fonts)}
       disabledSlots={disabledSlots}
       blockOverrides={extractBlockOverrides(invitation.customization_overrides)}
+      blockTint={extractBlockTint(invitation.customization_overrides)}
+      blockTintOpacity={extractBlockTintOpacity(invitation.customization_overrides)}
       hiddenBlocks={getHiddenBlocks(disabledSlots)}
       sectionImages={extractSectionImages(invitation.customization_overrides)}
+      scrollMotion={extractScrollMotion(invitation.customization_overrides)}
+      intro={extractIntroSettings(invitation.customization_overrides)}
       reviewStatus={invitation.review_status}
       initialRevisions={(revisions ?? []).map((r) => ({
         id: String(r.id),

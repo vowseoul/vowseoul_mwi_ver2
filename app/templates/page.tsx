@@ -6,14 +6,14 @@ import { Header } from '@/components/header'
 import { Footer } from '@/components/footer'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { sampleThemes, Theme } from '@/lib/store'
+import { sampleThemes, MockTheme } from '@/lib/store'
 import { supabase, logSupabaseError } from '@/lib/supabase'
 import { resolveThemeSwatch } from '@/lib/theme-template'
 import { Eye, FileText, Loader2 } from 'lucide-react'
 
 export default function TemplatesPage() {
   const [hoveredTheme, setHoveredTheme] = useState<string | null>(null)
-  const [themes, setThemes] = useState<Theme[]>([])
+  const [themes, setThemes] = useState<MockTheme[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {

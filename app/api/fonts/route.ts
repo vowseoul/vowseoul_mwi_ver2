@@ -1,11 +1,29 @@
 import { NextResponse } from 'next/server'
 
+/**
+ * url 파라미터를 검증 없이 그대로 fetch하면 오픈 프록시/SSRF가 된다 —
+ * 실사용처는 Supabase Storage에 업로드된 폰트 파일 하나뿐이므로, 그 origin으로만
+ * 화이트리스트를 건다.
+ */
+function isAllowedFontUrl(url: string): boolean {
+  const allowedOrigin = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!allowedOrigin) return false
+  try {
+    return new URL(url).origin === new URL(allowedOrigin).origin
+  } catch {
+    return false
+  }
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const url = searchParams.get('url')
 
   if (!url) {
     return new NextResponse('Missing url parameter', { status: 400 })
+  }
+  if (!isAllowedFontUrl(url)) {
+    return new NextResponse('URL not allowed', { status: 403 })
   }
 
   try {

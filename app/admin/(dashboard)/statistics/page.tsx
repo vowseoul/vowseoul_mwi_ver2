@@ -1,9 +1,11 @@
 'use client'
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import { useState, useEffect } from 'react'
 import { supabase, logSupabaseError } from '@/lib/supabase'
-import { Loader2 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
@@ -30,8 +32,11 @@ import {
 
 
 export default function StatisticsPage() {
+  useDocumentTitle("통계")
+  // 차트는 "오늘 포함 7일"(오늘-6 ~ 오늘)을 그리는데 이 범위는 오늘-7 로 시작해
+  // 헤더에는 8일치가 적혀 있었다. 화면 위아래가 서로 다른 기간을 말하고 있었다.
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({
-    from: subDays(new Date(), 7),
+    from: subDays(new Date(), 6),
     to: new Date(),
   })
 
@@ -63,16 +68,20 @@ export default function StatisticsPage() {
         // 매출은 청첩장 건당 5만원 고정이 아니라 실제 orders.amount 합계를 쓴다(§1-B).
         // 주문 관리 화면은 없어졌지만(고객 관리로 통합) amount/notes 데이터는 orders
         // 테이블에 그대로 남아있으므로 매출 집계는 계속 여기서 읽는다.
+        // 샘플/테스트 주문은 매출이 아니다 — 고객 수와 같은 이유로 뺀다.
         const { data: ordersData, error: ordersError } = await supabase
           .from('orders')
           .select('amount, created_at')
+          .neq('status', 'sample')
         logSupabaseError('statistics: orders', ordersError)
 
         // 건수 지표(총 고객 수, 일별 신규 등록)는 orders 가 아니라 customers 기준으로 센다.
+        // 샘플/테스트로 표시된 고객은 내부 테스트 건이라 집계에서 뺀다.
         const { data: customersData, error: customersError } = await supabase
           .from('customers')
           .select('id, status, created_at')
           .is('deleted_at', null)
+          .eq('is_sample', false)
         logSupabaseError('statistics: customers', customersError)
 
         // 시간대별 트래픽은 visit_daily_stats(일 단위 집계)가 아니라 visit_logs 의
@@ -215,13 +224,47 @@ export default function StatisticsPage() {
 
   // Calculate RSVP Activation rate
   const rsvpActiveCount = invitations.filter(inv => inv.content_data?.rsvpEnabled !== false).length
-  const rsvpActivationRate = invitations.length > 0 ? Math.round((rsvpActiveCount / invitations.length) * 100) : 100
+  // 청첩장이 한 건도 없으면 비율이 정의되지 않는다 — 예전에는 그때도 100% 라고 적었다.
+  const rsvpActivationRate = invitations.length > 0
+    ? Math.round((rsvpActiveCount / invitations.length) * 100)
+    : null
 
   if (isLoading) {
     return (
-      <div className="w-full h-[60vh] flex flex-col items-center justify-center font-sans">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        <p className="text-muted-foreground text-sm mt-4">통계 데이터를 산출하는 중입니다...</p>
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="space-y-2">
+            <Skeleton className="h-7 w-20" />
+            <Skeleton className="h-4 w-56" />
+          </div>
+          <Skeleton className="h-9 w-60" />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="pb-2">
+                <Skeleton className="h-4 w-20" />
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Skeleton className="h-8 w-24" />
+                <Skeleton className="h-3 w-32" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="pb-2">
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-3 w-40" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-56 w-full" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
     )
   }
@@ -301,7 +344,7 @@ export default function StatisticsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{rsvpActivationRate}%</div>
+            <div className="text-3xl font-bold">{rsvpActivationRate === null ? '—' : `${rsvpActivationRate}%`}</div>
             <p className="mt-1 text-xs text-muted-foreground">
               RSVP 기능 사용 비율
             </p>

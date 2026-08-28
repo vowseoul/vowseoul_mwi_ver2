@@ -13,12 +13,16 @@
       <!-- Groom & Bride Names -->
       <div class="ms-hero__names">
         <div class="ms-hero__name-block">
-          <p class="ms-hero__relation" data-field="groom_relationship">아들</p>
+          <p class="ms-hero__relation">
+            <span data-field="groom_father_name">박태수</span> · <span data-field="groom_mother_name">선우명희</span><span data-field="groom_relationship">의 아들</span>
+          </p>
           <h1 class="ms-hero__name" data-field="groom_name">박성훈</h1>
         </div>
         <div class="ms-hero__connector">&amp;</div>
         <div class="ms-hero__name-block">
-          <p class="ms-hero__relation" data-field="bride_relationship">딸</p>
+          <p class="ms-hero__relation">
+            <span data-field="bride_father_name">이훈</span> · <span data-field="bride_mother_name">최현숙</span><span data-field="bride_relationship">의 딸</span>
+          </p>
           <h1 class="ms-hero__name" data-field="bride_name">이지혜</h1>
         </div>
       </div>
@@ -43,7 +47,14 @@
 
   <!-- 2. GREETING SECTION -->
   <section class="ms-section ms-greeting" data-block="greeting">
-    <div class="ms-divider">♥</div>
+    <div class="ms-divider">
+      <span class="ms-divider__icon" data-greeting-icon>
+        <svg class="ms-divider__icon-heart" viewBox="0 0 24 24" fill="currentColor" data-greeting-icon-heart>
+          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+        </svg>
+        <span class="ms-divider__icon-custom" data-greeting-icon-custom style="display:none"></span>
+      </span>
+    </div>
     <div class="ms-greeting__message" data-field="greeting_message">
 사랑으로 하나 된 두 사람이
 서로를 이해하며 한 길을 걸어가려 합니다.
@@ -55,88 +66,15 @@
     <div class="ms-greeting__image" data-field-when="greeting_image">
       <img data-field="greeting_image" alt="인사말 이미지" />
     </div>
-
-    <!-- Spouses & Parents Info Grid -->
-    <div class="ms-parents">
-      <!-- Groom Parents -->
-      <div class="ms-parents__col">
-        <div class="ms-parents__role">신랑</div>
-        <div class="ms-parents__child" data-field="groom_name">박성훈</div>
-        <div class="ms-parents__divider"></div>
-        <div class="ms-parents__info">
-          <p class="ms-parents__parent">
-            <span class="ms-parents__label">아버지</span>
-            <span data-field="groom_father_name">박태수</span>
-          </p>
-          <p class="ms-parents__parent">
-            <span class="ms-parents__label">어머니</span>
-            <span data-field="groom_mother_name">선우명희</span>
-          </p>
-        </div>
-      </div>
-
-      <!-- Bride Parents -->
-      <div class="ms-parents__col">
-        <div class="ms-parents__role">신부</div>
-        <div class="ms-parents__child" data-field="bride_name">이지혜</div>
-        <div class="ms-parents__divider"></div>
-        <div class="ms-parents__info">
-          <p class="ms-parents__parent">
-            <span class="ms-parents__label">아버지</span>
-            <span data-field="bride_father_name">이훈</span>
-          </p>
-          <p class="ms-parents__parent">
-            <span class="ms-parents__label">어머니</span>
-            <span data-field="bride_mother_name">최현숙</span>
-          </p>
-        </div>
-      </div>
-    </div>
   </section>
 
-  <!-- 3. SEQUENCE SECTION (정적 타임라인 — 이 테마는 아직 식순 슬롯이 연결돼 있지 않아
-       관리자가 실제 데이터로 바꿀 수 없다. 디자인 컨트롤(제목/여백)만 우선 지원한다) -->
+  <!-- 3. SEQUENCE SECTION -->
   <section class="ms-section ms-sequence" data-block="sequence">
     <div class="ms-section__header">
       <span class="ms-section__subtitle" data-block-label>WEDDING ORDER</span>
       <h2 class="ms-section__title" data-block-title>식순 안내</h2>
     </div>
-
-    <!-- Timeline Tree -->
-    <div class="ms-timeline">
-      <div class="ms-timeline__line"></div>
-      
-      <div class="ms-timeline__item">
-        <div class="ms-timeline__dot"></div>
-        <div class="ms-timeline__time">12:00</div>
-        <div class="ms-timeline__event">식전 영상 상영</div>
-      </div>
-      <div class="ms-timeline__item">
-        <div class="ms-timeline__dot"></div>
-        <div class="ms-timeline__time">12:10</div>
-        <div class="ms-timeline__event">개식 및 화촉점화</div>
-      </div>
-      <div class="ms-timeline__item">
-        <div class="ms-timeline__dot"></div>
-        <div class="ms-timeline__time">12:20</div>
-        <div class="ms-timeline__event">신랑 신부 입장</div>
-      </div>
-      <div class="ms-timeline__item">
-        <div class="ms-timeline__dot"></div>
-        <div class="ms-timeline__time">12:30</div>
-        <div class="ms-timeline__event">혼인서약 및 성혼선언</div>
-      </div>
-      <div class="ms-timeline__item">
-        <div class="ms-timeline__dot"></div>
-        <div class="ms-timeline__time">12:45</div>
-        <div class="ms-timeline__event">축가 및 하객 인사</div>
-      </div>
-      <div class="ms-timeline__item">
-        <div class="ms-timeline__dot"></div>
-        <div class="ms-timeline__time">13:00</div>
-        <div class="ms-timeline__event">신랑 신부 행진 및 폐식</div>
-      </div>
-    </div>
+    <div class="ms-slot" data-slot="sequence"></div>
   </section>
 
   <!-- 4. GALLERY SECTION -->
@@ -149,71 +87,13 @@
     <div class="ms-slot" data-slot="gallery"></div>
   </section>
 
-  <!-- 5. CALENDAR SECTION (정적 달력 — 위와 동일하게 아직 슬롯이 없어 디자인 컨트롤만 지원) -->
+  <!-- 5. CALENDAR SECTION -->
   <section class="ms-section ms-calendar" data-block="calendar">
     <div class="ms-section__header">
       <span class="ms-section__subtitle" data-block-label>CALENDAR</span>
       <h2 class="ms-section__title" data-block-title>소중한 날</h2>
     </div>
-    
-    <!-- D-day -->
-    <div class="ms-dday" data-field="wedding_dday">D-30</div>
-
-    <!-- Calendar Card -->
-    <div class="ms-card ms-calendar__card">
-      <div class="ms-calendar__header">
-        <span class="ms-calendar__month">SEPTEMBER</span>
-        <span class="ms-calendar__year">2026</span>
-      </div>
-      
-      <div class="ms-calendar__grid">
-        <div class="ms-calendar__day-name">일</div>
-        <div class="ms-calendar__day-name">월</div>
-        <div class="ms-calendar__day-name">화</div>
-        <div class="ms-calendar__day-name">수</div>
-        <div class="ms-calendar__day-name">목</div>
-        <div class="ms-calendar__day-name">금</div>
-        <div class="ms-calendar__day-name">토</div>
-        
-        <!-- Days -->
-        <div class="ms-calendar__day ms-calendar__day--empty"></div>
-        <div class="ms-calendar__day ms-calendar__day--empty"></div>
-        <div class="ms-calendar__day">1</div>
-        <div class="ms-calendar__day">2</div>
-        <div class="ms-calendar__day">3</div>
-        <div class="ms-calendar__day">4</div>
-        <div class="ms-calendar__day">5</div>
-        
-        <div class="ms-calendar__day">6</div>
-        <div class="ms-calendar__day">7</div>
-        <div class="ms-calendar__day">8</div>
-        <div class="ms-calendar__day">9</div>
-        <div class="ms-calendar__day">10</div>
-        <div class="ms-calendar__day">11</div>
-        <div class="ms-calendar__day">12</div>
-        
-        <div class="ms-calendar__day">13</div>
-        <div class="ms-calendar__day">14</div>
-        <div class="ms-calendar__day">15</div>
-        <div class="ms-calendar__day">16</div>
-        <div class="ms-calendar__day">17</div>
-        <div class="ms-calendar__day">18</div>
-        <div class="ms-calendar__day ms-calendar__day--active">19</div>
-        
-        <div class="ms-calendar__day">20</div>
-        <div class="ms-calendar__day">21</div>
-        <div class="ms-calendar__day">22</div>
-        <div class="ms-calendar__day">23</div>
-        <div class="ms-calendar__day">24</div>
-        <div class="ms-calendar__day">25</div>
-        <div class="ms-calendar__day">26</div>
-        
-        <div class="ms-calendar__day">27</div>
-        <div class="ms-calendar__day">28</div>
-        <div class="ms-calendar__day">29</div>
-        <div class="ms-calendar__day">30</div>
-      </div>
-    </div>
+    <div class="ms-slot" data-slot="calendar"></div>
   </section>
 
   <!-- 6. LOCATION SECTION -->
@@ -223,34 +103,26 @@
       <h2 class="ms-section__title" data-block-title>식장 위치</h2>
     </div>
 
-    <div class="ms-card ms-location__info-card">
+    <div class="ms-card ms-location__info-card" data-copy-field="venue_address">
       <h3 class="ms-location__venue" data-field="venue_name">보우서울</h3>
       <p class="ms-location__hall" data-field="venue_hall">그랜드홀</p>
       <p class="ms-location__address" data-field="venue_address">서울 강남구 학동로 1212</p>
-      
-      <!-- Copy Address Button -->
-      <button class="ms-button ms-button--copy" type="button">
-        <svg class="ms-button__icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-        </svg>
-        주소 복사
-      </button>
+      <p class="ms-location__hint" data-copy-feedback>터치하여 주소 복사</p>
     </div>
 
     <!-- Map Slot -->
     <div class="ms-slot" data-slot="map"></div>
 
-    <div class="ms-location__guides">
-      <div class="ms-location__guide">
+    <div class="ms-location__guides" data-field-when-any="traffic_info,parking_info,shuttle_info">
+      <div class="ms-location__guide" data-field-when="traffic_info">
         <h4 class="ms-location__guide-title">교통 안내</h4>
         <p class="ms-location__guide-desc" data-field="traffic_info">지하철 7호선 학동역 1번 출구 도보 5분</p>
       </div>
-      <div class="ms-location__guide">
+      <div class="ms-location__guide" data-field-when="parking_info">
         <h4 class="ms-location__guide-title">주차 안내</h4>
         <p class="ms-location__guide-desc" data-field="parking_info">식장 내부 주차장 2시간 무료 주차 가능</p>
       </div>
-      <div class="ms-location__guide">
+      <div class="ms-location__guide" data-field-when="shuttle_info">
         <h4 class="ms-location__guide-title">셔틀버스 안내</h4>
         <p class="ms-location__guide-desc" data-field="shuttle_info">운행 정보가 등록되면 이곳에 표시됩니다</p>
       </div>
@@ -291,13 +163,18 @@
     <div class="ms-slot" data-slot="rsvp"></div>
   </section>
 
-  <!-- 10. GUESTBOOK SECTION -->
+  <!-- 9-1. GUESTBOOK SECTION -->
   <section class="ms-section ms-guestbook" data-block="guestbook">
     <div class="ms-section__header">
       <span class="ms-section__subtitle" data-block-label>GUESTBOOK</span>
       <h2 class="ms-section__title" data-block-title>방명록</h2>
     </div>
     <div class="ms-slot" data-slot="guestbook"></div>
+  </section>
+
+  <!-- 10. SHARE — 항상 청첩장 맨 아래에 위치한다(고정 블럭, 순서 변경 대상 아님) -->
+  <section class="ms-section ms-share-section" data-block="share">
+    <div class="ms-slot" data-slot="share"></div>
   </section>
 
   <!-- 11. BGM -->

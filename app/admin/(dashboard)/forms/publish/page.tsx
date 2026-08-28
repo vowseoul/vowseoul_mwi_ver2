@@ -1,5 +1,7 @@
 'use client'
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import React, { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -9,11 +11,11 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { 
-  useCustomersQuery, 
-  useCustomerQuery, 
-  useUpdateCustomerMutation 
+import {
+  useCustomerQuery,
+  useUpdateCustomerMutation
 } from '@/hooks/queries/useCustomers'
+import { CustomerPicker } from '@/components/admin/customer-picker'
 import { 
   useFormTemplatesQuery, 
   useFormTemplateFieldsQuery, 
@@ -21,7 +23,10 @@ import {
 } from '@/hooks/queries/useForms'
 import { ArrowLeft, Send, Copy, Check, ExternalLink, Loader2, Link as LinkIcon, ShieldAlert } from 'lucide-react'
 import { toast } from 'sonner'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 import { v4 as uuidv4 } from 'uuid'
+import { hashPassword } from '@/lib/dashboard-password'
+import { useCopyFeedback } from '@/lib/use-copy-feedback'
 
 function FormPublishContent() {
   const router = useRouter()
@@ -39,12 +44,13 @@ function FormPublishContent() {
   
   // Publish Output State
   const [publishedSlug, setPublishedSlug] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
+  const { isCopied, copy: copyText } = useCopyFeedback()
+  const copied = isCopied()
 
   // Queries
-  const { data: customerData } = useCustomersQuery({ status: 'all' }, 1, 100)
   const { data: selectedCustomer } = useCustomerQuery(customerId || customerIdParam)
-  const { data: templates } = useFormTemplatesQuery()
+  // 비활성으로 꺼둔 양식은 발송 대상에서 빠져야 한다 (폼 관리 화면의 활성 토글이 실제로 반영되는 지점)
+  const { data: templates } = useFormTemplatesQuery({ activeOnly: true })
   const createInstanceMutation = useCreateFormInstanceMutation()
   const updateCustomerMutation = useUpdateCustomerMutation()
 
@@ -87,7 +93,11 @@ function FormPublishContent() {
     }
 
     if (isMobileRequested && !templateIncludesMobile) {
-      const ok = confirm('이 고객은 모바일 청첩장 제작 대상(O)이나, 선택한 양식은 모바일 필드가 없는 [지류 단독형]입니다. 그래도 발행하시겠습니까?')
+      const ok = await confirmDialog({
+        title: '모바일 필드가 없는 양식입니다',
+        description: '이 고객은 모바일 청첩장 제작 대상(O)이나, 선택한 양식은 모바일 필드가 없는 [지류 단독형]입니다. 그래도 발행하시겠습니까?',
+        confirmText: '발행',
+      })
       if (!ok) {
         return
       }
@@ -112,13 +122,14 @@ function FormPublishContent() {
       }))
 
       // 3. Create Form Instance
+      const trimmedPassword = accessPassword.trim()
       await createInstanceMutation.mutateAsync({
         customer_id: customerId,
         template_id: templateId,
         fields_snapshot: fieldsSnapshot,
         unique_url_slug: slug,
         status: 'active',
-        access_password: accessPassword.trim() || null,
+        access_password: trimmedPassword ? await hashPassword(trimmedPassword) : null,
         expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
       })
 
@@ -142,10 +153,8 @@ function FormPublishContent() {
   const formUrl = publishedSlug ? `${baseUrl}/form/${publishedSlug}` : ''
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(formUrl)
-    setCopied(true)
+    copyText(formUrl)
     toast.success('폼 주소가 복사되었습니다. 고객에게 메신저나 이메일로 전송하세요.')
-    setTimeout(() => setCopied(false), 2000)
   }
 
   // If already published
@@ -164,7 +173,7 @@ function FormPublishContent() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-700">정보 수집 폼 공유 주소</label>
+              <label className="text-xs font-semibold text-foreground">정보 수집 폼 공유 주소</label>
               <div className="flex gap-2">
                 <Input value={formUrl} readOnly className="bg-white border-green-200 text-sm h-10" />
                 <Button onClick={handleCopy} className="h-10 px-4 shrink-0 bg-green-600 hover:bg-green-700">
@@ -191,13 +200,12 @@ function FormPublishContent() {
     )
   }
 
-  const registeredCustomers = customerData?.data || []
   const availableTemplates = templates || []
 
   return (
     <div className="space-y-6 font-sans max-w-2xl mx-auto">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" asChild>
+        <Button variant="ghost" size="icon" asChild aria-label="뒤로가기">
           <Link href="/admin/forms">
             <ArrowLeft className="w-5 h-5" />
           </Link>
@@ -220,32 +228,23 @@ function FormPublishContent() {
               {/* Customer Select */}
               <Field>
                 <FieldLabel htmlFor="customerSelect">고객 선택 *</FieldLabel>
-                {selectedCustomer ? (
+                {/* 고객 상세에서 넘어온 경우(customerIdParam)에는 대상이 이미 정해져 있으므로
+                    읽기 전용으로 보여주고, 그 외에는 검색형 선택기를 쓴다 */}
+                {customerIdParam && selectedCustomer ? (
                   <div className="flex items-center justify-between p-3 border border-border rounded-lg bg-muted/20 text-sm">
                     <div>
                       <span className="font-semibold">{selectedCustomer.groom_name} & {selectedCustomer.bride_name}</span>
-                      <span className="text-xs text-muted-foreground ml-2">예식일: {selectedCustomer.wedding_date}</span>
+                      <span className="text-xs text-muted-foreground ml-2">예식일: {selectedCustomer.wedding_date || '미정'}</span>
                     </div>
-                    {customerIdParam ? null : (
-                      <Button variant="link" onClick={() => setCustomerId('')} className="h-auto p-0 text-xs">
-                        변경
-                      </Button>
-                    )}
                   </div>
                 ) : (
-                  <Select value={customerId} onValueChange={setCustomerId}>
-                    <SelectTrigger id="customerSelect">
-                      <SelectValue placeholder="폼을 발송할 고객 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">고객 선택</SelectItem>
-                      {registeredCustomers.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.groom_name} & {c.bride_name} (예식일: {c.wedding_date})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <CustomerPicker
+                    id="customerSelect"
+                    value={customerId}
+                    onChange={(id) => setCustomerId(id)}
+                    filters={{ status: 'all' }}
+                    placeholder="폼을 발송할 고객 검색"
+                  />
                 )}
               </Field>
 
@@ -270,7 +269,7 @@ function FormPublishContent() {
               {/* Fields Preview */}
               {templateId && templateId !== 'none' && (
                 <div className="bg-muted/10 border border-border rounded-xl p-4 space-y-2.5">
-                  <span className="text-xs font-semibold text-slate-700 block">수집할 정보 필드 목록 미리보기</span>
+                  <span className="text-xs font-semibold text-foreground block">수집할 정보 필드 목록 미리보기</span>
                   {isLoadingFields ? (
                     <div className="flex items-center text-xs text-muted-foreground py-2">
                       <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> 불러오는 중...
@@ -327,7 +326,10 @@ function FormPublishContent() {
                   onChange={(e) => setExpiresAt(e.target.value)}
                 />
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  만료일 이후에는 고객이 폼을 수정하거나 응답할 수 없습니다. (기본값: 예식일 + 7일)
+                  만료일 이후에는 고객이 폼을 수정하거나 응답할 수 없습니다.
+                  {selectedCustomer && !selectedCustomer.wedding_date
+                    ? ' 예식일이 아직 없어 자동 계산되지 않았습니다 — 비워두면 만료 없이 계속 열려 있습니다.'
+                    : ' (기본값: 예식일 + 7일)'}
                 </p>
               </Field>
             </FieldGroup>
@@ -336,7 +338,7 @@ function FormPublishContent() {
               <Button type="button" variant="outline" asChild disabled={isSubmitting}>
                 <Link href="/admin/forms">취소</Link>
               </Button>
-              <Button type="submit" className="gap-2" disabled={isSubmitting || (templateId && templateFields?.length === 0)}>
+              <Button type="submit" className="gap-2" disabled={isSubmitting || !!(templateId && templateFields?.length === 0)}>
                 {isSubmitting ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
@@ -353,11 +355,12 @@ function FormPublishContent() {
 }
 
 export default function FormPublishPage() {
+  useDocumentTitle("폼 발행")
   return (
     <Suspense fallback={
       <div className="w-full h-[60vh] flex flex-col items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        <p className="text-muted-foreground text-sm mt-4">데이터 로딩 중...</p>
+        <p className="text-muted-foreground text-sm mt-4">불러오는 중…</p>
       </div>
     }>
       <FormPublishContent />

@@ -1,4 +1,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "청첩장 편집기 | VOW SEOUL" }
 import type { ThemeRow } from "@/lib/theme-template"
 import CustomizeClient from "./customize-client"
 

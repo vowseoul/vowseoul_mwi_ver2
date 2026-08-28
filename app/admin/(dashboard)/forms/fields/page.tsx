@@ -1,5 +1,7 @@
 'use client'
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import React, { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -23,9 +25,11 @@ import {
 } from '@/components/ui/select'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
-import { useFieldsQuery, useCreateFieldMutation, useUpdateFieldMutation, useDeleteFieldMutation } from '@/hooks/queries/useForms'
+import { useFieldsQuery, useCreateFieldMutation, useUpdateFieldMutation, useDeleteFieldMutation, type FieldLibraryItem } from '@/hooks/queries/useForms'
 import { Plus, Search, ArrowLeft, Shield, FileCode2, Loader2, Save, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Settings, Sparkles, Link2, X, ChevronsUpDown } from 'lucide-react'
 import { toast } from 'sonner'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
+import { useUnsavedChangesWarning } from '@/lib/use-unsaved-changes-warning'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog'
 import { supabase } from '@/lib/supabase'
 import { Switch } from '@/components/ui/switch'
@@ -89,6 +93,7 @@ function EditableOptionSelect({
                   variant="ghost"
                   size="icon"
                   className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+                  aria-label="옵션 삭제"
                   onClick={() => onRemoveOption(opt)}
                 >
                   <X className="w-3 h-3" />
@@ -106,7 +111,7 @@ function EditableOptionSelect({
             className="h-7 text-xs px-2"
             maxLength={100}
           />
-          <Button type="button" size="icon" className="h-7 w-7 shrink-0" onClick={handleAdd}>
+          <Button type="button" size="icon" className="h-7 w-7 shrink-0" onClick={handleAdd} aria-label="옵션 추가">
             <Plus className="w-3.5 h-3.5" />
           </Button>
         </div>
@@ -158,7 +163,12 @@ const getDefaultFieldBlocks = () => [
   }
 ]
 
+const ALL_CATEGORIES: FieldLibraryItem['category'][] = [
+  '신랑 정보', '신부 정보', '예식 정보', '혼주 정보', '계좌 정보', '이미지', 'BGM', 'RSVP 설정', '카카오 공유', '영상', '지류 전용',
+]
+
 export default function FieldLibraryPage() {
+  useDocumentTitle("폼 필드 관리")
   const { data: fields, isLoading, error } = useFieldsQuery()
   const createMutation = useCreateFieldMutation()
   const updateMutation = useUpdateFieldMutation()
@@ -176,6 +186,12 @@ export default function FieldLibraryPage() {
   const [blockName, setBlockName] = useState('')
   const [blockDescription, setBlockDescription] = useState('')
   const [blockFields, setBlockFields] = useState<any[]>([])
+  /** 방금 추가되거나 이동된 필드 행 — 잠깐 배경을 강조해 "이게 방금 바뀐 행"임을 보여준다(Feedback) */
+  const [highlightFieldKey, setHighlightFieldKey] = useState<string | null>(null)
+  const flashHighlight = (fieldKey: string) => {
+    setHighlightFieldKey(fieldKey)
+    setTimeout(() => setHighlightFieldKey((cur) => (cur === fieldKey ? null : cur)), 1200)
+  }
   const [isSavingBlock, setIsSavingBlock] = useState(false)
   const [expandedLinkKey, setExpandedLinkKey] = useState<string | null>(null)
 
@@ -196,23 +212,15 @@ export default function FieldLibraryPage() {
     )
   }, [blockName, initialBlockName, blockDescription, initialBlockDescription, blockFields, initialBlockFields])
 
-  const handleCloseBlockEditor = () => {
+  const handleCloseBlockEditor = async () => {
     if (isDirty) {
-      const ok = confirm('작성 중인 변경사항이 있습니다. 저장하지 않고 편집기를 닫으시겠습니까?')
+      const ok = await confirmDialog({ title: '저장하지 않고 편집기를 닫으시겠습니까?', description: '작성 중인 변경사항이 있습니다.', destructive: true, confirmText: '닫기' })
       if (!ok) return
     }
     setIsEditingBlockView(false)
   }
 
-  useEffect(() => {
-    if (!isDirty || !isEditingBlockView) return
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault()
-      e.returnValue = ''
-    }
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [isDirty, isEditingBlockView])
+  useUnsavedChangesWarning(isDirty && isEditingBlockView)
 
   const fetchFieldBlocks = async () => {
     setIsLoadingBlocks(true)
@@ -346,9 +354,8 @@ export default function FieldLibraryPage() {
 
   // Dynamic available categories from current data
   const availableCategories = React.useMemo(() => {
-    if (!fields) return ['신랑 정보', '신부 정보', '예식 정보', '혼주 정보', '계좌 정보', '이미지', 'BGM', 'RSVP 설정', '카카오 공유', '영상', '지류 전용']
-    const cats = new Set(fields.map((f) => f.category).filter(Boolean))
-    ;['신랑 정보', '신부 정보', '예식 정보', '혼주 정보', '계좌 정보', '이미지', 'BGM', 'RSVP 설정', '카카오 공유', '영상', '지류 전용'].forEach((c) => cats.add(c))
+    const cats = new Set<FieldLibraryItem['category']>(ALL_CATEGORIES)
+    fields?.forEach((f) => { if (f.category) cats.add(f.category) })
     return Array.from(cats)
   }, [fields])
 
@@ -436,6 +443,7 @@ export default function FieldLibraryPage() {
         page_title: ''
       }
     ])
+    flashHighlight(fieldKey)
   }
 
   const handleRemoveFieldFromBlock = (index: number) => {
@@ -454,6 +462,7 @@ export default function FieldLibraryPage() {
       updated[targetIdx] = temp
       return updated
     })
+    flashHighlight(blockFields[index].field_key)
   }
 
   const handleUpdateBlockFieldProp = (index: number, prop: string, value: any) => {
@@ -510,7 +519,7 @@ export default function FieldLibraryPage() {
   }
 
   const handleDeleteBlock = async (blockId: string) => {
-    if (!confirm('정말로 이 필드 블록을 삭제하시겠습니까? 이 동작은 블록 구성 설정만 제거하며 개별 필드는 삭제되지 않습니다.')) {
+    if (!(await confirmDialog({ title: '이 필드 블록을 삭제하시겠습니까?', description: '이 동작은 블록 구성 설정만 제거하며 개별 필드는 삭제되지 않습니다.', destructive: true, confirmText: '삭제' }))) {
       return
     }
 
@@ -530,7 +539,7 @@ export default function FieldLibraryPage() {
     }
   }
   const handleDelete = async (fieldId: string) => {
-    if (!confirm('정말로 이 필드를 삭제하시겠습니까? 이 동작은 되돌릴 수 없습니다.')) {
+    if (!(await confirmDialog({ title: '이 필드를 삭제하시겠습니까?', description: '이 동작은 되돌릴 수 없습니다.', destructive: true, confirmText: '삭제' }))) {
       return
     }
 
@@ -679,6 +688,7 @@ export default function FieldLibraryPage() {
               size="icon" 
               onClick={handleCloseBlockEditor}
               className="h-9 w-9"
+              aria-label="닫기"
             >
               <ArrowLeft className="w-5 h-5" />
             </Button>
@@ -785,9 +795,10 @@ export default function FieldLibraryPage() {
                         const libF = fields?.find(f => f.field_key === bf.field_key)
                         const isExpanded = expandedLinkKey === bf.field_key
                         const hasParent = !!bf.parent_field_key
+                        const isHighlighted = highlightFieldKey === bf.field_key
                         return (
                           <React.Fragment key={index}>
-                            <TableRow className="hover:bg-muted/5">
+                            <TableRow className={`hover:bg-muted/5 transition-colors duration-700 ${isHighlighted ? "bg-primary/10" : ""}`}>
                               <TableCell className="text-center align-middle">
                                 <div className="flex items-center justify-center gap-1">
                                   <Button
@@ -797,6 +808,7 @@ export default function FieldLibraryPage() {
                                     className="h-7 w-7 hover:bg-muted"
                                     onClick={() => handleMoveBlockField(index, 'up')}
                                     disabled={index === 0}
+                                    aria-label="위로 이동"
                                   >
                                     <ArrowUp className="w-3.5 h-3.5" />
                                   </Button>
@@ -807,6 +819,7 @@ export default function FieldLibraryPage() {
                                     className="h-7 w-7 hover:bg-muted"
                                     onClick={() => handleMoveBlockField(index, 'down')}
                                     disabled={index === blockFields.length - 1}
+                                    aria-label="아래로 이동"
                                   >
                                     <ArrowDown className="w-3.5 h-3.5" />
                                   </Button>
@@ -893,6 +906,7 @@ export default function FieldLibraryPage() {
                                     size="icon"
                                     onClick={() => handleRemoveFieldFromBlock(index)}
                                     className="h-8 w-8 text-destructive hover:text-destructive/90 hover:bg-destructive/10 shrink-0"
+                                    aria-label="필드 제거"
                                   >
                                     <Trash2 className="w-4 h-4" />
                                   </Button>
@@ -1034,7 +1048,7 @@ export default function FieldLibraryPage() {
     <div className="space-y-6 font-sans">
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" asChild>
+          <Button variant="ghost" size="icon" asChild aria-label="뒤로가기">
             <Link href="/admin">
               <ArrowLeft className="w-5 h-5" />
             </Link>
@@ -1235,6 +1249,7 @@ export default function FieldLibraryPage() {
                               variant="ghost"
                               size="icon"
                               className="h-6 w-6 text-destructive shrink-0 mt-1 hover:bg-destructive/10"
+                              aria-label="선택지 삭제"
                               onClick={() => setNewSelectTextChoices(prev => prev.filter((_, i) => i !== idx))}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -1426,15 +1441,16 @@ export default function FieldLibraryPage() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(field)}>
+                            <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(field)} aria-label="필드 설정">
                               <Settings className="w-4 h-4 text-muted-foreground" />
                             </Button>
                             {!field.is_system && (
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 className="text-destructive"
                                 onClick={() => handleDelete(field.id)}
+                                aria-label="삭제"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
@@ -1605,6 +1621,7 @@ export default function FieldLibraryPage() {
                                 variant="ghost"
                                 size="icon"
                                 className="h-6 w-6 text-destructive shrink-0 mt-1 hover:bg-destructive/10"
+                                aria-label="선택지 삭제"
                                 onClick={() => setEditSelectTextChoices(prev => prev.filter((_, i) => i !== idx))}
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -1687,14 +1704,16 @@ export default function FieldLibraryPage() {
                               size="icon" 
                               onClick={() => handleOpenBlockEdit(block)}
                               className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                              aria-label="블록 설정"
                             >
                               <Settings className="w-4 h-4" />
                             </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               onClick={() => handleDeleteBlock(block.id)}
                               className="h-8 w-8 text-destructive hover:text-destructive/90"
+                              aria-label="블록 삭제"
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>

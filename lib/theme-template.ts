@@ -1,4 +1,5 @@
 import type { ThemeTemplate, TokenMap } from "@/components/invitation/invitation-frame"
+import { z } from "zod"
 
 /**
  * DB(themes 행) ↔ 렌더러(InvitationFrame) 사이의 브릿지.
@@ -103,6 +104,11 @@ export const SIZE_TOKEN_FIELDS: { name: string; label: string; group: "typograph
   { name: "--text-label", label: "섹션 영문 소제목 크기", group: "typography", min: 10, max: 24 },
   { name: "--text-body", label: "본문 크기", group: "typography", min: 12, max: 22 },
   { name: "--text-caption", label: "작은 글씨 크기", group: "typography", min: 10, max: 18 },
+  // 아래 셋은 예전에 테마 CSS 에 px 로 박혀 있어 편집기에서 손댈 수 없던 텍스트들을
+  // 성격별로 묶은 것이다. 요소마다 토큰을 만들면 슬라이더가 테마당 열 개 넘게 쌓인다.
+  { name: "--text-number", label: "큰 숫자 · 강조 크기", group: "typography", min: 16, max: 56 },
+  { name: "--text-card-title", label: "카드 · 항목 제목 크기", group: "typography", min: 10, max: 28 },
+  { name: "--text-micro", label: "아주 작은 라벨 크기", group: "typography", min: 7, max: 16 },
   { name: "--section-py", label: "섹션 세로 여백", group: "layout", min: 16, max: 120 },
   { name: "--section-px", label: "섹션 가로 여백", group: "layout", min: 8, max: 48 },
   { name: "--content-gap", label: "요소 간 기본 간격", group: "layout", min: 8, max: 64 },
@@ -139,6 +145,25 @@ export interface BlockManifestEntry {
   padding: boolean
 }
 
+/** invitations.block_order(jsonb) 를 안전한 블럭 키 배열로 정규화. 알 수 없는 키(레거시
+ * 흔적 등)는 버리고, 유효한 키가 하나도 없으면 undefined를 돌려줘 호출부가 테마의 기본
+ * 순서(template.html의 DOM 순서)를 그대로 쓰게 한다. share는 항상 맨 마지막에 고정되는
+ * 블럭이라 여기서 걸러내지 않아도 되지만(§invitation-frame.tsx 재정렬 이펙트가 강제),
+ * 순서 배열 자체에는 포함시켜 저장/복원 왕복이 정확하게 유지되도록 한다. */
+export function extractBlockOrder(raw: unknown): BlockKey[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const seen = new Set<string>()
+  const out: BlockKey[] = []
+  for (const v of raw) {
+    if (typeof v !== "string") continue
+    if (!(BLOCK_KEYS as readonly string[]).includes(v)) continue
+    if (seen.has(v)) continue
+    seen.add(v)
+    out.push(v as BlockKey)
+  }
+  return out.length > 0 ? out : undefined
+}
+
 /** themes.block_manifest(jsonb) 를 안전하게 배열로 정규화 */
 export function getBlockManifest(row: ThemeRow | null | undefined): BlockManifestEntry[] {
   const value = row?.block_manifest
@@ -148,30 +173,169 @@ export function getBlockManifest(row: ThemeRow | null | undefined): BlockManifes
   )
 }
 
-/** 블럭 하나에 대한 개별 오버라이드 — customization_overrides.blocks[key] */
-export interface BlockOverride {
+const nonEmptyString = z.string().min(1)
+const finiteNumber = z.number().finite()
+
+/**
+ * 블럭 하나에 대한 개별 오버라이드 — customization_overrides.blocks[key].
+ * 스키마 하나가 타입(BlockOverride)과 런타임 검증(extractBlockOverrides) 양쪽의
+ * 단일 출처다 — 필드를 여기 하나에만 추가하면 타입과 가드가 함께 따라온다.
+ */
+const BlockOverrideSchema = z.object({
   /** 위/아래 여백(px). 없으면 테마 기본값 */
-  py?: number
+  py: finiteNumber,
   /** 한글 타이틀. 빈 문자열/미설정이면 템플릿 기본 텍스트를 그대로 둔다 */
-  title?: string
+  title: z.string(),
   /** 영문 소제목. 빈 문자열/미설정이면 템플릿 기본 텍스트를 그대로 둔다 */
-  label?: string
+  label: z.string(),
   /** rsvp 블럭 전용: false 면 식사 여부 질문을 숨긴다 (미설정 시 노출) */
-  mealEnabled?: boolean
+  mealEnabled: z.boolean(),
   /** rsvp 블럭 전용: false 면 셔틀버스 이용 질문을 숨긴다 (미설정 시 노출) */
-  shuttleEnabled?: boolean
+  shuttleEnabled: z.boolean(),
   /** rsvp 블럭 전용: 응답 마감일("YYYY-MM-DD"). 없으면 마감 없이 상시 접수 */
-  rsvpDeadline?: string
+  rsvpDeadline: nonEmptyString,
   /** calendar 블럭 전용: false 면 D-day 카운트다운을 숨긴다 (미설정 시 노출) */
-  ddayEnabled?: boolean
+  ddayEnabled: z.boolean(),
   /** calendar 블럭 전용: false 면 ".ics 캘린더 앱에 추가" 버튼을 숨긴다 (미설정 시 노출) */
-  icsButtonEnabled?: boolean
+  icsButtonEnabled: z.boolean(),
   /** calendar 블럭 전용: false 면 "구글 캘린더" 버튼을 숨긴다 (미설정 시 노출) */
-  googleCalendarButtonEnabled?: boolean
+  googleCalendarButtonEnabled: z.boolean(),
+  /** calendar 블럭 전용: true 면 D-day 숫자가 처음 나타날 때 0에서 실제 값까지 굴러 올라간다 (미설정 시 꺼짐) */
+  ddayRollingEnabled: z.boolean(),
+  /** calendar 블럭 전용: 예식일 강조 표시 모양 (미설정 시 원형) */
+  calendarDayShape: z.enum(["circle", "heart", "custom"]),
+  /** calendar 블럭 전용: calendarDayShape가 'custom'일 때 사용할 업로드 이미지 URL */
+  calendarDayCustomShapeUrl: nonEmptyString,
+  /** calendar 블럭 전용: 강조 표시 크기(px). 미설정 시 32 */
+  calendarDayShapeSize: finiteNumber,
+  /** calendar 블럭 전용: 강조된 날짜 숫자의 텍스트 색상(hex). 미설정 시 흰색 */
+  calendarDayTextColor: nonEmptyString,
+  /** calendar 블럭 전용: 업로드한 SVG 모양에 입힐 색상(hex). 미설정 시 테마 accent 색 */
+  calendarDaySvgColor: nonEmptyString,
+  /** calendar 블럭 전용: 달력 박스 배경색(hex). 미설정 시 CALENDAR_BOX_DEFAULT.color */
+  calendarBoxColor: nonEmptyString,
+  /** calendar 블럭 전용: 달력 박스 배경 불투명도(0~100). 미설정 시 CALENDAR_BOX_DEFAULT.opacity.
+   *  배경에만 적용한다 — CSS opacity 로 주면 날짜 숫자까지 함께 흐려진다 */
+  calendarBoxOpacity: finiteNumber,
+  /** calendar 블럭 전용: 달력 그리드 아래 날짜 줄 텍스트. 미설정 시 wedding_date에서 "YYYY년 MM월 DD일"로 자동 계산 */
+  calendarDateText: nonEmptyString,
+  /** calendar 블럭 전용: 달력 그리드 아래 시간 줄 텍스트. 미설정 시 "요일 wedding_time"으로 자동 계산 */
+  calendarTimeText: nonEmptyString,
+  /** account 블럭 전용: 계좌 표시 방식. 미설정 시 기존 목록형("list") */
+  accountLayout: z.enum(["list", "card"]),
+  /** account 카드형 전용: 카드 배경을 무엇에서 가져올지.
+   *  auto  — 그 섹션이 실제로 쓰는 글자색(currentColor)에 맞춘다. 어느 배경 위에서도 보인다.
+   *  accent/bg — 테마 토큰을 따라가므로 테마를 바꿔도 어울리는 색이 유지되지만, 섹션 배경과
+   *              같은 토큰이면 카드가 보이지 않는다(color-atelier 의 계좌 섹션 배경이 --accent 다).
+   *  custom — accountCardBgColor 의 고정 hex.
+   *  미설정 시 ACCOUNT_CARD_BG_DEFAULT.source */
+  accountCardBg: z.enum(["auto", "accent", "bg", "custom"]),
+  /** account 카드형 전용: accountCardBg 가 'custom' 일 때 쓸 색(hex) */
+  accountCardBgColor: nonEmptyString,
+  /** account 카드형 전용: 카드 배경 불투명도(0~100). 미설정 시 ACCOUNT_CARD_BG_DEFAULT.opacity */
+  accountCardBgOpacity: finiteNumber,
+  /** greeting 블럭 전용: 인사말 아이콘 모양 (미설정 시 하트) */
+  greetingIconShape: z.enum(["heart", "custom"]),
+  /** greeting 블럭 전용: greetingIconShape가 'custom'일 때 사용할 업로드 이미지 URL */
+  greetingIconCustomUrl: nonEmptyString,
+  /** greeting 블럭 전용: 아이콘 크기(px). 미설정 시 24 */
+  greetingIconSize: finiteNumber,
+  /** greeting 블럭 전용: 아이콘 색상(hex). 하트/커스텀 SVG 모두 적용. 미설정 시 테마 accent 색 */
+  greetingIconColor: nonEmptyString,
+}).partial()
+
+export type BlockOverride = z.infer<typeof BlockOverrideSchema>
+
+/** 달력 박스 배경 기본값 — 렌더러(calendar-island)와 편집기 슬라이더가 공유한다 */
+// 기본값을 바꿀 때는 기존 청첩장에 현재 값을 명시적으로 박아 넣은 뒤 바꿔야 한다 —
+// 오버라이드가 없는 청첩장은 이 값을 따라가므로, 그냥 바꾸면 이미 발행된 것까지 함께 변한다.
+export const CALENDAR_BOX_DEFAULT = { color: "#ffffff", opacity: 25 } as const
+
+/**
+ * 블럭별 배경 농담(濃淡) — customization_overrides.blockTint.
+ *
+ * 테마의 메인 배경색은 그대로 두고, 섹션마다 흰색/검정을 옅게 덮어 경계를 만든다.
+ * 배경색을 바꾸는 게 아니라 위에 한 겹 얹는 방식이라(background-image 오버레이)
+ * 테마가 어떤 색을 쓰든, 섹션이 이미지든 그라데이션이든 그대로 통한다.
+ *
+ *   A  덮지 않음 (테마 기본 배경)
+ *   B  + #ffffff 40%
+ *   C  + #000000 5%
+ *
+ * color-atelier 는 이미 --accent 로 섹션 배경을 교대하므로(vs-alt-a/b) 대상이 아니다.
+ * 그런 테마에서는 편집기가 이 설정을 아예 보여주지 않는다 — 겹쳐 칠하면 의도한
+ * 교대가 뭉개지고, 무엇보다 효과 없는 컨트롤은 버그로 읽힌다.
+ */
+/**
+ * 각 단계가 덮을 색. 농도는 관리자가 조절하고 색은 고정한다 — 색까지 열면 "블럭별
+ * 배경 농담"이 아니라 섹션마다 배경색을 따로 칠하는 기능이 되고, 그건 테마가 할 일이다.
+ *
+ * A 도 흰색을 쓰되 기본 농도가 0 이라 아무것도 덮지 않는다(= 테마 기본 배경 그대로).
+ * 0 일 때는 오버레이 자체를 얹지 않아 흔적이 남지 않는다.
+ */
+export const BLOCK_TINT_STEP_COLORS = { A: "255,255,255", B: "255,255,255", C: "0,0,0" } as const
+
+export type BlockTintStep = keyof typeof BLOCK_TINT_STEP_COLORS
+
+export const BLOCK_TINT_DEFAULT_OPACITY: Record<BlockTintStep, number> = { A: 0, B: 40, C: 5 }
+
+export const BLOCK_TINT_STEP_LABELS: Record<BlockTintStep, string> = {
+  A: "A · 기본 배경",
+  B: "B · 밝게",
+  C: "C · 어둡게",
 }
+
+export const BLOCK_TINT_PATTERNS: { value: string; label: string; steps: BlockTintStep[] }[] = [
+  { value: "none", label: "기본 배경색 (통일)", steps: ["A"] },
+  { value: "abac", label: "A-B-A-C 반복", steps: ["A", "B", "A", "C"] },
+  { value: "abab", label: "A-B-A-B 반복", steps: ["A", "B", "A", "B"] },
+  { value: "acac", label: "A-C-A-C 반복", steps: ["A", "C", "A", "C"] },
+]
+
+/** customization_overrides.blockTint 를 안전하게 읽는다 (모르는 값은 'none') */
+export function extractBlockTint(overrides: unknown): string {
+  if (!overrides || typeof overrides !== "object") return "none"
+  const v = (overrides as Record<string, unknown>).blockTint
+  return typeof v === "string" && BLOCK_TINT_PATTERNS.some((p) => p.value === v) ? v : "none"
+}
+
+/** customization_overrides.blockTintOpacity 를 안전하게 읽는다 (없거나 범위를 벗어나면 기본값) */
+export function extractBlockTintOpacity(overrides: unknown): Record<BlockTintStep, number> {
+  const out = { ...BLOCK_TINT_DEFAULT_OPACITY }
+  const raw = (overrides && typeof overrides === "object")
+    ? (overrides as Record<string, unknown>).blockTintOpacity
+    : null
+  if (raw && typeof raw === "object") {
+    for (const step of Object.keys(out) as BlockTintStep[]) {
+      const v = (raw as Record<string, unknown>)[step]
+      if (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 100) out[step] = v
+    }
+  }
+  return out
+}
+
+/** 패턴 이름 → 보이는 섹션 순서대로 적용할 오버레이 목록 (null 이면 덮지 않음) */
+export function blockTintOverlays(
+  pattern: string,
+  opacity: Record<BlockTintStep, number> = BLOCK_TINT_DEFAULT_OPACITY,
+): (string | null)[] {
+  const found = BLOCK_TINT_PATTERNS.find((p) => p.value === pattern) ?? BLOCK_TINT_PATTERNS[0]
+  return found.steps.map((step) => {
+    const pct = Math.min(100, Math.max(0, opacity[step] ?? BLOCK_TINT_DEFAULT_OPACITY[step]))
+    if (pct <= 0) return null
+    const rgb = BLOCK_TINT_STEP_COLORS[step]
+    const a = (pct / 100).toFixed(3)
+    return `linear-gradient(rgba(${rgb},${a}), rgba(${rgb},${a}))`
+  })
+}
+
+/** 계좌 카드 배경 기본값 — 렌더러(account-island)와 편집기가 공유한다 */
+export const ACCOUNT_CARD_BG_DEFAULT = { source: "auto", color: "#bebebe", opacity: 12 } as const
 
 /**
  * customization_overrides(jsonb) 에서 blocks(블럭별 오버라이드 맵)를 추출한다.
+ * 필드 단위로 개별 검증한다(객체 전체를 한 번에 parse하지 않음) — 한 필드가
+ * 깨져 있어도 나머지 정상 필드는 그대로 살리는 기존 관용 동작을 유지하기 위함.
  * disabled_slots/'--' 토큰과 같은 customization_overrides 컬럼을 공유하되 별도 키라 서로 간섭하지 않는다.
  */
 export function extractBlockOverrides(overrides: unknown): Record<string, BlockOverride> {
@@ -179,20 +343,17 @@ export function extractBlockOverrides(overrides: unknown): Record<string, BlockO
   if (!overrides || typeof overrides !== "object") return out
   const blocks = (overrides as Record<string, unknown>).blocks
   if (!blocks || typeof blocks !== "object") return out
+  const fieldSchemas = BlockOverrideSchema.shape
   for (const [key, raw] of Object.entries(blocks as Record<string, unknown>)) {
     if (!raw || typeof raw !== "object") continue
     const r = raw as Record<string, unknown>
-    const entry: BlockOverride = {}
-    if (typeof r.py === "number" && Number.isFinite(r.py)) entry.py = r.py
-    if (typeof r.title === "string") entry.title = r.title
-    if (typeof r.label === "string") entry.label = r.label
-    if (typeof r.mealEnabled === "boolean") entry.mealEnabled = r.mealEnabled
-    if (typeof r.shuttleEnabled === "boolean") entry.shuttleEnabled = r.shuttleEnabled
-    if (typeof r.rsvpDeadline === "string" && r.rsvpDeadline) entry.rsvpDeadline = r.rsvpDeadline
-    if (typeof r.ddayEnabled === "boolean") entry.ddayEnabled = r.ddayEnabled
-    if (typeof r.icsButtonEnabled === "boolean") entry.icsButtonEnabled = r.icsButtonEnabled
-    if (typeof r.googleCalendarButtonEnabled === "boolean") entry.googleCalendarButtonEnabled = r.googleCalendarButtonEnabled
-    if (Object.keys(entry).length > 0) out[key] = entry
+    const entry: Record<string, unknown> = {}
+    for (const field of Object.keys(fieldSchemas) as (keyof typeof fieldSchemas)[]) {
+      if (r[field] === undefined) continue
+      const parsed = fieldSchemas[field].safeParse(r[field])
+      if (parsed.success) entry[field] = parsed.data
+    }
+    if (Object.keys(entry).length > 0) out[key] = entry as BlockOverride
   }
   return out
 }
@@ -203,14 +364,16 @@ export function extractBlockOverrides(overrides: unknown): Record<string, BlockO
  * 연속 배치된다. 삭제 후 재업로드 없이 afterBlock 드롭다운만 바꾸면 위치를 옮길 수 있고,
  * 배열 순서는 위/아래 버튼으로 바꾼다 (편집기 UI, §customize-client.tsx).
  */
-export interface SectionImage {
+const SectionImageSchema = z.object({
   /** 클라이언트에서 생성하는 안정적인 key (React key 및 DOM 매칭용) */
-  id: string
-  url: string
+  id: z.string(),
+  url: nonEmptyString,
   /** 이 블럭 키의 섹션 바로 뒤에 삽입된다 */
-  afterBlock: string
-  caption?: string
-}
+  afterBlock: z.string(),
+  caption: z.string().optional(),
+})
+
+export type SectionImage = z.infer<typeof SectionImageSchema>
 
 /** customization_overrides.sectionImages 를 안전하게 SectionImage[] 로 정규화 */
 export function extractSectionImages(overrides: unknown): SectionImage[] {
@@ -219,13 +382,10 @@ export function extractSectionImages(overrides: unknown): SectionImage[] {
   if (!Array.isArray(raw)) return []
   const out: SectionImage[] = []
   for (const item of raw) {
-    if (!item || typeof item !== "object") continue
-    const r = item as Record<string, unknown>
-    if (typeof r.id !== "string" || typeof r.url !== "string" || typeof r.afterBlock !== "string") continue
-    if (!r.url) continue
-    const entry: SectionImage = { id: r.id, url: r.url, afterBlock: r.afterBlock }
-    if (typeof r.caption === "string" && r.caption) entry.caption = r.caption
-    out.push(entry)
+    const parsed = SectionImageSchema.safeParse(item)
+    if (!parsed.success) continue
+    // 빈 문자열 caption은 "설정 안 함"과 동일하게 취급한다(기존 관용 동작 유지).
+    out.push(parsed.data.caption ? parsed.data : { ...parsed.data, caption: undefined })
   }
   return out
 }
@@ -319,6 +479,16 @@ export function buildInvitationTokens(
  * 꺼둔 기능"을 나타낸다 — 예: 이 커플만 RSVP를 빼달라는 요청. '--' 토큰 오버라이드와
  * 같은 customization_overrides 컬럼을 공유하되 CSS 변수가 아닌 별도 키라 서로 간섭하지 않는다.
  */
+/**
+ * customization_overrides(jsonb)에서 introEnabled(오프닝 인트로 연출 여부)를 추출한다.
+ * 다른 boolean 최상위 키(scrollMotion 등)와 마찬가지로 별도 키를 써서 서로 간섭하지 않는다.
+ * 기본값은 false — 취향이 크게 갈리는 연출이라 담당자가 의식적으로 켜야 한다.
+ */
+export function extractIntroEnabled(overrides: unknown): boolean {
+  if (!overrides || typeof overrides !== "object") return false
+  return (overrides as Record<string, unknown>).introEnabled === true
+}
+
 export function extractDisabledSlots(overrides: unknown): string[] {
   if (!overrides || typeof overrides !== "object") return []
   const value = (overrides as Record<string, unknown>).disabled_slots

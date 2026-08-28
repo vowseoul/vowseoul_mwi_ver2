@@ -1,8 +1,8 @@
 'use client'
 
 import React, { useState, useEffect, use, Suspense } from 'react'
-import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import { SaveButton } from '@/components/ui/save-button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { useFormInstanceBySlugQuery, useSubmitFormMutation } from '@/hooks/queries/useForms'
+import { pickFormSubmission } from '@/lib/form-submission'
 import { useBgmLibraryQuery } from '@/hooks/queries/useBgms'
 import { mergeMusicChoices } from '@/lib/bgm-choices'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -42,11 +43,26 @@ import {
   Plus
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { uploadImage } from '@/lib/image-upload'
+import { uploadImage, SHARE_THUMBNAIL_OPTIONS, isShareThumbnailField } from '@/lib/image-upload'
 import { Logo } from '@/components/logo'
 import { Checkbox } from '@/components/ui/checkbox'
 import { supabase } from '@/lib/supabase'
 import { DATA_RETENTION_SETTINGS_KEY, DEFAULT_RETENTION_DAYS, parseRetentionSettings } from '@/lib/data-retention'
+import { BUSINESS_INFO_SETTINGS_KEY, parseBusinessInfo } from '@/lib/business-info'
+import { AddressSearchField } from '@/components/address-search-field'
+import { AccountBlock, AccountListField } from '@/components/account-fields'
+import {
+  ACCOUNT_GROUPS,
+  EMPTY_ACCOUNT,
+  accountGroupKeys,
+  accountGroupOf,
+  composeAccountText,
+  isAccountFilled,
+  isExtraAccountKey,
+  parseAccountList,
+} from '@/lib/account-fields'
+import { ContactListField } from '@/components/contact-fields'
+import { composeContactText, isContactFilled, isExtraContactsKey, parseContactList } from '@/lib/contact-fields'
 import { CONSENT_VERSION, getFormConsentCopy } from '@/lib/privacy-consent'
 
 const parseLocalDate = (dateStr: string) => {
@@ -55,9 +71,54 @@ const parseLocalDate = (dateStr: string) => {
   return new Date(year, month - 1, day)
 }
 
+/**
+ * 값이 비었는지 판정. 사진 항목은 값이 배열이라 `!val` 로는 걸러지지 않는다 —
+ * 사진을 넣었다 전부 지우면 빈 배열([])이 남는데 JS 에서 []는 truthy 라
+ * "첨부됨"으로 보이면서 제출 검증은 누락으로 잡는 모순이 생긴다.
+ */
+const isBlank = (val: any) => {
+  if (val === null || val === undefined) return true
+  if (Array.isArray(val)) return val.length === 0
+  return val.toString().trim() === ''
+}
+
+/** 임시저장 시각을 "3분 전"처럼 읽기 쉬운 상대 시간으로. 하루가 넘으면 날짜로 보여준다 */
+const formatSavedAt = (iso: string) => {
+  const saved = new Date(iso)
+  if (Number.isNaN(saved.getTime())) return ''
+  const minutes = Math.floor((Date.now() - saved.getTime()) / 60000)
+  if (minutes < 1) return '방금 전'
+  if (minutes < 60) return `${minutes}분 전`
+  if (minutes < 60 * 24) return `${Math.floor(minutes / 60)}시간 전`
+  return format(saved, 'M월 d일 a h:mm', { locale: ko })
+}
+
+/**
+ * 링크가 잘못됐거나 만료됐을 때 보여주는 문의 안내. 예전에는 "메인 화면으로 이동"
+ * 버튼이었는데 그 경로(/)가 관리자 페이지로 리다이렉트돼(§app/page.tsx) 고객이
+ * 관리자 로그인 화면에 떨어지는 막다른 길이었다.
+ */
+function SupportContact({ email }: { email: string }) {
+  return (
+    <div className="rounded-lg bg-muted/60 p-3 text-sm">
+      <p className="font-medium text-foreground">문의하기</p>
+      <p className="mt-1 text-muted-foreground">
+        카카오채널 <span className="font-medium text-foreground">바우서울</span>
+        {email && (
+          <>
+            {' 또는 '}
+            <a href={`mailto:${email}`} className="font-medium text-foreground underline underline-offset-2">
+              {email}
+            </a>
+          </>
+        )}
+      </p>
+    </div>
+  )
+}
+
 function PublicFormContent({ slug }: { slug: string }) {
-  const router = useRouter()
-  const { data: instance, isLoading, error } = useFormInstanceBySlugQuery(slug)
+  const { data: instance, isLoading, error, refetch } = useFormInstanceBySlugQuery(slug)
   const submitMutation = useSubmitFormMutation()
   const { data: bgmLibrary } = useBgmLibraryQuery()
 
@@ -74,23 +135,33 @@ function PublicFormContent({ slug }: { slug: string }) {
   const [consentConfirmed, setConsentConfirmed] = useState(false)
   const [consentAgreedAt, setConsentAgreedAt] = useState<string | null>(null)
   const [retentionDays, setRetentionDays] = useState(DEFAULT_RETENTION_DAYS)
+  // 링크가 잘못됐거나 만료됐을 때 고객이 연락할 곳. 예전엔 '메인 화면으로 이동' 버튼을
+  // 뒀는데 그 경로(/)가 관리자 페이지로 리다이렉트돼 고객이 로그인 화면에 떨어졌다.
+  const [supportEmail, setSupportEmail] = useState('')
 
   useEffect(() => {
     supabase
       .from('settings')
-      .select('value')
-      .eq('key', DATA_RETENTION_SETTINGS_KEY)
-      .maybeSingle()
-      .then(({ data }) => setRetentionDays(parseRetentionSettings(data?.value).daysAfterWedding))
+      .select('key, value')
+      .in('key', [DATA_RETENTION_SETTINGS_KEY, BUSINESS_INFO_SETTINGS_KEY])
+      .then(({ data }) => {
+        const byKey = Object.fromEntries((data ?? []).map((r) => [r.key, r.value]))
+        setRetentionDays(parseRetentionSettings(byKey[DATA_RETENTION_SETTINGS_KEY]).daysAfterWedding)
+        setSupportEmail(parseBusinessInfo(byKey[BUSINESS_INFO_SETTINGS_KEY]).supportEmail)
+      })
   }, [])
 
   // Form Value state { field_key: value }
   const [formValues, setFormValues] = useState<Record<string, any>>({})
   const [zoomImage, setZoomImage] = useState<string | null>(null)
   const [currentStep, setCurrentStep] = useState(0)
+  // 다음/제출을 눌렀을 때 비어 있던 필수 항목들. 해당 입력칸에 오류 표시를 띄우는 데 쓴다
+  const [missingKeys, setMissingKeys] = useState<string[]>([])
+  // 이전에 쓰던 내용을 되살렸을 때의 저장 시각. 긴 폼이라 "내가 쓴 게 남아있나"를
+  // 알려주지 않으면 고객이 처음부터 다시 쓰게 된다. null 이면 새로 시작하는 것.
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [savingDraft, setSavingDraft] = useState(false)
   const [customSelectTexts, setCustomSelectTexts] = useState<Record<string, boolean>>({})
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null)
   const [uploadingFields, setUploadingFields] = useState<string[]>([])
@@ -110,7 +181,7 @@ function PublicFormContent({ slug }: { slug: string }) {
       const results = await Promise.all(
         files.map(async (file) => {
           try {
-            return await uploadImage(file, 'forms/submissions')
+            return await uploadImage(file, 'forms/submissions', isShareThumbnailField(fieldKey) ? SHARE_THUMBNAIL_OPTIONS : undefined)
           } catch (err) {
             toast.error(err instanceof Error ? err.message : `'${file.name}' 업로드에 실패했습니다.`)
             return null
@@ -186,7 +257,9 @@ function PublicFormContent({ slug }: { slug: string }) {
   // Initialize password lock & form values
   useEffect(() => {
     if (instance) {
-      if (!instance.has_password) {
+      // 서버가 잠금해제 쿠키까지 보고 내린 판정을 그대로 따른다. 비밀번호가 없는 폼도,
+      // 이미 통과해 쿠키를 가진 폼도 locked:false 로 내려온다.
+      if (!instance.locked) {
         setIsUnlocked(true)
       }
       
@@ -205,10 +278,20 @@ function PublicFormContent({ slug }: { slug: string }) {
     const draftKey = `vowseoul_draft_${instance.slug || instance.id}`
 
     let initialValues: Record<string, any> = {}
+    let savedAt: string | null = null
 
-    const serverSubmission = instance.form_submissions?.[0]
+    const serverSubmission = pickFormSubmission<any>(instance.form_submissions)
     if (serverSubmission?.data) {
       initialValues = { ...serverSubmission.data }
+      savedAt = serverSubmission.updated_at ?? null
+    }
+
+    // 이미 이번 버전 방침에 동의한 기록이 서버에 있으면 다시 묻지 않는다. 방침이
+    // 개정돼 버전이 올라가면 값이 달라지므로 그때는 자동으로 다시 받게 된다.
+    if (serverSubmission?.consent_agreed_at && serverSubmission.consent_version === CONSENT_VERSION) {
+      setConsentAgreedAt(serverSubmission.consent_agreed_at)
+      setConsentChecked(true)
+      setConsentConfirmed(true)
     }
 
     try {
@@ -220,14 +303,19 @@ function PublicFormContent({ slug }: { slug: string }) {
           if (typeof parsed.currentStep === 'number') {
             setCurrentStep(parsed.currentStep)
           }
+          // 이 기기에 남은 게 서버 기록보다 최신이다
+          if (typeof parsed.updatedAt === 'string') savedAt = parsed.updatedAt
         }
       }
     } catch (e) {
       console.error('Error reading localStorage draft:', e)
     }
 
+    // 값이 실제로 들어있을 때만 "이어쓰기"로 본다 — 빈 문자열로 초기화된 기본값
+    // 뭉치까지 복원으로 치면 처음 여는 고객에게도 안내가 뜬다.
     if (Object.keys(initialValues).length > 0) {
       setFormValues((prev) => ({ ...prev, ...initialValues }))
+      if (Object.values(initialValues).some((v) => !isBlank(v))) setDraftSavedAt(savedAt)
     }
   }, [instance])
 
@@ -260,7 +348,9 @@ function PublicFormContent({ slug }: { slug: string }) {
         body: JSON.stringify({ slug, password }),
       })
       if (res.ok) {
-        setIsUnlocked(true)
+        // 로컬 플래그만 켜면 화면은 열리는데 답변이 비어 있다 — 잠긴 응답에는
+        // 폼 구성도 기존 답변도 없기 때문이다. 쿠키를 받은 상태로 다시 받아온다.
+        await refetch()
         setPasswordError('')
       } else {
         setPasswordError('비밀번호가 올바르지 않습니다. 다시 확인해주세요.')
@@ -293,12 +383,10 @@ function PublicFormContent({ slug }: { slug: string }) {
             <div className="space-y-2">
               <h2 className="text-lg font-semibold">찾을 수 없는 양식</h2>
               <p className="text-sm text-muted-foreground">
-                입력 양식이 만료되었거나, 주소가 잘못되었습니다. 운영팀에 문의해주세요.
+                입력 양식이 만료되었거나, 주소가 잘못되었습니다.
               </p>
             </div>
-            <Button className="w-full" onClick={() => router.push('/')}>
-              메인 화면으로 이동
-            </Button>
+            <SupportContact email={supportEmail} />
           </CardContent>
         </Card>
       </div>
@@ -316,11 +404,10 @@ function PublicFormContent({ slug }: { slug: string }) {
               <h2 className="text-lg font-semibold">만료된 입력 링크</h2>
               <p className="text-sm text-muted-foreground">
                 이 정보 수집 링크는 만료기한이 지나 비활성화되었습니다.
+                새 링크를 받으시려면 아래로 문의해주세요.
               </p>
             </div>
-            <Button className="w-full" onClick={() => router.push('/')}>
-              메인 화면으로 이동
-            </Button>
+            <SupportContact email={supportEmail} />
           </CardContent>
         </Card>
       </div>
@@ -495,11 +582,47 @@ function PublicFormContent({ slug }: { slug: string }) {
 
   const handleInputChange = (key: string, val: any) => {
     setFormValues((prev) => ({ ...prev, [key]: val }))
+    // 입력을 시작하면 그 항목의 누락 표시는 바로 걷어준다
+    setMissingKeys((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : prev))
+  }
+
+  /** 계좌 블럭처럼 여러 키를 한 번에 바꾸는 입력용 */
+  const handleInputPatch = (patch: Record<string, any>) => {
+    setFormValues((prev) => ({ ...prev, ...patch }))
+    setMissingKeys((prev) => prev.filter((k) => !(k in patch) || isBlank(patch[k])))
+  }
+
+  /** 부모 항목의 답에 따라 지금 이 항목을 실제로 물어보고 있는지 */
+  const isFieldActive = (f: any) => {
+    const opts = parseOptions(f)
+    if (!opts.parent_field_key) return true
+    let parentVal = (formValues[opts.parent_field_key] || '').toString().trim()
+    if (parentVal === 'true') parentVal = '예'
+    if (parentVal === 'false') parentVal = '아니오'
+    return parentVal === (opts.parent_trigger_option || '').toString().trim()
+  }
+
+  /** 화면에 떠 있는 필수 항목 중 아직 안 채운 것들 */
+  const collectMissing = (fields: any[]) =>
+    fields.filter((f) => f.is_required && isFieldActive(f) && isBlank(formValues[f.field_key]))
+
+  /**
+   * 누락 항목을 표시하고 첫 번째 항목으로 스크롤한다. 한 단계가 3,000px 이 넘어서
+   * 토스트로 이름만 나열하면 고객이 긴 폼을 직접 뒤져야 한다.
+   */
+  const focusMissing = (missing: any[]) => {
+    setMissingKeys(missing.map((f) => f.field_key))
+    const first = document.getElementById(`formfield-${missing[0].field_key}`)
+    if (first) {
+      // smooth 가 아니라 즉시 이동이다 — 오류를 고치러 가는 길이라 1초짜리 애니메이션이
+      // 도움이 안 되고, 애니메이션 프레임이 안 도는 환경에서는 조용히 아무 일도 안 일어난다.
+      first.scrollIntoView({ behavior: 'auto', block: 'center' })
+      first.querySelector<HTMLElement>('input, textarea, select, button')?.focus({ preventScroll: true })
+    }
   }
 
   // 3. Manual Draft Save Handler
-  const handleSaveDraft = async () => {
-    setSavingDraft(true)
+  const handleSaveDraft = async (): Promise<boolean> => {
     const draftKey = `vowseoul_draft_${instance.slug || instance.id}`
 
     // Immediate Local Storage write
@@ -519,8 +642,7 @@ function PublicFormContent({ slug }: { slug: string }) {
     // Server DB save
     try {
       await submitMutation.mutateAsync({
-        instanceId: instance.id,
-        customerId: instance.customer_id,
+        slug,
         data: formValues,
         isComplete: false,
         consentAgreedAt: consentAgreedAt ?? undefined,
@@ -530,36 +652,24 @@ function PublicFormContent({ slug }: { slug: string }) {
     } catch (err: any) {
       console.warn('Server draft save failed, saved locally:', err)
       toast.success('이 기기에 입력 내용이 임시 저장되었습니다!')
-    } finally {
-      setSavingDraft(false)
     }
+    return true
   }
 
   const handleNext = () => {
-    // Validate current step fields
-    const missingFields = currentFields.filter((f) => {
-      if (!f.is_required) return false
-      
-      // If it is a child field, check if its parent is triggered. If not triggered, ignore it.
-      const opts = parseOptions(f)
-      if (opts.parent_field_key) {
-        let parentVal = (formValues[opts.parent_field_key] || '').toString().trim()
-        if (parentVal === 'true') parentVal = '예'
-        if (parentVal === 'false') parentVal = '아니오'
-        const triggerVal = (opts.parent_trigger_option || '').toString().trim()
-        if (parentVal !== triggerVal) {
-          return false // Not triggered, ignore
-        }
-      }
-      
-      return !formValues[f.field_key] || formValues[f.field_key].toString().trim() === ''
-    })
+    const missingFields = collectMissing(currentFields)
 
     if (missingFields.length > 0) {
-      toast.error(`필수 항목을 입력해주세요: ${missingFields.map((f) => f.label).join(', ')}`)
+      toast.error(
+        missingFields.length === 1
+          ? `'${missingFields[0].label}' 항목을 입력해주세요.`
+          : `입력하지 않은 필수 항목이 ${missingFields.length}개 있습니다. 표시된 항목을 확인해주세요.`
+      )
+      focusMissing(missingFields)
       return
     }
 
+    setMissingKeys([])
     if (currentStep < allStepKeys.length - 1) {
       setCurrentStep((c) => c + 1)
       window.scrollTo(0, 0)
@@ -574,37 +684,29 @@ function PublicFormContent({ slug }: { slug: string }) {
   }
 
   const handleSubmit = async () => {
-    // Final check for all fields
-    const allMissing: string[] = []
-    instance.fields_snapshot.forEach((f: any) => {
-      if (!f.is_required) return
-      
-      const opts = parseOptions(f)
-      if (opts.parent_field_key) {
-        let parentVal = (formValues[opts.parent_field_key] || '').toString().trim()
-        if (parentVal === 'true') parentVal = '예'
-        if (parentVal === 'false') parentVal = '아니오'
-        const triggerVal = (opts.parent_trigger_option || '').toString().trim()
-        if (parentVal !== triggerVal) {
-          return // Parent is not triggered, skip
-        }
-      }
-      
-      if (!formValues[f.field_key] || formValues[f.field_key].toString().trim() === '') {
-        allMissing.push(f.label)
-      }
-    })
+    const allMissing = collectMissing(instance.fields_snapshot)
 
     if (allMissing.length > 0) {
-      toast.error(`입력하지 않은 필수 항목이 있습니다: ${allMissing.join(', ')}`)
+      toast.error(
+        allMissing.length === 1
+          ? `'${allMissing[0].label}' 항목을 입력해주세요.`
+          : `입력하지 않은 필수 항목이 ${allMissing.length}개 있습니다. 표시된 항목을 확인해주세요.`
+      )
+      // 최종 확인 화면에서 눌렀으므로 누락된 항목은 다른 단계에 있다. 그 단계로 옮긴 뒤
+      // 실제로 그려지고 나서 스크롤해야 해서 다음 프레임까지 기다린다.
+      const targetStep = fieldStepKeys.findIndex((key) =>
+        (stepsMap[key] || []).some((f: any) => f.field_key === allMissing[0].field_key)
+      )
+      if (targetStep >= 0 && targetStep !== currentStep) setCurrentStep(targetStep)
+      requestAnimationFrame(() => focusMissing(allMissing))
       return
     }
 
+    setMissingKeys([])
     setSubmitting(true)
     try {
       await submitMutation.mutateAsync({
-        instanceId: instance.id,
-        customerId: instance.customer_id,
+        slug,
         data: formValues,
         isComplete: true,
         consentAgreedAt: consentAgreedAt ?? undefined,
@@ -619,8 +721,85 @@ function PublicFormContent({ slug }: { slug: string }) {
     }
   }
 
+  /** 누락으로 표시된 항목의 입력칸에 붙일 속성. Input 이 aria-invalid 를 빨간 테두리로 그린다 */
+  const errorProps = (field: any) =>
+    missingKeys.includes(field.field_key) ? { 'aria-invalid': true as const } : {}
+
   const renderInputField = (field: any) => {
     const value = formValues[field.field_key] || ''
+
+    // 계좌 필드는 field_type 이 아니라 키로 판정한다(§lib/account-fields.ts).
+    // 신랑·신부 본인 계좌: 예금주/은행명/계좌번호 3개 필드를 한 블럭으로 묶어 보여주되
+    // 저장은 기존 키 그대로다.
+    const groupPrefix = accountGroupOf(field.field_key)
+    if (groupPrefix) {
+      const k = accountGroupKeys(groupPrefix)
+      return (
+        <AccountBlock
+          idPrefix={groupPrefix}
+          value={{
+            holder: formValues[k.holder] || '',
+            bank: formValues[k.bank] || '',
+            number: formValues[k.number] || '',
+          }}
+          onChange={(next) =>
+            handleInputPatch({ [k.holder]: next.holder, [k.bank]: next.bank, [k.number]: next.number })
+          }
+          invalid={[k.holder, k.bank, k.number].some((key) => missingKeys.includes(key))}
+        />
+      )
+    }
+
+    // 혼주 계좌: 개수가 정해져 있지 않아 값 하나에 배열로 담는다.
+    if (isExtraAccountKey(field.field_key)) {
+      const parsed = parseAccountList(formValues[field.field_key])
+      if (parsed === null && typeof value === 'string' && value.trim()) {
+        // 예전 자유 입력으로 이미 채워진 폼 — 값을 임의로 쪼개면 잘못 나눌 수 있어
+        // 원문을 그대로 두고 고칠 수만 있게 한다.
+        return (
+          <div className="space-y-2">
+            <Textarea
+              value={value}
+              onChange={(e) => handleInputChange(field.field_key, e.target.value)}
+              rows={3}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              예전 방식(자유 입력)으로 저장된 내용입니다. 아래 버튼을 누르면 계좌별로 나눠 입력하는
+              방식으로 바꿀 수 있습니다.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handleInputChange(field.field_key, [{ ...EMPTY_ACCOUNT }])}
+            >
+              계좌별로 나눠 입력하기
+            </Button>
+          </div>
+        )
+      }
+      return (
+        <AccountListField
+          idPrefix={field.field_key}
+          items={parsed ?? []}
+          onChange={(next) => handleInputChange(field.field_key, next)}
+          addLabel="혼주 계좌 추가"
+        />
+      )
+    }
+
+    // 축하 연락처: 신랑·신부 본인은 고정 필드로 남고, 그 외(혼주 등)는 값 하나에
+    // 배열로 담아 필요한 만큼 추가한다.
+    if (isExtraContactsKey(field.field_key)) {
+      return (
+        <ContactListField
+          idPrefix={field.field_key}
+          items={parseContactList(formValues[field.field_key]) ?? []}
+          onChange={(next) => handleInputChange(field.field_key, next)}
+          addLabel="연락처 추가"
+        />
+      )
+    }
 
     switch (field.field_type) {
       case 'textarea':
@@ -669,6 +848,21 @@ function PublicFormContent({ slug }: { slug: string }) {
         const hoursList = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
         const minutesList = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'))
 
+        // 예식 시간은 대부분 11~13시대인데 시(hour) 목록이 00시부터 시작해, 열 때마다 한참
+        // 스크롤을 내려야 예식 시간대가 보였다. 팝오버가 열리는 순간(=이 ref 콜백이 붙는 순간)
+        // 선택값(없으면 12시)이 목록 한가운데 오도록 스크롤 뷰포트만 움직인다.
+        // scrollIntoView 는 조상 스크롤 컨테이너(=폼 페이지 전체)까지 같이 스크롤해 화면이
+        // 튀므로 쓰지 않고, 뷰포트의 scrollTop 을 직접 계산해 넣는다.
+        const focusHour = h || '12'
+        const centerHourInView = (el: HTMLButtonElement | null) => {
+          if (!el) return
+          const viewport = el.closest('[data-slot="scroll-area-viewport"]') as HTMLElement | null
+          if (!viewport) return
+          const vRect = viewport.getBoundingClientRect()
+          const eRect = el.getBoundingClientRect()
+          viewport.scrollTop += (eRect.top - vRect.top) - (vRect.height - eRect.height) / 2
+        }
+
         return (
           <Popover>
             <PopoverTrigger asChild>
@@ -694,6 +888,7 @@ function PublicFormContent({ slug }: { slug: string }) {
                         <button
                           key={hr}
                           type="button"
+                          ref={hr === focusHour ? centerHourInView : undefined}
                           className={cn(
                             "w-full py-1.5 text-xs hover:bg-muted text-center transition-colors",
                             h === hr && "bg-primary text-primary-foreground font-semibold hover:bg-primary"
@@ -895,6 +1090,7 @@ function PublicFormContent({ slug }: { slug: string }) {
                       className="h-10 w-10 text-muted-foreground hover:text-red-500 hover:bg-red-50 shrink-0 rounded-lg"
                       onClick={() => removeRow(idx)}
                       title="삭제"
+                      aria-label="삭제"
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -1267,16 +1463,34 @@ function PublicFormContent({ slug }: { slug: string }) {
             <p className="text-[11px] text-muted-foreground">영문 소문자, 숫자, 하이픈(-)만 입력 가능합니다.</p>
           </div>
         )
-      default:
+      case 'address':
+        return (
+          <AddressSearchField
+            id={field.field_key}
+            value={value}
+            onChange={(addr) => handleInputChange(field.field_key, addr)}
+            placeholder={field.help_text}
+            required={field.is_required}
+            invalid={missingKeys.includes(field.field_key)}
+          />
+        )
+      default: {
+        // phone 은 전용 분기가 없어 여기로 떨어진다. 그냥 text 로 두면 휴대폰에서
+        // 숫자 키패드 대신 일반 자판이 올라와 연락처 6개를 전부 그렇게 입력해야 한다.
+        const isPhone = field.field_type === 'phone'
         return (
           <Input
-            type={field.field_type === 'number' ? 'number' : 'text'}
+            type={field.field_type === 'number' ? 'number' : isPhone ? 'tel' : 'text'}
+            inputMode={isPhone ? 'numeric' : undefined}
+            autoComplete={isPhone ? 'tel' : undefined}
             value={value}
             onChange={(e) => handleInputChange(field.field_key, e.target.value)}
             placeholder={field.help_text || '내용을 입력하세요.'}
             required={field.is_required}
+            {...errorProps(field)}
           />
         )
+      }
     }
   }
 
@@ -1291,18 +1505,14 @@ function PublicFormContent({ slug }: { slug: string }) {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <Button
-            type="button"
+          <SaveButton
             variant="ghost"
             size="sm"
-            onClick={handleSaveDraft}
-            disabled={savingDraft}
+            onSave={handleSaveDraft}
             className="h-7 sm:h-8 text-[11px] sm:text-xs text-muted-foreground hover:text-foreground px-2 sm:px-3 font-medium border border-border/80 sm:border-none rounded-lg shrink-0"
-          >
-            {savingDraft ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
-            <span className="hidden sm:inline">나중에 이어쓰기 (임시저장)</span>
-            <span className="sm:hidden">임시저장</span>
-          </Button>
+            idleLabel={<><span className="hidden sm:inline">나중에 이어쓰기 (임시저장)</span><span className="sm:hidden">임시저장</span></>}
+            successLabel="저장됨"
+          />
 
           {(instance.customer?.groom_name || instance.customer?.bride_name) && (
             <div className="text-right border-l border-border pl-2 sm:pl-3 shrink-0">
@@ -1319,6 +1529,20 @@ function PublicFormContent({ slug }: { slug: string }) {
 
       {/* Main Container */}
       <main className="flex-1 max-w-xl w-full mx-auto px-4 py-8 space-y-6">
+        {draftSavedAt !== null && (
+          <div className="flex items-start gap-2 rounded-xl border border-primary/30 bg-primary/5 p-3 text-xs">
+            <CheckCircle2 className="mt-px h-4 w-4 shrink-0 text-primary" />
+            <p className="text-foreground">
+              이전에 입력하신 내용을 그대로 불러왔습니다. 이어서 작성해주세요.
+              {draftSavedAt && (
+                <span className="mt-0.5 block text-muted-foreground">
+                  마지막 저장 {formatSavedAt(draftSavedAt)}
+                </span>
+              )}
+            </p>
+          </div>
+        )}
+
         {/* Step Indicator Map */}
         <div className="bg-white border border-border rounded-xl p-3.5 shadow-sm space-y-3">
           <div className="flex items-center justify-between gap-1 select-none overflow-x-auto py-1 scrollbar-hide">
@@ -1377,19 +1601,7 @@ function PublicFormContent({ slug }: { slug: string }) {
             <CardContent className="p-5 space-y-6">
               {fieldStepKeys.map((stepKey, sIdx) => {
                 const stepFields = stepsMap[stepKey] || []
-                const filledFields = stepFields.filter(f => {
-                  const opts = parseOptions(f)
-                  if (opts.parent_field_key) {
-                    let parentVal = (formValues[opts.parent_field_key] || '').toString().trim()
-                    if (parentVal === 'true') parentVal = '예'
-                    if (parentVal === 'false') parentVal = '아니오'
-                    const triggerVal = (opts.parent_trigger_option || '').toString().trim()
-                    if (parentVal !== triggerVal) {
-                      return false
-                    }
-                  }
-                  return true
-                })
+                const filledFields = stepFields.filter(isFieldActive)
 
                 if (filledFields.length === 0) return null
 
@@ -1414,18 +1626,33 @@ function PublicFormContent({ slug }: { slug: string }) {
                     <div className="grid grid-cols-1 gap-1.5 text-xs bg-muted/50 p-2.5 rounded-lg border border-border">
                       {filledFields.map(f => {
                         const val = formValues[f.field_key]
-                        let displayVal = val ? val.toString() : ''
+                        // isBlank 로 판정해야 사진을 넣었다 전부 지운 경우([])도 '없음'으로 잡힌다
+                        const blank = isBlank(val)
+                        let displayVal = blank ? '' : val.toString()
                         if (displayVal === 'true') displayVal = '예'
                         if (displayVal === 'false') displayVal = '아니오'
                         if (f.field_type === 'image' || f.field_type === 'images') {
-                          displayVal = val ? '이미지 첨부됨' : ''
+                          const count = Array.isArray(val) ? val.length : 1
+                          displayVal = blank ? '' : `사진 ${count}장 첨부됨`
                         }
-                        
+                        // 계좌·연락처는 값이 객체 배열이라 val.toString() 이 "[object Object]"를
+                        // 만든다 — 계좌·연락처별로 한 줄씩 풀어서 보여준다.
+                        if (isExtraAccountKey(f.field_key)) {
+                          const list = parseAccountList(val)
+                          if (list) displayVal = list.filter(isAccountFilled).map(composeAccountText).join('\n')
+                        }
+                        if (isExtraContactsKey(f.field_key)) {
+                          const list = parseContactList(val)
+                          if (list) displayVal = list.filter(isContactFilled).map(composeContactText).join('\n')
+                        }
+
                         return (
                           <div key={f.field_key} className="flex justify-between items-start gap-4">
                             <span className="text-muted-foreground font-medium shrink-0">{f.label}:</span>
+                            {/* 오탈자를 확인하라고 만든 화면이라 값을 자르면 안 된다. 인사말처럼
+                                줄바꿈이 들어간 긴 글도 그대로 보이도록 접어서 전부 표시한다. */}
                             <span className={cn(
-                              "text-right truncate max-w-[250px]",
+                              "min-w-0 text-right whitespace-pre-wrap break-words",
                               displayVal ? "text-foreground font-semibold" : "text-amber-500 italic font-medium"
                             )}>
                               {displayVal || (f.is_required ? "필수 입력 누락" : "선택 안 함")}
@@ -1526,6 +1753,19 @@ function PublicFormContent({ slug }: { slug: string }) {
                     )
                   }
 
+                  /** 필드 안내 — 안내 문구와 안내 이미지. help_text 는 입력하는 순간 사라지는
+                   *  placeholder 라 안내로 쓸 수 없어서, 남아 있는 설명은 여기로 그린다. */
+                  const renderGuide = (opts: any) => (
+                    <>
+                      {opts?.attached_note?.trim() && (
+                        <p className="my-2 whitespace-pre-wrap rounded-lg border border-border bg-muted/60 px-3 py-2.5 text-[13px] leading-relaxed text-muted-foreground">
+                          {opts.attached_note}
+                        </p>
+                      )}
+                      {renderAttachedImages(opts?.attached_images)}
+                    </>
+                  )
+
                   // 2. Render grouped sections and fields
                   return sections.map((sec, secIdx) => (
                     <div key={`section-${secIdx}`} className="space-y-4">
@@ -1543,18 +1783,40 @@ function PublicFormContent({ slug }: { slug: string }) {
                           (c) => parseOptions(c).parent_field_key === field.field_key
                         )
 
+                        // 계좌 그룹은 대표 필드(예금주) 하나에서 블럭 전체를 그리므로
+                        // 나머지 두 필드(은행명·계좌번호)는 따로 카드를 만들지 않는다.
+                        const groupPrefix = accountGroupOf(field.field_key)
+                        if (groupPrefix && field.field_key !== accountGroupKeys(groupPrefix).holder) return null
+                        const groupLabel = groupPrefix
+                          ? ACCOUNT_GROUPS.find((g) => g.prefix === groupPrefix)?.label
+                          : null
+
+                        const isMissing = missingKeys.includes(field.field_key)
+
                         return (
-                          <div key={field.field_key} className="p-4 sm:p-5 rounded-2xl border border-border bg-card shadow-2xs space-y-3">
+                          <div
+                            key={field.field_key}
+                            id={`formfield-${field.field_key}`}
+                            className={cn(
+                              'p-4 sm:p-5 rounded-2xl border bg-card shadow-2xs space-y-3',
+                              isMissing ? 'border-destructive ring-2 ring-destructive/20' : 'border-border'
+                            )}
+                          >
                             <Field>
                               <FieldLabel htmlFor={field.field_key} className="text-sm font-extrabold text-foreground tracking-tight flex items-center gap-1">
-                                <span>{field.label}</span>
+                                <span>{groupLabel ?? field.label}</span>
                                 {field.is_required && (
                                   <span className="text-rose-500 font-bold text-sm ml-0.5" title="필수 입력 항목">*</span>
                                 )}
                               </FieldLabel>
 
-                              {renderAttachedImages(parseOptions(field).attached_images)}
+                              {renderGuide(parseOptions(field))}
                               {renderInputField(field)}
+                              {isMissing && (
+                                <p role="alert" className="text-xs font-medium text-destructive">
+                                  이 항목은 필수입니다.
+                                </p>
+                              )}
                             </Field>
 
                             {/* Child fields accordion wrapper */}
@@ -1566,26 +1828,39 @@ function PublicFormContent({ slug }: { slug: string }) {
                               const triggerVal = (childOpts.parent_trigger_option || '').toString().trim()
                               const isTriggered = parentVal === triggerVal && parentVal !== ''
 
+                              // 계좌 3필드는 대표 필드(예금주)에서 블럭 하나로 그린다 —
+                              // 계좌 항목들은 토글의 하위 항목이라 여기로 들어온다.
+                              const childGroup = accountGroupOf(childField.field_key)
+                              if (childGroup && childField.field_key !== accountGroupKeys(childGroup).holder) return null
+                              const childGroupLabel = childGroup
+                                ? ACCOUNT_GROUPS.find((g) => g.prefix === childGroup)?.label
+                                : null
+
+                              // 별도 표식(라벨·테두리) 없이 부모를 켜면 그냥 자연스럽게 펼쳐지는
+                              // 아코디언으로만 동작한다 — grid-template-rows 0fr/1fr 전환은
+                              // max-height 를 고정값으로 잡아두는 방식과 달리 내용이 길어져도
+                              // (계좌를 여러 개 추가하는 경우 등) 잘리지 않는다.
                               return (
                                 <div
                                   key={childField.field_key}
-                                  className={`transition-all duration-300 ease-in-out overflow-hidden border-l-2 border-primary pl-4 ml-1 mt-3 bg-muted/60 p-3.5 rounded-r-xl border-y border-r border-border/60 ${
-                                    isTriggered 
-                                      ? 'max-h-[600px] opacity-100 py-3' 
-                                      : 'max-h-0 opacity-0 py-0 pointer-events-none'
+                                  className={`grid transition-[grid-template-rows,opacity,margin-top] duration-300 ease-in-out ${
+                                    isTriggered
+                                      ? 'grid-rows-[1fr] opacity-100 mt-3'
+                                      : 'grid-rows-[0fr] opacity-0 mt-0 pointer-events-none'
                                   }`}
                                 >
-                                   <div className="text-[11px] font-bold text-primary flex items-center gap-1 mb-2">
-                                     <span>↳</span> 하위 세부 입력 항목
-                                   </div>
-                                   <Field>
-                                     <FieldLabel htmlFor={childField.field_key} className="text-xs font-bold text-muted-foreground">
-                                       {childField.label}
-                                       {childField.is_required && <span className="text-rose-500 font-bold text-xs ml-0.5">*</span>}
-                                     </FieldLabel>
-                                     {renderAttachedImages(childOpts.attached_images)}
-                                     {renderInputField(childField)}
-                                   </Field>
+                                  <div className="overflow-hidden">
+                                    <Field>
+                                      <FieldLabel htmlFor={childField.field_key} className="text-sm font-extrabold text-foreground tracking-tight flex items-center gap-1">
+                                        <span>{childGroupLabel ?? childField.label}</span>
+                                        {childField.is_required && (
+                                          <span className="text-rose-500 font-bold text-sm ml-0.5">*</span>
+                                        )}
+                                      </FieldLabel>
+                                      {renderGuide(childOpts)}
+                                      {renderInputField(childField)}
+                                    </Field>
+                                  </div>
                                 </div>
                               )
                             })}
@@ -1627,6 +1902,21 @@ function PublicFormContent({ slug }: { slug: string }) {
           </a>
         </div>
       </main>
+
+      {/* 안내 이미지 원본 보기 — 안내 이미지는 작게 줄여 보여주므로, 확대해야 읽히는 것들이 있다 */}
+      <Dialog open={!!zoomImage} onOpenChange={() => setZoomImage(null)}>
+        <DialogContent className="max-w-4xl border-slate-800 bg-slate-950/95 p-3 text-white">
+          <DialogHeader className="px-2 py-1.5">
+            <DialogTitle className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
+              <ZoomIn className="h-4 w-4" /> 안내 이미지 원본
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex max-h-[82vh] items-center justify-center overflow-auto p-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={zoomImage ?? ''} alt="안내 이미지 원본" className="max-h-[78vh] max-w-full rounded-lg object-contain" />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

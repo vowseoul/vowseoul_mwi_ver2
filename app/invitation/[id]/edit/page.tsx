@@ -5,6 +5,7 @@ import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { dashboardCookieName, verifyDashboardToken } from '@/lib/dashboard-session'
 import { mergeInvitationRaw } from '@/lib/invitation-data'
 import { SELF_EDIT_SETTINGS_KEY, SELF_EDIT_FIELD_KEYS, parseSelfEditSettings } from '@/lib/self-edit'
+import { extractScrollMotion } from '@/lib/scroll-motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Lock } from 'lucide-react'
@@ -25,8 +26,9 @@ export default async function InvitationEditPage({ params }: { params: Promise<{
   const supabase = createSupabaseAdminClient()
   const { data: invitation, error } = await supabase
     .from('invitations')
-    .select('id, public_slug, customer_id, content_data')
+    .select('id, public_slug, customer_id, content_data, customization_overrides')
     .eq('id', id)
+    .is('deleted_at', null)
     .maybeSingle()
 
   if (error) console.error('edit: invitation lookup failed:', error.message)
@@ -85,6 +87,7 @@ export default async function InvitationEditPage({ params }: { params: Promise<{
       invitationId={id}
       initialFields={initialFields}
       initialGalleryImages={initialGalleryImages}
+      initialScrollMotion={extractScrollMotion(invitation.customization_overrides)}
     />
   )
 }

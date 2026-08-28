@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect } from 'react'
-import Link from 'next/link'
+import Link, { useLinkStatus } from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { 
@@ -25,7 +25,8 @@ import {
   FileText,
   Sparkles,
   LogOut,
-  HelpCircle
+  HelpCircle,
+  Loader2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -39,8 +40,15 @@ const navItems = [
   { href: '/admin/assets', label: '에셋 관리', icon: Palette },
   { href: '/admin/statistics', label: '통계', icon: BarChart3 },
   { href: '/admin/inquiries', label: '문의 관리', icon: HelpCircle },
-  { href: '/admin/settings', label: '시스템 설정', icon: Settings },
+  { href: '/admin/settings', label: '시스템 설정', icon: Settings, adminOnly: true },
 ]
+
+/** useLinkStatus()는 자신을 감싼 <Link>의 진행중 여부를 읽으므로 Link 내부에서만 호출할 수 있다.
+ * 클릭 즉시(다음 페이지 응답을 기다리는 동안) 아이콘이 스피너로 바뀌어 "지금 이동 중"임을 보여준다 — Visibility. */
+function NavIcon({ icon: Icon }: { icon: React.ComponentType<{ className?: string }> }) {
+  const { pending } = useLinkStatus()
+  return pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />
+}
 
 export default function AdminLayout({
   children,
@@ -51,10 +59,14 @@ export default function AdminLayout({
   const { setAuth, fetchData } = useAppStore()
   const [authChecking, setAuthChecking] = React.useState(true)
   const [authorized, setAuthorized] = React.useState(false)
+  const [role, setRole] = React.useState<string | null>(null)
 
   useEffect(() => {
     fetchData()
   }, [fetchData])
+
+  /** 시스템 설정은 운영자만 — 눌러봐야 되돌려보내지는 메뉴를 보여줄 이유가 없다 */
+  const visibleNavItems = navItems.filter((item) => !item.adminOnly || role === 'ADMIN')
 
   useEffect(() => {
     async function checkAdminAuth() {
@@ -72,13 +84,16 @@ export default function AdminLayout({
           .eq('id', user.id)
           .single()
 
-        if (profileError || profile?.role !== 'ADMIN') {
-          console.error('Not authorized as admin:', profileError)
-          // Attempt sign out since they are not an admin
+        // 등록된 직원이면 통과시킨다. 예전에는 ADMIN 만 들여보내 디자이너 계정이
+        // 로그인 직후 다시 로그아웃되었다. 시스템 설정만 운영자 전용이고,
+        // 그 판정은 여기(메뉴 숨김)와 proxy.ts(주소 직접 입력 차단) 양쪽에서 한다.
+        if (profileError || !profile?.role) {
+          console.error('Not authorized as staff:', profileError)
           await supabase.auth.signOut()
           window.location.href = '/admin/login'
           return
         }
+        setRole(profile.role)
 
         setAuth(true, true)
         setAuthorized(true)
@@ -112,7 +127,7 @@ export default function AdminLayout({
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
-      <aside className="hidden w-64 border-r border-border bg-background lg:block">
+      <aside className="hidden w-64 shrink-0 border-r border-border bg-background lg:block">
         <div className="flex h-16 items-center border-b border-border px-6 gap-2">
           <Link href="/admin" className="flex items-center">
             <Logo className="h-4.5 w-auto text-foreground" />
@@ -123,7 +138,7 @@ export default function AdminLayout({
         </div>
         <nav className="p-4">
           <ul className="space-y-1">
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const isActive = pathname === item.href || 
                 (item.href !== '/admin' && pathname.startsWith(item.href))
               return (
@@ -137,7 +152,7 @@ export default function AdminLayout({
                         : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                     )}
                   >
-                    <item.icon className="h-4 w-4" />
+                    <NavIcon icon={item.icon} />
                     {item.label}
                   </Link>
                 </li>
@@ -148,34 +163,38 @@ export default function AdminLayout({
       </aside>
 
       {/* Main Content */}
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         {/* Header */}
-        <header className="flex h-16 items-center justify-between border-b border-border bg-background px-4 lg:px-6">
-          <div className="flex items-center gap-4">
+        <header className="flex h-16 items-center justify-between gap-2 border-b border-border bg-background px-4 lg:px-6">
+          <div className="flex min-w-0 items-center gap-4">
             {/* Mobile Menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild className="lg:hidden">
-                <Button variant="ghost" size="icon">
+                <Button variant="ghost" size="icon" aria-label="메뉴 열기">
                   <Menu className="h-5 w-5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-48">
-                {navItems.map((item) => (
+                {visibleNavItems.map((item) => (
                   <DropdownMenuItem key={item.href} asChild>
                     <Link href={item.href} className="flex items-center gap-2">
-                      <item.icon className="h-4 w-4" />
+                      <NavIcon icon={item.icon} />
                       {item.label}
                     </Link>
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <span className="text-lg font-semibold lg:hidden flex items-center gap-1.5">
-              <Logo className="h-4.5 w-auto text-foreground" /> Admin
+            {/* 폰에서 이 브랜드 영역이 줄어들지 않아 오른쪽의 알림 배지가 "Admin" 글자 위로
+                겹쳐 보였다. min-w-0 로 줄어들 수 있게 하고, 폭이 가장 빠듯한 구간에서는
+                로고만 온전히 남기고 "Admin" 글자를 뺀다(잘린 채로 보이는 것보다 낫다). */}
+            <span className="flex min-w-0 items-center gap-1.5 text-lg font-semibold lg:hidden">
+              <Logo className="h-4.5 w-auto shrink-0 text-foreground" />
+              <span className="hidden sm:inline">Admin</span>
             </span>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             <AdminNotificationBell />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

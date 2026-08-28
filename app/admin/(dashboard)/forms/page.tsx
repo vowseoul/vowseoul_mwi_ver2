@@ -1,5 +1,7 @@
 'use client'
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import React, { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -14,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { TableRowsSkeleton, CardListSkeleton } from '@/components/admin/list-skeleton'
 import {
   Dialog,
   DialogContent,
@@ -42,12 +45,14 @@ import {
 } from '@/hooks/queries/useForms'
 import { FileText, Plus, Search, Edit2, Copy, Trash2, ArrowLeft, Settings, LayoutGrid, Eye, Edit, Loader2, ZoomIn } from 'lucide-react'
 import { toast } from 'sonner'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
 
 export default function FormTemplatesPage() {
+  useDocumentTitle("폼 관리")
   const queryClient = useQueryClient()
   const { data: templates, isLoading, error } = useFormTemplatesQuery()
   const createMutation = useCreateFormTemplateMutation()
@@ -87,7 +92,7 @@ export default function FormTemplatesPage() {
 
 
   const handleCopyTemplate = async (template: any) => {
-    if (!confirm(`"${template.name}" 템플릿을 복사하시겠습니까?`)) {
+    if (!(await confirmDialog({ title: `"${template.name}" 템플릿을 복사하시겠습니까?`, confirmText: '복사' }))) {
       return
     }
 
@@ -394,6 +399,7 @@ export default function FormTemplatesPage() {
                     variant="ghost"
                     size="icon"
                     className="h-9 w-9 text-muted-foreground hover:text-destructive shrink-0"
+                    aria-label="항목 삭제"
                     onClick={() => {
                       const newItems = items.filter((_: any, i: number) => i !== idx)
                       handlePreviewInputChange(field.field_key, newItems)
@@ -856,7 +862,7 @@ export default function FormTemplatesPage() {
   }
 
   const handleDeleteTemplate = async (templateId: string) => {
-    if (!confirm('이 폼 템플릿을 정말로 삭제하시겠습니까? 삭제 후에는 복구할 수 없습니다.')) {
+    if (!(await confirmDialog({ title: '이 폼 템플릿을 삭제하시겠습니까?', description: '삭제 후에는 복구할 수 없습니다.', destructive: true, confirmText: '삭제' }))) {
       return
     }
 
@@ -878,7 +884,7 @@ export default function FormTemplatesPage() {
     <div className="space-y-6 font-sans">
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" asChild>
+          <Button variant="ghost" size="icon" asChild aria-label="뒤로가기">
             <Link href="/admin">
               <ArrowLeft className="w-5 h-5" />
             </Link>
@@ -976,9 +982,9 @@ export default function FormTemplatesPage() {
           {/* 모바일 카드 리스트 — sm 미만에서는 6열 테이블 대신 카드로 보여준다 */}
           <div className="sm:hidden max-h-[calc(100vh-280px)] overflow-y-auto divide-y divide-border">
             {isLoading ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">폼 템플릿을 불러오는 중입니다...</p>
+              <CardListSkeleton rows={6} />
             ) : error ? (
-              <p className="py-8 text-center text-sm text-destructive">템플릿 로딩 중 오류가 발생했습니다.</p>
+              <p className="py-8 text-center text-sm text-destructive">템플릿을 불러오지 못했습니다.</p>
             ) : filteredTemplates?.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">등록된 폼 템플릿이 없습니다.</p>
             ) : (
@@ -1063,6 +1069,7 @@ export default function FormTemplatesPage() {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      aria-label="삭제"
                       onClick={() => handleDeleteTemplate(template.id)}
                     >
                       <Trash2 className="w-4 h-4" />
@@ -1088,15 +1095,11 @@ export default function FormTemplatesPage() {
               </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                    폼 템플릿을 불러오는 중입니다...
-                  </TableCell>
-                </TableRow>
+                <TableRowsSkeleton rows={6} columns={6} />
               ) : error ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-8 text-destructive">
-                    템플릿 로딩 중 오류가 발생했습니다.
+                    템플릿을 불러오지 못했습니다.
                   </TableCell>
                 </TableRow>
               ) : filteredTemplates?.length === 0 ? (
@@ -1193,6 +1196,7 @@ export default function FormTemplatesPage() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive shrink-0"
+                          aria-label="삭제"
                           onClick={() => handleDeleteTemplate(template.id)}
                         >
                           <Trash2 className="w-4 h-4" />
@@ -1369,6 +1373,17 @@ export default function FormTemplatesPage() {
                       )
                     }
 
+                    const renderPreviewGuide = (o: any) => (
+                      <>
+                        {o?.attached_note?.trim() && (
+                          <p className="my-2 whitespace-pre-wrap rounded-lg border border-border bg-muted/60 px-2.5 py-2 text-[12px] leading-relaxed text-muted-foreground">
+                            {o.attached_note}
+                          </p>
+                        )}
+                        {renderPreviewAttachedImages(o?.attached_images)}
+                      </>
+                    )
+
                     return (
                       <React.Fragment key={field.field_key}>
                         {showSectionHeader && (
@@ -1386,7 +1401,7 @@ export default function FormTemplatesPage() {
                               <span>{field.label}</span>
                               {field.is_required && <span className="text-rose-500 font-bold ml-0.5">*</span>}
                             </FieldLabel>
-                            {renderPreviewAttachedImages(opts.attached_images)}
+                            {renderPreviewGuide(opts)}
                             {renderPreviewInputField(field)}
                           </Field>
 
@@ -1416,7 +1431,7 @@ export default function FormTemplatesPage() {
                                     {childField.label}
                                     {childField.is_required && <span className="text-rose-500 font-bold ml-0.5">*</span>}
                                   </FieldLabel>
-                                  {renderPreviewAttachedImages(childOpts.attached_images)}
+                                  {renderPreviewGuide(childOpts)}
                                   {renderPreviewInputField(childField)}
                                 </Field>
                               </div>

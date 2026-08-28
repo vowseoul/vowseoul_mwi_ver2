@@ -2,8 +2,10 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { mergeInvitationRaw } from "@/lib/invitation-data"
 import { DATA_RETENTION_SETTINGS_KEY, GUEST_DATA_PURGE_DAYS, HARD_DELETE_GRACE_DAYS, computeExpiryDate, parseRetentionSettings } from "@/lib/data-retention"
-import { purgeGuestData } from "@/lib/guest-data-purge"
+import { purgeGuestData, describePurgeCounts } from "@/lib/guest-data-purge"
+import { logAuditEvent } from "@/lib/audit-log"
 import { deleteInvitationUploads } from "@/lib/storage-cleanup"
+import { notifyCronFailure } from "@/lib/cron-alert"
 
 /**
  * 데이터 자동 파기 — 하루 한 번 도는 크론이 3단계를 수행한다.
@@ -36,6 +38,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
+  try {
+    return await runPurge()
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    await notifyCronFailure("purge-expired-invitations", `예외 발생: ${detail}`)
+    return NextResponse.json({ error: "처리 중 예외가 발생했습니다." }, { status: 500 })
+  }
+}
+
+async function runPurge() {
   const admin = createSupabaseAdminClient()
 
   const { data: retentionRow } = await admin
@@ -55,7 +67,7 @@ export async function GET(request: Request) {
     .eq("is_sample", false)
 
   if (error) {
-    console.error("purge-expired-invitations: invitations 조회 실패:", error.message)
+    await notifyCronFailure("purge-expired-invitations", `invitations 조회 실패: ${error.message}`)
     return NextResponse.json({ error: "조회에 실패했습니다." }, { status: 500 })
   }
 
@@ -75,8 +87,19 @@ export async function GET(request: Request) {
     if (!Number.isNaN(wedding.getTime())) {
       const daysSinceWedding = Math.floor((now.getTime() - wedding.getTime()) / (1000 * 60 * 60 * 24))
       if (daysSinceWedding >= GUEST_DATA_PURGE_DAYS) {
-        await purgeGuestData(admin, inv.id as string)
+        const counts = await purgeGuestData(admin, inv.id as string)
         guestDataPurgedIds.push(inv.id as string)
+        // 하객 개인정보를 되돌릴 수 없이 지우는 지점이라 무엇을 지웠는지 남긴다.
+        // 실제로 지운 게 있을 때만 기록한다 — 이 크론은 매일 같은 청첩장에 다시
+        // 호출되므로(멱등), 0건까지 남기면 로그가 의미 없이 계속 쌓인다.
+        if (Object.values(counts).some((n) => n > 0)) {
+          await logAuditEvent(admin, {
+            invitationId: inv.id as string,
+            actorType: "system",
+            action: "guest_data.purged",
+            summary: `예식일로부터 ${GUEST_DATA_PURGE_DAYS}일이 지나 하객 수집 정보를 파기했습니다 (자동 파기 크론): ${describePurgeCounts(counts)}`,
+          })
+        }
       }
     }
 
@@ -101,7 +124,7 @@ export async function GET(request: Request) {
       .update({ deleted_at: now.toISOString(), status: "expired" })
       .in("id", purgedIds)
     if (updateError) {
-      console.error("purge-expired-invitations: 소프트 삭제 실패:", updateError.message)
+      await notifyCronFailure("purge-expired-invitations", `소프트 삭제 실패: ${updateError.message}`)
       return NextResponse.json({ error: "삭제 처리에 실패했습니다." }, { status: 500 })
     }
   }
@@ -141,7 +164,7 @@ export async function GET(request: Request) {
     .lt("deleted_at", hardDeleteCutoff.toISOString())
     .eq("is_sample", false)
 
-  if (staleError) console.error("purge-expired-invitations: 하드삭제 대상 조회 실패:", staleError.message)
+  if (staleError) await notifyCronFailure("purge-expired-invitations", `하드삭제 대상 조회 실패: ${staleError.message}`)
 
   const hardDeletedInvitationIds: string[] = []
   const hardDeletedCustomerIds: string[] = []

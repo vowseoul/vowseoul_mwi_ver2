@@ -1,5 +1,7 @@
 'use client'
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import React, { useState, useEffect, use } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -25,6 +27,10 @@ import { cn } from '@/lib/utils'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { toast } from 'sonner'
 import { uploadImage } from '@/lib/image-upload'
+import { ExtraAccountEditor } from '@/components/account-fields'
+import { composeAccountText, isAccountFilled, isExtraAccountKey, parseAccountList } from '@/lib/account-fields'
+import { ContactListField } from '@/components/contact-fields'
+import { composeContactText, isContactFilled, isExtraContactsKey, parseContactList } from '@/lib/contact-fields'
 
 const parseLocalDate = (dateStr: string) => {
   if (!dateStr) return undefined
@@ -58,6 +64,7 @@ function formatTimeTextValue(val: any): string {
 }
 
 export default function FormResponsePage({ params }: { params: Promise<{ instanceId: string }> }) {
+  useDocumentTitle("폼 응답")
   const { instanceId } = use(params)
   const router = useRouter()
 
@@ -169,6 +176,44 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
     if (displayVal === 'true') displayVal = '예'
     if (displayVal === 'false') displayVal = '아니오'
 
+    // 계좌 배열이 아래 이미지 분기(Array.isArray)에 먼저 걸리면 계좌 객체를 img src 로
+    // 그리려 하므로 그 앞에서 처리한다
+    if (isExtraAccountKey(field.field_key)) {
+      const list = parseAccountList(rawVal)
+      if (list !== null) {
+        const filled = list.filter(isAccountFilled)
+        if (filled.length === 0) {
+          return <div className="text-xs text-muted-foreground italic bg-muted p-2.5 rounded-lg border border-border/60">(미입력 항목)</div>
+        }
+        return (
+          <div className="space-y-1.5">
+            {filled.map((a, idx) => (
+              <div key={idx} className="text-xs font-semibold text-foreground bg-muted p-2.5 rounded-lg border border-border/80 select-text">
+                {composeAccountText(a)}
+              </div>
+            ))}
+          </div>
+        )
+      }
+      // 예전 자유 입력 문자열은 아래 기본 표시로 넘어간다
+    }
+
+    if (isExtraContactsKey(field.field_key)) {
+      const filled = (parseContactList(rawVal) ?? []).filter(isContactFilled)
+      if (filled.length === 0) {
+        return <div className="text-xs text-muted-foreground italic bg-muted p-2.5 rounded-lg border border-border/60">(미입력 항목)</div>
+      }
+      return (
+        <div className="space-y-1.5">
+          {filled.map((c, idx) => (
+            <div key={idx} className="text-xs font-semibold text-foreground bg-muted p-2.5 rounded-lg border border-border/80 select-text">
+              {composeContactText(c)}
+            </div>
+          ))}
+        </div>
+      )
+    }
+
     if (field.field_type === 'image' || field.field_type === 'images' || Array.isArray(rawVal)) {
       const imageList: string[] = Array.isArray(rawVal) ? rawVal : (typeof rawVal === 'string' && rawVal.startsWith('http') ? [rawVal] : (rawVal ? [rawVal] : []))
       
@@ -223,6 +268,31 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
 
   const renderInputField = (field: any) => {
     const value = formData[field.field_key] || ''
+
+    // 혼주 계좌는 값이 배열이라 textarea 로 그리면 깨진다 — 고객 폼과 같은 계좌별 입력을 쓴다
+    if (isExtraAccountKey(field.field_key)) {
+      const parsed = parseAccountList(formData[field.field_key])
+      return (
+        <ExtraAccountEditor
+          label=""
+          legacyText={typeof value === 'string' ? value : ''}
+          list={parsed}
+          onChangeList={(next) => handleInputChange(field.field_key, next)}
+          onChangeLegacy={(next) => handleInputChange(field.field_key, next)}
+        />
+      )
+    }
+
+    if (isExtraContactsKey(field.field_key)) {
+      return (
+        <ContactListField
+          idPrefix={field.field_key}
+          items={parseContactList(formData[field.field_key]) ?? []}
+          onChange={(next) => handleInputChange(field.field_key, next)}
+          addLabel="연락처 추가"
+        />
+      )
+    }
 
     switch (field.field_type) {
       case 'textarea':
@@ -465,6 +535,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                    aria-label="항목 삭제"
                     onClick={() => {
                       const newItems = items.filter((_, i) => i !== idx)
                       handleInputChange(field.field_key, newItems)
@@ -649,7 +720,7 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
     <div className="space-y-6 font-sans max-w-4xl mx-auto">
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}>
+          <Button variant="ghost" size="icon" onClick={() => router.back()} aria-label="뒤로가기">
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
@@ -699,14 +770,19 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
           <CardContent className="p-6">
             <FieldGroup className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {(() => {
-                let lastSectionTitle = ''
-                return fields.map((field: any) => {
+                // 섹션 제목별로 묶어서 그린다. 예전엔 "직전 필드와 섹션이 다르면 머리말 출력"
+                // 방식이라, 나중에 추가돼 sort_order가 뒤로 밀린 필드가 앞 섹션 소속이면
+                // 같은 머리말이 여러 번 나오고 관련 항목이 흩어졌다(실제 양식에서 섹션 10개가
+                // 머리말 15번으로 쪼개졌다 — 도로명 주소가 화면 맨 아래 두 번째 "예식 정보"에
+                // 있었다). 하객용 폼(§app/form/[slug]/page.tsx)은 처음부터 이 방식이라
+                // 같은 데이터를 제대로 10개로 보여주고 있었다.
+                const sections: { title: string; fields: any[] }[] = []
+                fields.forEach((field: any) => {
                   let currentSection = ''
                   if (field.options) {
                     if (typeof field.options === 'string') {
                       try {
-                        const parsed = JSON.parse(field.options)
-                        currentSection = parsed.section_title || ''
+                        currentSection = JSON.parse(field.options).section_title || ''
                       } catch {
                         currentSection = ''
                       }
@@ -714,23 +790,28 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
                       currentSection = field.options.section_title || ''
                     }
                   }
+                  currentSection = currentSection.trim()
 
-                  const showSectionHeader = currentSection && currentSection !== lastSectionTitle
-                  if (showSectionHeader) {
-                    lastSectionTitle = currentSection
+                  let sec = sections.find((s) => s.title === currentSection)
+                  if (!sec) {
+                    sec = { title: currentSection, fields: [] }
+                    sections.push(sec)
                   }
+                  sec.fields.push(field)
+                })
 
-                  return (
-                    <React.Fragment key={field.field_key}>
-                      {showSectionHeader && (
-                        <div className="col-span-1 md:col-span-2 pt-4 pb-1 border-b border-border mt-3 first:mt-0">
-                          <h3 className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                            <span className="w-1.5 h-3 bg-primary rounded-full" />
-                            {currentSection}
-                          </h3>
-                        </div>
-                      )}
-                      <div className="space-y-1">
+                return sections.map((section) => (
+                  <React.Fragment key={section.title || '(무제)'}>
+                    {section.title && (
+                      <div className="col-span-1 md:col-span-2 pt-4 pb-1 border-b border-border mt-3 first:mt-0">
+                        <h3 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                          <span className="w-1.5 h-3 bg-primary rounded-full" />
+                          {section.title}
+                        </h3>
+                      </div>
+                    )}
+                    {section.fields.map((field: any) => (
+                      <div key={field.field_key} className="space-y-1">
                         <div className="flex justify-between items-center">
                           <span className="text-[11px] font-semibold text-muted-foreground">
                             {field.label_override || field.label}
@@ -742,9 +823,9 @@ export default function FormResponsePage({ params }: { params: Promise<{ instanc
                         </div>
                         {isEditing ? renderInputField(field) : renderResponseView(field)}
                       </div>
-                    </React.Fragment>
-                  )
-                })
+                    ))}
+                  </React.Fragment>
+                ))
               })()}
             </FieldGroup>
 

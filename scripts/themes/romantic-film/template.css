@@ -97,14 +97,16 @@
   top: 16px;
   font-size: var(--text-display, 48px);
   letter-spacing: 0.1em;
-  font-weight: 400;
+  font-weight: var(--font-en-weight, 400);
+
+  font-style: var(--font-en-style, normal);
   font-family: 'Kaushan Script', cursive;
 }
 
 .sb-hero__word--the {
   left: 103px;
   top: 72px;
-  font-size: 18px;
+  font-size: var(--text-card-title, 18px);
   font-style: italic;
   opacity: 0.9;
   font-family: 'Kaushan Script', cursive;
@@ -115,7 +117,9 @@
   top: 60px;
   font-size: var(--text-display, 48px);
   letter-spacing: 0.1em;
-  font-weight: 400;
+  font-weight: var(--font-en-weight, 400);
+
+  font-style: var(--font-en-style, normal);
   font-family: 'Kaushan Script', cursive;
 }
 
@@ -130,8 +134,10 @@
 }
 
 .sb-hero__names {
-  font-size: 16px;
-  font-weight: 500;
+  font-size: var(--text-card-title, 16px);
+  font-weight: var(--font-kr-weight, 500);
+
+  font-style: var(--font-kr-style, normal);
   letter-spacing: 0.15em;
   display: flex;
   align-items: center;
@@ -143,7 +149,7 @@
 
 .sb-hero__amp {
   opacity: 0.6;
-  font-size: 12px;
+  font-size: var(--text-caption, 12px);
   font-style: italic;
   font-family: serif;
 }
@@ -180,8 +186,10 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 12px;
-  font-weight: 300;
+  font-size: var(--text-caption, 12px);
+  font-weight: var(--font-kr-weight, 300);
+
+  font-style: var(--font-kr-style, normal);
 }
 
 .sb-parents__relation-wrap {
@@ -189,7 +197,7 @@
 }
 
 .sb-parents__label {
-  font-size: 9px;
+  font-size: var(--text-micro, 9px);
   opacity: 0.6;
   display: block;
   letter-spacing: 0.15em;
@@ -201,8 +209,10 @@
 }
 
 .sb-parents__child-name {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--text-card-title, 16px);
+  font-weight: var(--font-kr-weight, 600);
+
+  font-style: var(--font-kr-style, normal);
   letter-spacing: 0.1em;
   width: 64px;
   text-align: left;
@@ -216,11 +226,27 @@
   margin: 0 auto 24px;
 }
 
+.sb-greeting__icon {
+  width: 24px;
+  height: 24px;
+  margin: 0 auto 20px;
+  opacity: 0.8;
+}
+
+.sb-greeting__icon-heart,
+.sb-greeting__icon-custom {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .sb-greeting__message {
   font-size: var(--text-body, 14px);
   line-height: 1.8;
   letter-spacing: 0.05em;
-  font-weight: 300;
+  font-weight: var(--font-kr-weight, 300);
+
+  font-style: var(--font-kr-style, normal);
   max-width: 300px;
   margin: 0 auto;
   white-space: pre-line;
@@ -238,6 +264,18 @@
   height: auto;
   border-radius: var(--radius, 0);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* 좌우로 꽉 채우기 — 섹션 좌우 패딩만큼 음수 마진으로 밀어내 화면 끝까지 채운다 */
+.sb-greeting__image.is-fill {
+  max-width: none;
+  margin-left: calc(-1 * var(--section-px, 24px));
+  margin-right: calc(-1 * var(--section-px, 24px));
+  width: calc(100% + var(--section-px, 24px) * 2);
+}
+.sb-greeting__image.is-fill img {
+  border-radius: 0;
+  box-shadow: none;
 }
 
 /* COMMON SECTION STYLES */
@@ -258,18 +296,12 @@
 
 .sb-section__title {
   font-size: var(--text-title, 18px);
-  font-weight: 700;
+  font-weight: var(--font-kr-weight, 700);
+
+  font-style: var(--font-kr-style, normal);
   margin-top: 4px;
   margin-bottom: 32px;
   font-family: var(--font-kr, 'Noto Serif KR', serif);
-}
-
-/* share 섹션은 위 여백을 없애 RSVP 섹션과 바로 이어지도록 한다. .sb-section 보다 반드시 뒤에 와야
-   동일 특정도에서 소스 순서로 이긴다 (원래 template.html의 인라인 style="padding-top:0"이었던 것을
-   클래스로 옮김 — 인라인 스타일은 블럭 여백 오버라이드 주입 CSS를 항상 이겨버리기 때문,
-   data-block 계약 문서 §2.3) */
-.sb-share-section {
-  padding-top: 0;
 }
 
 /* 4. ORDER / SEQUENCE TABLE */
@@ -283,7 +315,7 @@
 .sb-order-table__row {
   display: flex;
   align-items: center;
-  font-size: 14px;
+  font-size: var(--text-body, 14px);
   padding: 14px 8px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
@@ -296,7 +328,9 @@
   width: 60px;
   text-align: left;
   letter-spacing: 0.05em;
-  font-weight: 600;
+  font-weight: var(--font-en-weight, 600);
+
+  font-style: var(--font-en-style, normal);
   font-family: monospace;
 }
 
@@ -311,7 +345,9 @@
   flex: 1;
   text-align: left;
   letter-spacing: 0.05em;
-  font-weight: 500;
+  font-weight: var(--font-kr-weight, 500);
+
+  font-style: var(--font-kr-style, normal);
   font-family: var(--font-kr, 'Noto Serif KR', serif);
 }
 
@@ -328,8 +364,10 @@
 
 .sb-calendar-card__header {
   text-align: center;
-  font-size: 18px;
-  font-weight: 600;
+  font-size: var(--text-card-title, 18px);
+  font-weight: var(--font-en-weight, 600);
+
+  font-style: var(--font-en-style, normal);
   letter-spacing: 0.15em;
   text-transform: uppercase;
   font-family: monospace;
@@ -342,19 +380,21 @@
   grid-template-columns: repeat(7, 1fr);
   row-gap: 12px;
   text-align: center;
-  font-size: 12px;
+  font-size: var(--text-caption, 12px);
 }
 
 .sb-calendar-grid__day-name {
   padding: 4px 0;
   opacity: 0.4;
-  font-weight: 600;
+  font-weight: var(--font-kr-weight, 600);
+
+  font-style: var(--font-kr-style, normal);
 }
 
 .sb-calendar-grid__active {
   position: relative;
   padding: 4px 0;
-  font-size: 12px;
+  font-size: var(--text-caption, 12px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -362,7 +402,9 @@
   height: 28px;
   margin: 0 auto;
   border-radius: 50%;
-  font-weight: 700;
+  font-weight: var(--font-kr-weight, 700);
+
+  font-style: var(--font-kr-style, normal);
   color: #FFFFFF;
   background-color: var(--accent, #62798E);
 }
@@ -373,18 +415,22 @@
 }
 
 .sb-dday-title {
-  font-size: 10px;
+  font-size: var(--text-micro, 10px);
   text-transform: uppercase;
   letter-spacing: 0.15em;
-  font-weight: 600;
+  font-weight: var(--font-kr-weight, 600);
+
+  font-style: var(--font-kr-style, normal);
   color: var(--accent, #62798E);
   margin-bottom: 16px;
   opacity: 0.6;
 }
 
 .sb-dday-badge {
-  font-size: 32px;
-  font-weight: 300;
+  font-size: var(--text-number, 32px);
+  font-weight: var(--font-en-weight, 300);
+
+  font-style: var(--font-en-style, normal);
   color: var(--accent, #62798E);
   font-family: monospace;
 }
@@ -398,11 +444,14 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   margin-bottom: 16px;
   border-radius: var(--radius, 0);
+  cursor: pointer;
 }
 
 .sb-location-card__name {
-  font-weight: 600;
-  font-size: 18px;
+  font-weight: var(--font-kr-weight, 600);
+
+  font-style: var(--font-kr-style, normal);
+  font-size: var(--text-card-title, 18px);
   letter-spacing: 0.05em;
   color: #000000;
   font-family: var(--font-kr, 'Noto Serif KR', serif);
@@ -410,21 +459,24 @@
 
 .sb-location-card__hall {
   font-size: var(--text-caption, 14px);
-  font-weight: 500;
+  font-weight: var(--font-kr-weight, 500);
+
+  font-style: var(--font-kr-style, normal);
   color: var(--accent, #62798E);
   margin-top: 4px;
 }
 
 .sb-location-card__address {
-  font-size: 14px;
+  font-size: var(--text-body, 14px);
   margin-top: 8px;
   white-space: pre-line;
   color: rgba(0, 0, 0, 0.75);
 }
 
 .sb-location-card__hint {
-  font-size: var(--text-caption, 10px);
+  font-size: var(--text-micro, 9px);
   margin-top: 4px;
+  text-align: center;
   color: rgba(0, 0, 0, 0.4);
 }
 
@@ -440,8 +492,10 @@
 }
 
 .sb-location__guide-title {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--text-body, 13px);
+  font-weight: var(--font-kr-weight, 600);
+
+  font-style: var(--font-kr-style, normal);
   color: var(--ink, #FFFFFF);
   margin-bottom: 4px;
 }

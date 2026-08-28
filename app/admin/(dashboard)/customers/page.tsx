@@ -1,9 +1,11 @@
 'use client'
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import React, { useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import {
   Table,
@@ -13,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { TableRowsSkeleton, CardListSkeleton } from '@/components/admin/list-skeleton'
 import {
   Select,
   SelectContent,
@@ -29,6 +32,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
   useCustomersQuery,
+  useDeletedCustomersQuery,
+  usePurgeCustomersMutation,
   useDeleteCustomerMutation,
   Customer
 } from '@/hooks/queries/useCustomers'
@@ -48,17 +53,26 @@ import {
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
 import { logAuditEvent } from '@/lib/audit-log'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
+import { Checkbox } from '@/components/ui/checkbox'
 
 export default function CustomersPage() {
+  useDocumentTitle("고객 관리")
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('all')
 
-  const { data: customerData, isLoading, error } = useCustomersQuery({ search, status }, page, 10)
+  // 샘플/테스트 고객은 기본 뷰에서 빠지지만, 이 필터를 고르면 그것만 따로 볼 수 있다
+  const showingSample = status === 'sample'
+  const { data: customerData, isLoading, error } = useCustomersQuery(
+    { search, status: showingSample ? 'all' : status, sampleMode: showingSample ? 'only' : 'exclude' },
+    page,
+    10
+  )
   const deleteMutation = useDeleteCustomerMutation()
 
   const handleDelete = async (id: string) => {
-    if (!confirm('정말로 이 고객을 삭제하시겠습니까? (Soft delete 처리되어 복구 가능합니다)')) return
+    if (!(await confirmDialog({ title: '이 고객을 삭제하시겠습니까?', description: 'Soft delete 처리되어 복구 가능합니다.', destructive: true, confirmText: '삭제' }))) return
 
     try {
       await deleteMutation.mutateAsync(id)
@@ -80,7 +94,7 @@ export default function CustomersPage() {
       c.groom_name,
       c.bride_name,
       c.phone || '',
-      c.wedding_date,
+      c.wedding_date || '',
       c.venue_name,
       c.venue_address,
       c.status,
@@ -136,7 +150,9 @@ export default function CustomersPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* 폰(<640px)에서 1열이면 요약 카드 4장이 세로로 쌓여 정작 고객 목록까지 600px을
+          스크롤해야 했다 — 기본을 2열로 둔다 */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">전체 고객</CardTitle>
@@ -213,6 +229,7 @@ export default function CustomersPage() {
             <SelectItem value="draft">초안 작성 (draft)</SelectItem>
             <SelectItem value="published">청첩장 발행 (published)</SelectItem>
             <SelectItem value="expired">만료됨 (expired)</SelectItem>
+            <SelectItem value="sample">샘플/테스트</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -223,7 +240,7 @@ export default function CustomersPage() {
           {/* 모바일 카드 리스트 — sm 미만에서는 7열 테이블 대신 카드로 보여준다 */}
           <div className="sm:hidden divide-y divide-border">
             {isLoading ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">고객 데이터를 불러오는 중입니다...</p>
+              <CardListSkeleton rows={6} />
             ) : error ? (
               <p className="py-8 text-center text-sm text-destructive">데이터를 불러오는 동안 오류가 발생했습니다.</p>
             ) : customersList.length === 0 ? (
@@ -254,7 +271,7 @@ export default function CustomersPage() {
                   </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label="더보기">
                         <MoreHorizontal className="w-4 h-4" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -279,7 +296,7 @@ export default function CustomersPage() {
           </div>
 
           {/* 데스크톱/태블릿 테이블 — sm 이상에서만 보인다 */}
-          <div className="hidden sm:block">
+          <div className="hidden sm:block overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -294,11 +311,7 @@ export default function CustomersPage() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                    고객 데이터를 불러오는 중입니다...
-                  </TableCell>
-                </TableRow>
+                <TableRowsSkeleton rows={6} columns={7} />
               ) : error ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-destructive">
@@ -327,7 +340,7 @@ export default function CustomersPage() {
                     </TableCell>
                     <TableCell className="text-sm">{customer.phone || '-'}</TableCell>
                     <TableCell className="text-sm">
-                      {customer.wedding_date}
+                      {customer.wedding_date || <span className="text-muted-foreground">미정</span>}
                     </TableCell>
                     <TableCell className="text-sm">{customer.venue_name}</TableCell>
                     <TableCell><CustomerStatusBadge status={customer.status} /></TableCell>
@@ -337,7 +350,7 @@ export default function CustomersPage() {
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="더보기">
                             <MoreHorizontal className="w-4 h-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -390,6 +403,105 @@ export default function CustomersPage() {
           </Button>
         </div>
       )}
+
+      <DeletedCustomersPanel />
     </div>
+  )
+}
+
+/**
+ * 삭제 대기 고객 — 목록에서 지운 고객은 deleted_at 만 찍힌 채 어디에도 보이지 않았다.
+ * 되돌릴 수도, 완전히 지울 수도 없어 계속 쌓이기만 했다.
+ *
+ * 기본은 접혀 있다. 자주 쓰는 기능이 아니고, 되돌릴 수 없는 삭제가 목록 화면에 늘
+ * 펼쳐져 있는 것 자체가 위험하다.
+ */
+function DeletedCustomersPanel() {
+  const [open, setOpen] = useState(false)
+  const [selected, setSelected] = useState<string[]>([])
+  const { data: deleted = [], isLoading } = useDeletedCustomersQuery(open)
+  const purge = usePurgeCustomersMutation()
+
+  const daysSince = (iso: string | null) =>
+    iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86400000) : 0
+
+  const toggle = (id: string) =>
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+
+  const handlePurge = async () => {
+    const names = deleted.filter((c) => selected.includes(c.id))
+      .map((c) => `${c.groom_name ?? ''} & ${c.bride_name ?? ''}`.trim()).join(', ')
+    const ok = await confirmDialog({
+      title: `${selected.length}명을 완전히 삭제할까요?`,
+      description: `${names}
+
+청첩장·폼 응답·하객 데이터까지 함께 지워지며 되돌릴 수 없습니다.`,
+      destructive: true,
+      confirmText: '완전 삭제',
+    })
+    if (!ok) return
+    try {
+      const res = await purge.mutateAsync(selected)
+      setSelected([])
+      toast.success(`${res.purged}명을 완전히 삭제했습니다.`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '완전 삭제에 실패했습니다.')
+    }
+  }
+
+  return (
+    <Card className="mt-8">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <CardTitle className="text-base font-medium">삭제 대기 고객</CardTitle>
+            <CardDescription>
+              목록에서 삭제한 고객입니다. 아직 데이터가 남아 있어 되돌릴 수 있습니다.
+            </CardDescription>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setOpen((v) => !v)}>
+            {open ? '접기' : '열기'}
+          </Button>
+        </div>
+      </CardHeader>
+      {open && (
+        <CardContent className="space-y-3">
+          {isLoading ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">불러오는 중…</p>
+          ) : deleted.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">삭제 대기 중인 고객이 없습니다.</p>
+          ) : (
+            <>
+              <div className="divide-y divide-border rounded-md border">
+                {deleted.map((c) => (
+                  <label key={c.id} className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm">
+                    <Checkbox checked={selected.includes(c.id)} onCheckedChange={() => toggle(c.id)} />
+                    <span className="min-w-0 flex-1 truncate">
+                      {c.groom_name || '미지정'} &amp; {c.bride_name || '미지정'}
+                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                      삭제 후 {daysSince(c.deleted_at)}일
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs text-muted-foreground">
+                  {selected.length > 0 ? `${selected.length}명 선택됨` : '지울 고객을 선택하세요.'}
+                </span>
+                <Button
+                  variant="outline" size="sm"
+                  className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                  disabled={selected.length === 0 || purge.isPending}
+                  onClick={handlePurge}
+                >
+                  {purge.isPending ? '삭제 중…' : '선택 항목 완전 삭제'}
+                </Button>
+              </div>
+            </>
+          )}
+        </CardContent>
+      )}
+    </Card>
   )
 }

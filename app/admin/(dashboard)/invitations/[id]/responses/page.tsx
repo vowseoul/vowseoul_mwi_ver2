@@ -1,4 +1,7 @@
 import Link from "next/link"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "하객 응답 | VOW SEOUL" }
 import { notFound } from "next/navigation"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { mergeInvitationRaw } from "@/lib/invitation-data"

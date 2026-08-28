@@ -1,8 +1,11 @@
 'use client'
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import React, { useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import { SaveButton } from '@/components/ui/save-button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -15,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { TableRowsSkeleton, CardListSkeleton } from '@/components/admin/list-skeleton'
 import {
   Dialog,
   DialogContent,
@@ -34,8 +38,10 @@ import {
   useUpdateInvitationSampleMutation,
   useDeleteInvitationMutation
 } from '@/hooks/queries/useInvitations'
-import { useCustomersQuery } from '@/hooks/queries/useCustomers'
+import { CustomerPicker } from '@/components/admin/customer-picker'
+import { reviewStatusClass, reviewStatusLabel } from '@/lib/review-status'
 import { useThemesQuery } from '@/hooks/queries/useThemes'
+import { useCopyFeedback } from '@/lib/use-copy-feedback'
 import { 
   Plus, 
   Search, 
@@ -56,9 +62,9 @@ import {
 import { toast } from 'sonner'
 
 export default function InvitationsListPage() {
+  useDocumentTitle("청첩장 관리")
   const { data: invitations, isLoading, error } = useInvitationsQuery()
-  const { data: customersData } = useCustomersQuery({ status: 'form_completed' }, 1, 100)
-  const { data: themes } = useThemesQuery()
+  const { data: themes } = useThemesQuery({ activeOnly: true })
 
   const createMutation = useCreateInvitationMutation()
   const statusMutation = useUpdateInvitationStatusMutation()
@@ -73,39 +79,37 @@ export default function InvitationsListPage() {
   const [publicSlug, setPublicSlug] = useState('')
   const [isCreating, setIsCreating] = useState(false)
 
-  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const { isCopied, copy: copyText } = useCopyFeedback()
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
   const [slugEditTarget, setSlugEditTarget] = useState<{ id: string; name: string } | null>(null)
   const [editedSlug, setEditedSlug] = useState('')
-  const [isSavingSlug, setIsSavingSlug] = useState(false)
 
   const openSlugEditor = (id: string, currentSlug: string, name: string) => {
     setSlugEditTarget({ id, name })
     setEditedSlug(currentSlug)
   }
 
-  const handleSlugSave = async () => {
-    if (!slugEditTarget) return
+  const handleSlugSave = async (): Promise<boolean> => {
+    if (!slugEditTarget) return false
     const trimmed = editedSlug.trim()
     if (!trimmed) {
       toast.error('링크 주소를 입력해주세요.')
-      return
+      return false
     }
     if (!/^[a-z0-9-]+$/.test(trimmed)) {
       toast.error('링크 주소는 영문 소문자, 숫자, 하이픈(-)만 허용됩니다.')
-      return
+      return false
     }
-    setIsSavingSlug(true)
     try {
       await slugMutation.mutateAsync({ invitationId: slugEditTarget.id, publicSlug: trimmed })
       toast.success('접속 링크 주소가 변경되었습니다.')
       setSlugEditTarget(null)
+      return true
     } catch (err: any) {
       toast.error(err.message || '링크 주소 변경에 실패했습니다.')
-    } finally {
-      setIsSavingSlug(false)
+      return false
     }
   }
 
@@ -119,7 +123,7 @@ export default function InvitationsListPage() {
       return
     }
     if (!publicSlug.trim()) {
-      toast.error('접속 숏링크 주소(slug)를 입력해주세요.')
+      toast.error('접속 링크 주소를 입력해주세요.')
       return
     }
 
@@ -175,10 +179,8 @@ export default function InvitationsListPage() {
 
   const handleCopyLink = (slug: string, id: string) => {
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
-    navigator.clipboard.writeText(`${baseUrl}/w/${slug}`)
-    setCopiedId(id)
+    copyText(`${baseUrl}/w/${slug}`, id)
     toast.success('하객용 청첩장 주소가 클립보드에 복사되었습니다.')
-    setTimeout(() => setCopiedId(null), 2000)
   }
 
   const filteredInvitations = invitations?.filter((inv) => {
@@ -186,7 +188,6 @@ export default function InvitationsListPage() {
     return names.includes(search.toLowerCase()) || inv.public_slug.toLowerCase().includes(search.toLowerCase())
   })
 
-  const availableCustomers = customersData?.data || []
   const availableThemes = themes || []
 
   return (
@@ -215,19 +216,15 @@ export default function InvitationsListPage() {
                 {/* Customer selection */}
                 <Field>
                   <FieldLabel htmlFor="customerSelect">정보 입력 완료 고객 (선택)</FieldLabel>
-                  <Select value={customerId} onValueChange={setCustomerId}>
-                    <SelectTrigger id="customerSelect">
-                      <SelectValue placeholder="고객 선택 없음 (임시 초안 생성)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">임시 고객으로 생성 (고객 선택 없음)</SelectItem>
-                      {availableCustomers.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.groom_name} & {c.bride_name} (예식일: {c.wedding_date})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <CustomerPicker
+                    id="customerSelect"
+                    value={customerId}
+                    onChange={(id) => setCustomerId(id)}
+                    filters={{ status: 'form_completed' }}
+                    placeholder="고객 검색 후 선택"
+                    emptyText="정보 입력을 완료한 고객이 아직 없습니다."
+                    emptyOption={{ value: 'none', label: '임시 고객으로 생성 (고객 선택 없음)' }}
+                  />
                 </Field>
 
                 {/* Theme selection */}
@@ -250,7 +247,7 @@ export default function InvitationsListPage() {
 
                 {/* Public Slug */}
                 <Field>
-                  <FieldLabel htmlFor="publicSlug">하객 접속 링크 (Slug) *</FieldLabel>
+                  <FieldLabel htmlFor="publicSlug">하객 접속 링크 주소 *</FieldLabel>
                   <Input
                     id="publicSlug"
                     value={publicSlug}
@@ -296,7 +293,7 @@ export default function InvitationsListPage() {
           {/* 모바일 카드 리스트 — sm 미만에서는 6열 테이블 대신 카드로 보여준다 */}
           <div className="sm:hidden divide-y divide-border">
             {isLoading ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">청첩장 목록을 로딩 중입니다...</p>
+              <CardListSkeleton rows={6} />
             ) : error ? (
               <p className="py-8 text-center text-sm text-destructive">목록 조회 중 오류가 발생했습니다.</p>
             ) : filteredInvitations?.length === 0 ? (
@@ -347,9 +344,14 @@ export default function InvitationsListPage() {
                   </div>
 
                   <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5" />
-                      {inv.customer?.wedding_date || '-'}
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5" />
+                        {inv.customer?.wedding_date || '-'}
+                      </span>
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${reviewStatusClass(inv.review_status)}`}>
+                        {reviewStatusLabel(inv.review_status)}
+                      </span>
                     </div>
                     <label className="flex w-fit cursor-pointer items-center gap-1.5">
                       <Checkbox
@@ -367,7 +369,7 @@ export default function InvitationsListPage() {
                       className="h-8 text-[11px]"
                       onClick={() => handleCopyLink(inv.public_slug, inv.id)}
                     >
-                      {copiedId === inv.id ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Link2 className="w-3.5 h-3.5" />}
+                      {isCopied(inv.id) ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Link2 className="w-3.5 h-3.5" />}
                       <span className="ml-1">복사</span>
                     </Button>
                     <Button variant="outline" size="sm" asChild className="h-8 text-[11px] gap-1">
@@ -402,7 +404,7 @@ export default function InvitationsListPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-8 text-[11px] text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                      className="h-8 text-[11px] text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
                       onClick={() => setDeleteTarget({
                         id: inv.id,
                         name: `${inv.customer?.groom_name || '신랑'} & ${inv.customer?.bride_name || '신부'}`
@@ -417,13 +419,14 @@ export default function InvitationsListPage() {
           </div>
 
           {/* 데스크톱/태블릿 테이블 — sm 이상에서만 보인다 */}
-          <div className="hidden sm:block">
+          <div className="hidden sm:block overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>신랑 & 신부</TableHead>
-                <TableHead>접속 링크 (Slug)</TableHead>
+                <TableHead>접속 링크 주소</TableHead>
                 <TableHead className="text-center">상태</TableHead>
+                <TableHead className="text-center">검수</TableHead>
                 <TableHead>예식 예정일</TableHead>
                 <TableHead className="text-center">하객 링크</TableHead>
                 <TableHead className="w-24 text-right">관리 액션</TableHead>
@@ -431,20 +434,16 @@ export default function InvitationsListPage() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                    청첩장 목록을 로딩 중입니다...
-                  </TableCell>
-                </TableRow>
+                <TableRowsSkeleton rows={6} columns={7} />
               ) : error ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-destructive">
+                  <TableCell colSpan={7} className="text-center py-8 text-destructive">
                     목록 조회 중 오류가 발생했습니다.
                   </TableCell>
                 </TableRow>
               ) : filteredInvitations?.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     제작중인 청첩장이 없습니다.
                   </TableCell>
                 </TableRow>
@@ -500,6 +499,12 @@ export default function InvitationsListPage() {
                           : '만료'}
                       </Badge>
                     </TableCell>
+                    <TableCell className="text-center">
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${reviewStatusClass(inv.review_status)}`}>
+                        {reviewStatusLabel(inv.review_status)}
+                        {Number(inv.review_round) > 0 && ` ${inv.review_round}차`}
+                      </span>
+                    </TableCell>
                     <TableCell className="text-sm">
                       <div className="flex items-center gap-1.5 text-muted-foreground">
                         <Calendar className="w-3.5 h-3.5" />
@@ -513,7 +518,7 @@ export default function InvitationsListPage() {
                         className="h-8"
                         onClick={() => handleCopyLink(inv.public_slug, inv.id)}
                       >
-                        {copiedId === inv.id ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Link2 className="w-3.5 h-3.5" />}
+                        {isCopied(inv.id) ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Link2 className="w-3.5 h-3.5" />}
                         <span className="ml-1 text-[11px]">복사</span>
                       </Button>
                     </TableCell>
@@ -554,7 +559,7 @@ export default function InvitationsListPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-8 text-[11px] text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                          className="h-8 text-[11px] text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
                           onClick={() => setDeleteTarget({
                             id: inv.id,
                             name: `${inv.customer?.groom_name || '신랑'} & ${inv.customer?.bride_name || '신부'}`
@@ -626,7 +631,7 @@ export default function InvitationsListPage() {
           </DialogHeader>
           <FieldGroup className="mt-2">
             <Field>
-              <FieldLabel htmlFor="editedSlug">접속 링크 (Slug)</FieldLabel>
+              <FieldLabel htmlFor="editedSlug">접속 링크 주소</FieldLabel>
               <Input
                 id="editedSlug"
                 value={editedSlug}
@@ -640,13 +645,10 @@ export default function InvitationsListPage() {
             </Field>
           </FieldGroup>
           <DialogFooter className="mt-4 gap-2">
-            <Button variant="outline" size="sm" onClick={() => setSlugEditTarget(null)} disabled={isSavingSlug}>
+            <Button variant="outline" size="sm" onClick={() => setSlugEditTarget(null)}>
               취소
             </Button>
-            <Button size="sm" onClick={handleSlugSave} disabled={isSavingSlug}>
-              {isSavingSlug ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
-              저장
-            </Button>
+            <SaveButton size="sm" onSave={handleSlugSave} />
           </DialogFooter>
         </DialogContent>
       </Dialog>

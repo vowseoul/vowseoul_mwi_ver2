@@ -54,8 +54,17 @@ export async function proxy(request: NextRequest) {
       .eq('id', user.id)
       .single()
 
-    if (profileError || profile?.role !== 'ADMIN') {
+    // 등록된 직원이면 관리자 화면에 들어온다. 예전에는 ADMIN 만 통과시켜서
+    // 디자이너 계정은 로그인은 되는데 아무 화면도 못 열었다.
+    if (profileError || !profile?.role) {
       return redirectToLogin(request, pathname)
+    }
+
+    // 시스템 설정만 운영자 전용이다 — 서비스 오픈 여부·보관 정책·직원 계정처럼
+    // 되돌리기 어려운 것들이 모여 있다. 화면에서도 메뉴를 감추지만(§app/admin/(dashboard)/layout.tsx),
+    // 주소를 직접 치고 들어오는 경로는 여기서 막아야 한다.
+    if (pathname.startsWith('/admin/settings') && profile.role !== 'ADMIN') {
+      return NextResponse.redirect(new URL('/admin', request.url))
     }
   } catch (err) {
     console.error('Proxy auth check error:', err)

@@ -39,7 +39,7 @@ export function ScaledPreview({
 
   return (
     <div ref={containerRef} className={className ?? 'w-full'}>
-      <div className="mx-auto" style={{ width: width * scale, height: height * scale }}>
+      <div className="mx-auto overflow-hidden" style={{ width: width * scale, height: height * scale }}>
         <div style={{ width, height, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
           {children}
         </div>

@@ -14,11 +14,11 @@
 }
 
 .ms-container {
-  max-w: 480px;
+  max-width: 480px;
   margin: 0 auto;
   background-color: var(--bg);
   color: var(--ink);
-  font-family: var(--font-kr);
+  font-family: var(--font-kr, 'Noto Serif KR', serif);
   line-height: 1.6;
   position: relative;
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
@@ -66,7 +66,7 @@
 }
 
 .ms-section__subtitle {
-  font-family: var(--font-en);
+  font-family: var(--font-en, 'Cormorant Garamond', serif);
   font-size: var(--text-label, 13.6px);
   letter-spacing: 0.3em;
   color: var(--accent);
@@ -77,14 +77,16 @@
 
 .ms-section__title {
   font-size: var(--text-title, 21.6px);
-  font-weight: 500;
+  font-weight: var(--font-kr-weight, 500);
+
+  font-style: var(--font-kr-style, normal);
   letter-spacing: -0.01em;
 }
 
 /* Divider */
 .ms-divider {
   color: var(--accent);
-  font-size: 0.75rem;
+  font-size: var(--text-caption, 0.75rem);
   margin: 1.5rem auto;
   opacity: 0.6;
   text-align: center;
@@ -112,44 +114,22 @@
   margin-left: 12px;
 }
 
-/* Button styles */
-.ms-button {
+.ms-divider__icon {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  background-color: var(--accent);
-  color: #fff !important;
-  border: none;
-  border-radius: 6px;
-  padding: 0.6rem 1rem;
-  font-size: 0.85rem;
-  font-weight: 500;
-  text-decoration: none;
-  cursor: pointer;
-  transition: background-color 0.2s ease, opacity 0.2s ease;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.ms-button:hover {
-  opacity: 0.9;
-  background-color: #df996e;
-}
-
-.ms-button--copy {
-  background-color: transparent;
-  border: 1px solid var(--accent);
-  color: var(--accent) !important;
-  margin-top: 1rem;
-}
-
-.ms-button--copy:hover {
-  background-color: var(--accent-light);
-}
-
-.ms-button__icon {
   flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+}
+
+.ms-divider__icon-heart {
+  width: 100%;
+  height: 100%;
+}
+
+.ms-divider__icon-custom {
+  display: inline-block;
+  width: 100%;
+  height: 100%;
 }
 
 /* Hero Section */
@@ -189,14 +169,14 @@
   position: relative;
   z-index: 1;
   width: 100%;
-  max-w: 320px;
+  max-width: 320px;
   display: flex;
   flex-direction: column;
   gap: 2.5rem;
 }
 
 .ms-hero__sub {
-  font-family: var(--font-en);
+  font-family: var(--font-en, 'Cormorant Garamond', serif);
   font-size: var(--text-label, 14.4px);
   letter-spacing: 0.4em;
   opacity: 0.6;
@@ -215,20 +195,22 @@
 }
 
 .ms-hero__relation {
-  font-size: 0.75rem;
+  font-size: var(--text-caption, 0.75rem);
   opacity: 0.6;
   letter-spacing: 0.1em;
 }
 
 .ms-hero__name {
   font-size: var(--text-display, 32px);
-  font-weight: 300;
+  font-weight: var(--font-kr-weight, 300);
+
+  font-style: var(--font-kr-style, normal);
   letter-spacing: 0.1em;
 }
 
 .ms-hero__connector {
-  font-family: var(--font-en);
-  font-size: 1.5rem;
+  font-family: var(--font-en, 'Cormorant Garamond', serif);
+  font-size: var(--text-number, 1.5rem);
   font-style: italic;
   color: var(--accent);
   opacity: 0.7;
@@ -240,16 +222,20 @@
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  font-size: 0.9rem;
+  font-size: var(--text-body, 0.9rem);
   opacity: 0.85;
 }
 
 .ms-hero__date {
-  font-weight: 500;
+  font-weight: var(--font-kr-weight, 500);
+
+  font-style: var(--font-kr-style, normal);
 }
 
 .ms-hero__venue {
-  font-weight: 500;
+  font-weight: var(--font-kr-weight, 500);
+
+  font-style: var(--font-kr-style, normal);
 }
 
 .ms-hero__scroll {
@@ -286,178 +272,12 @@
   height: auto;
 }
 
-.ms-parents {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--content-gap, 32px);
-  max-width: 340px;
-  margin: 0 auto;
-}
-
-.ms-parents__col {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.ms-parents__role {
-  font-size: 0.75rem;
-  opacity: 0.55;
-  margin-bottom: 0.2rem;
-}
-
-.ms-parents__child {
-  font-size: 1.25rem;
-  font-weight: 500;
-  margin-bottom: 0.6rem;
-}
-
-.ms-parents__divider {
-  width: 20px;
-  height: 1px;
-  background-color: var(--accent);
-  opacity: 0.4;
-  margin-bottom: 0.8rem;
-}
-
-.ms-parents__info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  font-size: 0.85rem;
-}
-
-.ms-parents__parent {
-  display: flex;
-  gap: 0.4rem;
-}
-
-.ms-parents__label {
-  opacity: 0.5;
-}
-
-/* Sequence Section */
-.ms-timeline {
-  position: relative;
-  max-width: 300px;
-  margin: 0 auto;
-  padding-left: 2rem;
-  text-align: left;
-}
-
-.ms-timeline__line {
-  position: absolute;
-  left: 3px;
-  top: 0.5rem;
-  bottom: 0.5rem;
-  width: 1px;
-  background-color: var(--accent);
-  opacity: 0.2;
-}
-
-.ms-timeline__item {
-  position: relative;
-  padding-bottom: 2rem;
-}
-
-.ms-timeline__item:last-child {
-  padding-bottom: 0;
-}
-
-.ms-timeline__dot {
-  position: absolute;
-  left: -2rem;
-  top: 0.4rem;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background-color: var(--accent);
-  border: 2px solid var(--bg);
-  box-shadow: 0 0 0 1px rgba(232, 168, 124, 0.4);
-}
-
-.ms-timeline__time {
-  font-family: var(--font-en);
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--accent);
-  margin-bottom: 0.2rem;
-}
-
-.ms-timeline__event {
-  font-size: 0.9rem;
-  font-weight: 400;
-}
-
-/* Calendar Section */
-.ms-dday {
-  font-size: 1.1rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  color: var(--accent);
-  margin-bottom: 1.2rem;
-}
-
-.ms-calendar__card {
-  max-width: 320px;
-  margin: 0 auto;
-  padding: 1.5rem 1rem;
-}
-
-.ms-calendar__header {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  margin-bottom: 1.5rem;
-}
-
-.ms-calendar__month {
-  font-family: var(--font-en);
-  font-size: 1.25rem;
-  font-weight: 600;
-  letter-spacing: 0.15em;
-  color: var(--accent);
-}
-
-.ms-calendar__year {
-  font-size: 0.75rem;
-  opacity: 0.45;
-}
-
-.ms-calendar__grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 0.5rem 0.25rem;
-  text-align: center;
-}
-
-.ms-calendar__day-name {
-  font-size: 0.7rem;
-  font-weight: 600;
-  opacity: 0.5;
-  padding-bottom: 0.5rem;
-}
-
-.ms-calendar__day {
-  font-size: 0.85rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 1.8rem;
-  width: 1.8rem;
-  margin: 0 auto;
-}
-
-.ms-calendar__day--empty {
-  pointer-events: none;
-}
-
-.ms-calendar__day--active {
-  background-color: var(--accent);
-  color: #fff;
-  border-radius: 50%;
-  font-weight: 600;
-  box-shadow: 0 2px 8px rgba(232, 168, 124, 0.3);
+/* 좌우로 꽉 채우기 — 섹션 좌우 패딩만큼 음수 마진으로 밀어내 화면 끝까지 채운다 */
+.ms-greeting__image.is-fill {
+  max-width: none;
+  margin-left: calc(-1 * var(--section-px, 32px));
+  margin-right: calc(-1 * var(--section-px, 32px));
+  width: calc(100% + var(--section-px, 32px) * 2);
 }
 
 /* Location Section */
@@ -465,18 +285,23 @@
   max-width: 340px;
   margin: 0 auto 1.5rem auto;
   text-align: left;
+  cursor: pointer;
 }
 
 .ms-location__venue {
-  font-size: 1.1rem;
-  font-weight: 600;
+  font-size: var(--text-card-title, 1.1rem);
+  font-weight: var(--font-kr-weight, 600);
+
+  font-style: var(--font-kr-style, normal);
   margin-bottom: 0.2rem;
 }
 
 .ms-location__hall {
   color: var(--accent);
-  font-size: 0.95rem;
-  font-weight: 500;
+  font-size: var(--text-body, 0.95rem);
+  font-weight: var(--font-kr-weight, 500);
+
+  font-style: var(--font-kr-style, normal);
   margin-bottom: 0.6rem;
 }
 
@@ -485,6 +310,13 @@
   color: var(--ink-2);
   line-height: 1.5;
   white-space: pre-line;
+}
+
+.ms-location__hint {
+  font-size: var(--text-micro, 0.6rem);
+  margin-top: 0.5rem;
+  text-align: center;
+  opacity: 0.5;
 }
 
 .ms-location__guides {
@@ -499,8 +331,10 @@
 }
 
 .ms-location__guide-title {
-  font-size: 0.9rem;
-  font-weight: 600;
+  font-size: var(--text-body, 0.9rem);
+  font-weight: var(--font-kr-weight, 600);
+
+  font-style: var(--font-kr-style, normal);
   color: var(--accent);
   margin-bottom: 0.25rem;
 }

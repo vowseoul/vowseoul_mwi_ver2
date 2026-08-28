@@ -80,7 +80,9 @@
 .se-hero__title {
   font-family: 'Goudy Bookletter 1911', serif;
   font-size: var(--text-display, 25px);
-  font-weight: 400;
+  font-weight: var(--font-en-weight, 400);
+
+  font-style: var(--font-en-style, normal);
   line-height: 1.2;
   color: #1A1A1A;
   text-transform: capitalize;
@@ -124,7 +126,7 @@
   margin-top: 16px;
   font-family: 'Covered By Your Grace', cursive;
   font-size: var(--text-display, 24px);
-  font-weight: 400;
+  font-weight: var(--font-en-weight, 400);
   font-style: italic;
   color: #000000;
   text-transform: lowercase;
@@ -145,7 +147,9 @@
 
 .se-hero__venue {
   text-transform: uppercase;
-  font-weight: 600;
+  font-weight: var(--font-kr-weight, 600);
+
+  font-style: var(--font-kr-style, normal);
   letter-spacing: 0.15em;
   margin-bottom: 6px;
 }
@@ -173,13 +177,32 @@
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.06));
 }
 
+.se-greeting__icon {
+  width: 24px;
+  height: 24px;
+  margin: -24px auto 24px;
+  color: var(--accent, #D76C6C);
+  opacity: 0.8;
+  position: relative;
+  z-index: 1;
+}
+
+.se-greeting__icon-heart,
+.se-greeting__icon-custom {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .se-greeting__message {
   padding: 0 24px;
   max-width: 340px;
   margin: 0 auto;
   font-size: var(--text-body, 15px);
   line-height: 2.0;
-  font-weight: 500;
+  font-weight: var(--font-kr-weight, 500);
+
+  font-style: var(--font-kr-style, normal);
   white-space: pre-line;
   color: color-mix(in srgb, var(--ink, #FFFFFF) 95%, transparent);
   font-family: var(--font-kr, 'Noto Serif KR', serif);
@@ -196,6 +219,19 @@
   height: auto;
   border-radius: var(--radius, 2px);
   box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.08);
+}
+
+/* 좌우로 꽉 채우기 — 섹션 좌우 패딩만큼 음수 마진으로 밀어내 화면 끝까지 채운다 */
+.se-greeting__image.is-fill {
+  max-width: none;
+  padding: 0;
+  margin-left: calc(-1 * var(--section-px, 24px));
+  margin-right: calc(-1 * var(--section-px, 24px));
+  width: calc(100% + var(--section-px, 24px) * 2);
+}
+.se-greeting__image.is-fill img {
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .se-profile {
@@ -246,13 +282,15 @@
 }
 
 .se-parents__role-label {
-  font-size: 13px;
+  font-size: var(--text-body, 13px);
   opacity: 0.6;
 }
 
 .se-parents__name {
-  font-size: 21px;
-  font-weight: 500;
+  font-size: var(--text-number, 21px);
+  font-weight: var(--font-kr-weight, 500);
+
+  font-style: var(--font-kr-style, normal);
   font-family: var(--font-kr, 'Noto Serif KR', serif);
 }
 
@@ -267,12 +305,12 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 14px;
+  font-size: var(--text-body, 14px);
   opacity: 0.9;
 }
 
 .se-parents__section-title {
-  font-size: 11px;
+  font-size: var(--text-caption, 11px);
   opacity: 0.6;
   display: block;
 }
@@ -285,7 +323,7 @@
 }
 
 .se-parents__relation {
-  font-size: 11px;
+  font-size: var(--text-caption, 11px);
   opacity: 0.5;
   margin-right: 4px;
 }
@@ -314,17 +352,12 @@
 
 .se-section__title {
   font-size: var(--text-title, 18px);
-  font-weight: 700;
+  font-weight: var(--font-kr-weight, 700);
+
+  font-style: var(--font-kr-style, normal);
   margin-top: 4px;
   margin-bottom: 32px;
   font-family: var(--font-kr, 'Noto Serif KR', serif);
-}
-
-/* share 섹션은 위 여백을 없애 RSVP 섹션과 바로 이어지도록 한다.
-   원래 template.html의 인라인 style="padding-top:0"이었던 것을 클래스로 옮김
-   (인라인 스타일은 블럭 여백 오버라이드 주입 CSS를 항상 이겨버리기 때문 — data-block 계약 문서 §2.3) */
-.se-share-section {
-  padding-top: 0;
 }
 
 /* 4. ORDER TABLE */
@@ -349,8 +382,10 @@
   width: 90px;
   padding: 12px 0;
   text-align: center;
-  font-size: 14px;
-  font-weight: 300;
+  font-size: var(--text-body, 14px);
+  font-weight: var(--font-en-weight, 300);
+
+  font-style: var(--font-en-style, normal);
   color: color-mix(in srgb, var(--ink, #FFFFFF) 90%, transparent);
   border-right: 1px solid color-mix(in srgb, var(--ink, #FFFFFF) 40%, transparent);
   display: flex;
@@ -363,7 +398,7 @@
   flex: 1;
   padding: 12px 16px;
   text-align: left;
-  font-size: 14px;
+  font-size: var(--text-body, 14px);
   color: var(--ink, #FFFFFF);
   display: flex;
   align-items: center;
@@ -383,8 +418,10 @@
 
 .se-calendar-card__header {
   text-align: center;
-  font-size: 20px;
-  font-weight: 500;
+  font-size: var(--text-number, 20px);
+  font-weight: var(--font-en-weight, 500);
+
+  font-style: var(--font-en-style, normal);
   letter-spacing: 0.15em;
   text-transform: uppercase;
   font-family: 'Goudy Bookletter 1911', serif;
@@ -397,21 +434,25 @@
   grid-template-columns: repeat(7, 1fr);
   row-gap: 12px;
   text-align: center;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: var(--text-caption, 12px);
+  font-weight: var(--font-kr-weight, 500);
+
+  font-style: var(--font-kr-style, normal);
   color: rgba(213, 155, 155, 0.8);
 }
 
 .se-calendar-grid__day-name {
   padding: 4px 0;
   opacity: 0.5;
-  font-weight: 600;
+  font-weight: var(--font-kr-weight, 600);
+
+  font-style: var(--font-kr-style, normal);
 }
 
 .se-calendar-grid__active {
   position: relative;
   padding: 4px 0;
-  font-size: 12px;
+  font-size: var(--text-caption, 12px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -419,7 +460,9 @@
   height: 28px;
   margin: 0 auto;
   border-radius: 50%;
-  font-weight: 700;
+  font-weight: var(--font-kr-weight, 700);
+
+  font-style: var(--font-kr-style, normal);
   color: #FFFFFF;
   background-color: var(--accent, #D76C6C);
 }
@@ -432,17 +475,21 @@
 }
 
 .se-dday-title {
-  font-size: 14px;
+  font-size: var(--text-body, 14px);
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  font-weight: 600;
+  font-weight: var(--font-kr-weight, 600);
+
+  font-style: var(--font-kr-style, normal);
   color: var(--accent, #D76C6C);
   margin-bottom: 12px;
 }
 
 .se-dday-badge {
-  font-size: 32px;
-  font-weight: 500;
+  font-size: var(--text-number, 32px);
+  font-weight: var(--font-en-weight, 500);
+
+  font-style: var(--font-en-style, normal);
   color: var(--accent, #D76C6C);
   font-family: var(--font-en, 'Radio Canada Big', sans-serif);
 }
@@ -456,11 +503,14 @@
   box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.05);
   margin-bottom: 24px;
   border-radius: var(--radius, 2px);
+  cursor: pointer;
 }
 
 .se-location-card__name {
-  font-weight: 600;
-  font-size: 16px;
+  font-weight: var(--font-kr-weight, 600);
+
+  font-style: var(--font-kr-style, normal);
+  font-size: var(--text-card-title, 16px);
   letter-spacing: 0.05em;
   color: var(--accent, #D76C6C);
   font-family: var(--font-kr, 'Noto Serif KR', serif);
@@ -473,16 +523,19 @@
 }
 
 .se-location-card__address {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--text-body, 14px);
+  font-weight: var(--font-kr-weight, 500);
+
+  font-style: var(--font-kr-style, normal);
   margin-top: 8px;
   white-space: pre-line;
   color: var(--accent, #D76C6C);
 }
 
 .se-location-card__hint {
-  font-size: var(--text-caption, 10px);
+  font-size: var(--text-micro, 9px);
   margin-top: 4px;
+  text-align: center;
   color: color-mix(in srgb, var(--accent, #D76C6C) 60%, transparent);
 }
 
@@ -498,8 +551,10 @@
 }
 
 .se-location__guide-title {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--text-body, 13px);
+  font-weight: var(--font-kr-weight, 600);
+
+  font-style: var(--font-kr-style, normal);
   color: var(--accent, #D76C6C);
   margin-bottom: 4px;
 }

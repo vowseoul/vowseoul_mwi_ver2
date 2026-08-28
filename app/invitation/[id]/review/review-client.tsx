@@ -2,11 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
+import { confirmDialog } from "@/components/ui/confirm-dialog"
 import { MessageSquarePlus, X, ListChecks, Check } from "lucide-react"
 import { InvitationFrame, type BlockOverrideMap, type FontFace, type SectionImage, type TokenMap } from "@/components/invitation/invitation-frame"
 import { buildSlots } from "@/components/invitation/slot-registry"
 import { buildFieldData, normalizeLegacyKeys, type RawInvitationData } from "@/lib/invitation-data"
 import { toThemeTemplate, getBlockManifest, BLOCK_LABEL_FALLBACK, type ThemeRow } from "@/lib/theme-template"
+import type { ScrollMotionSettings } from "@/lib/scroll-motion"
+import type { IntroSettings } from "@/lib/intro-settings"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 
@@ -26,8 +29,12 @@ export default function ReviewClient({
   fontFaces = [],
   disabledSlots = [],
   blockOverrides = {},
+  blockTint = "none",
+  blockTintOpacity,
   hiddenBlocks = [],
   sectionImages = [],
+  scrollMotion,
+  intro,
   reviewStatus,
   initialRevisions,
 }: {
@@ -38,8 +45,13 @@ export default function ReviewClient({
   fontFaces?: FontFace[]
   disabledSlots?: string[]
   blockOverrides?: BlockOverrideMap
+  /** 블럭별 배경 농담 패턴 (customization_overrides.blockTint) */
+  blockTint?: string
+  blockTintOpacity?: Record<string, number>
   hiddenBlocks?: string[]
   sectionImages?: SectionImage[]
+  scrollMotion?: ScrollMotionSettings
+  intro?: IntroSettings
   reviewStatus: string
   initialRevisions: Revision[]
 }) {
@@ -101,7 +113,7 @@ export default function ReviewClient({
   }
 
   const confirmApprove = async () => {
-    if (!confirm("이 상태로 청첩장 제작을 확정하시겠습니까?")) return
+    if (!(await confirmDialog({ title: "이 상태로 청첩장 제작을 확정하시겠습니까?", confirmText: "확정" }))) return
     try {
       const res = await fetch("/api/review-submit", {
         method: "POST",
@@ -143,8 +155,13 @@ export default function ReviewClient({
           blockOverrides={blockOverrides}
           hiddenBlocks={hiddenBlocks}
           sectionImages={sectionImages}
+          scrollMotion={scrollMotion}
+          intro={intro}
           width={Math.min(size.w, 480)}
           height={size.h - 44 - 60}
+          fullBleed
+          blockTint={blockTint}
+          blockTintOpacity={blockTintOpacity as never}
           onBlockClick={commentMode ? (key) => setActiveBlock(key) : undefined}
         />
       </div>

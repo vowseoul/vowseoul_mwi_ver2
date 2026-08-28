@@ -2,15 +2,40 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { supabase } from "@/lib/supabase"
-import { uploadImage } from "@/lib/image-upload"
+import { uploadImage, SHARE_THUMBNAIL_OPTIONS, isShareThumbnailField } from "@/lib/image-upload"
 import { InvitationFrame, type TokenMap } from "@/components/invitation/invitation-frame"
 import { ScaledPreview } from "@/components/ui/scaled-preview"
 import { buildSlots } from "@/components/invitation/slot-registry"
-import { buildFieldData, mergeInvitationRaw } from "@/lib/invitation-data"
+import { buildFieldData, mergeInvitationRaw, normalizeSequence, isToggledOff, isToggledOn, type SequenceEvent } from "@/lib/invitation-data"
+import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes-warning"
+import {
+  REVIEW_STATUS_LABEL,
+  CONTENT_FIELD_DEFS,
+  ACCOUNT_FIELD_DEFS,
+  DECEASED_KEY_BY_NAME_FIELD,
+  DECEASED_KEYS,
+  CONTACT_FIELD_DEFS,
+  SLOT_LABELS,
+  ALL_TEXT_FIELD_DEFS,
+  MANAGED_CONTENT_KEYS,
+  moveArrayItem,
+  extractTokenDefault,
+  type FieldDef,
+} from "./field-defs"
+import { SortableBlockRow, DragHandle, SizeSliderField, BlockColorField, TextField, ImageField, GalleryUploadButton, FontVariantFields } from "./fields"
 import {
   BLOCK_KEYS,
   BLOCK_LABEL_FALLBACK,
   buildThemeTokens,
+  ACCOUNT_CARD_BG_DEFAULT,
+  BLOCK_TINT_DEFAULT_OPACITY,
+  BLOCK_TINT_PATTERNS,
+  BLOCK_TINT_STEP_LABELS,
+  CALENDAR_BOX_DEFAULT,
+  extractBlockTint,
+  extractBlockTintOpacity,
+  type BlockTintStep,
+  extractBlockOrder,
   extractBlockOverrides,
   extractDisabledSlots,
   extractSectionImages,
@@ -24,6 +49,10 @@ import {
   type SectionImage,
   type ThemeRow,
 } from "@/lib/theme-template"
+import { extractScrollMotion, type ScrollMotionSettings } from "@/lib/scroll-motion"
+import { writeToClipboard } from "@/lib/use-copy-feedback"
+import { extractIntroSettings, DEFAULT_INTRO_SETTINGS, INTRO_MODES, INTRO_ALIGNS, INTRO_FONT_SIZE_MIN, INTRO_FONT_SIZE_MAX, type IntroSettings } from "@/lib/intro-settings"
+import { ScrollMotionField } from "@/components/invitation/scroll-motion-field"
 import { buildFontStack, fetchRegisteredFonts, fontPreviewStyle, resolveFontFaces, type RegisteredFont } from "@/lib/fonts"
 import { useInjectFontFaces } from "@/lib/use-font-faces"
 import { useInvitationRevisionsQuery, useResolveRevisionMutation } from "@/hooks/queries/useInvitationRevisions"
@@ -40,11 +69,20 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
+import { SaveButton } from "@/components/ui/save-button"
+import { QrCodeDialog } from "@/components/admin/qr-code-dialog"
+import { ExtraAccountEditor } from "@/components/account-fields"
+import { isAccountFilled, parseAccountList, type AccountEntry } from "@/lib/account-fields"
+import { ContactListField } from "@/components/contact-fields"
+import { isContactFilled, parseContactList, type ContactEntry } from "@/lib/contact-fields"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Slider } from "@/components/ui/slider"
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Copy, ExternalLink, Image as ImageIcon, Loader2, Plus, Save, X } from "lucide-react"
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Copy, ExternalLink, Loader2, Plus, X } from "lucide-react"
 import { toast } from "sonner"
+import { confirmDialog } from "@/components/ui/confirm-dialog"
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core"
+import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable"
 
 /**
  * 템플릿 청첩장 커스터마이즈 편집기.
@@ -55,144 +93,8 @@ import { toast } from "sonner"
  * "여기서 보이는 것 = 발행 결과" 가 보장된다.
  */
 
-type FieldType = "text" | "textarea" | "tel" | "image"
-interface FieldDef { key: string; label: string; type: FieldType }
-
-const REVIEW_STATUS_LABEL: Record<string, string> = {
-  none: "검수 전",
-  in_review: "검수 요청됨",
-  changes_requested: "수정 요청 있음",
-  approved: "확정됨",
-}
-
-/** field_manifest 에 있을 때만 노출되는 필드 (테마가 실제로 쓰는 것만 보여준다) */
-const CONTENT_FIELD_DEFS: FieldDef[] = [
-  { key: "groom_name", label: "신랑 이름", type: "text" },
-  { key: "bride_name", label: "신부 이름", type: "text" },
-  { key: "groom_name_en", label: "신랑 영문 이름", type: "text" },
-  { key: "bride_name_en", label: "신부 영문 이름", type: "text" },
-  { key: "groom_relationship", label: "신랑측 호칭", type: "text" },
-  { key: "bride_relationship", label: "신부측 호칭", type: "text" },
-  { key: "groom_father_name", label: "신랑 아버지 성함", type: "text" },
-  { key: "groom_mother_name", label: "신랑 어머니 성함", type: "text" },
-  { key: "bride_father_name", label: "신부 아버지 성함", type: "text" },
-  { key: "bride_mother_name", label: "신부 어머니 성함", type: "text" },
-  { key: "groom_phone", label: "신랑 연락처", type: "tel" },
-  { key: "bride_phone", label: "신부 연락처", type: "tel" },
-  { key: "groom_father_phone", label: "신랑 아버지 연락처", type: "tel" },
-  { key: "groom_mother_phone", label: "신랑 어머니 연락처", type: "tel" },
-  { key: "bride_father_phone", label: "신부 아버지 연락처", type: "tel" },
-  { key: "bride_mother_phone", label: "신부 어머니 연락처", type: "tel" },
-  { key: "groom_sns_instagram", label: "신랑 인스타그램", type: "text" },
-  { key: "bride_sns_instagram", label: "신부 인스타그램", type: "text" },
-  { key: "venue_name", label: "예식장명", type: "text" },
-  { key: "venue_hall", label: "홀 이름", type: "text" },
-  { key: "venue_address", label: "예식장 주소", type: "text" },
-  { key: "traffic_info", label: "교통 안내", type: "textarea" },
-  { key: "parking_info", label: "주차 안내", type: "textarea" },
-  { key: "shuttle_info", label: "셔틀버스 안내", type: "textarea" },
-  { key: "greeting_message", label: "인사말", type: "textarea" },
-  { key: "main_image", label: "메인 이미지", type: "image" },
-  { key: "groom_photo", label: "신랑 사진", type: "image" },
-  { key: "bride_photo", label: "신부 사진", type: "image" },
-  { key: "greeting_image", label: "인사말 이미지 (선택)", type: "image" },
-  { key: "rsvp_meal_menu", label: "식사 종류 (쉼표로 구분, 비우면 한식/양식 기본)", type: "text" },
-]
-
-/** slot_manifest 에 'account' 가 있을 때만 노출 (필드키 마커가 아니라 슬롯 데이터라 field_manifest 에 없음) */
-const ACCOUNT_FIELD_DEFS: FieldDef[] = [
-  { key: "account_groom_bank", label: "은행", type: "text" },
-  { key: "account_groom_number", label: "계좌번호", type: "text" },
-  { key: "account_groom_holder", label: "예금주", type: "text" },
-  { key: "account_bride_bank", label: "은행", type: "text" },
-  { key: "account_bride_number", label: "계좌번호", type: "text" },
-  { key: "account_bride_holder", label: "예금주", type: "text" },
-  { key: "extra_account_groom", label: "신랑측 혼주 계좌 (자유 입력)", type: "textarea" },
-  { key: "extra_account_bride", label: "신부측 혼주 계좌 (자유 입력)", type: "textarea" },
-]
-
-/** 부모 이름 필드 → 고인(故) 표시 플래그 필드키. buildFieldData 가 이 값을 보고 이름 앞에 '故 '를 붙인다 */
-const DECEASED_KEY_BY_NAME_FIELD: Record<string, string> = {
-  groom_father_name: "groom_father_deceased",
-  groom_mother_name: "groom_mother_deceased",
-  bride_father_name: "bride_father_deceased",
-  bride_mother_name: "bride_mother_deceased",
-}
-const DECEASED_KEYS = Object.values(DECEASED_KEY_BY_NAME_FIELD)
-
-/** slot_manifest 에 'contact' 가 있을 때만 노출 (연락처 표시 여부 토글에 쓰는 이름 라벨용) */
-const CONTACT_FIELD_DEFS: FieldDef[] = [
-  { key: "groom_phone", label: "신랑 연락처", type: "tel" },
-  { key: "groom_father_phone", label: "신랑 아버지 연락처", type: "tel" },
-  { key: "groom_mother_phone", label: "신랑 어머니 연락처", type: "tel" },
-  { key: "bride_phone", label: "신부 연락처", type: "tel" },
-  { key: "bride_father_phone", label: "신부 아버지 연락처", type: "tel" },
-  { key: "bride_mother_phone", label: "신부 어머니 연락처", type: "tel" },
-]
-
-/** 슬롯 키 → 관리 화면에 보여줄 한글 이름. 테마가 지원하는 기능 중 이 청첩장만 끄고 싶을 때 쓴다 */
-const SLOT_LABELS: Record<string, string> = {
-  bgm: "배경음악",
-  gallery: "갤러리",
-  sequence: "식순",
-  calendar: "캘린더 · D-day",
-  account: "마음 전하실 곳 (계좌)",
-  contact: "연락처",
-  map: "오시는 길 (지도)",
-  rsvp: "참석 의사 전달",
-  guestbook: "방명록",
-  share: "청첩장 공유",
-}
-
-const ALL_TEXT_FIELD_DEFS = [...CONTENT_FIELD_DEFS, ...ACCOUNT_FIELD_DEFS]
-const MANAGED_CONTENT_KEYS = new Set([
-  ...ALL_TEXT_FIELD_DEFS.map((f) => f.key),
-  "wedding_date", "wedding_time", "gallery_images", "gallery_view_type", "gallery_align", "wedding_programs", "show_wedding_program",
-  "phone_expose", "groom_show_phone", "bride_show_phone",
-  ...DECEASED_KEYS,
-])
-
-type SequenceRow = { time: string; title: string }
-
-/** raw.wedding_programs 를 편집 가능한 {time,title}[] 로 정규화 (slot-registry 의 normalizeSequence 와 동일 규칙) */
-function normalizeSequenceRows(value: unknown): SequenceRow[] {
-  if (!Array.isArray(value)) return []
-  const out: SequenceRow[] = []
-  for (const item of value) {
-    if (item && typeof item === "object") {
-      const o = item as Record<string, unknown>
-      const time = typeof o.time === "string" ? o.time : ""
-      const title = typeof o.title === "string" ? o.title : typeof o.text === "string" ? o.text : ""
-      out.push({ time, title })
-    }
-  }
-  return out
-}
-
-/** '아니오'/false/'off' 가 아니면 표시로 간주 (미설정은 항상 표시) — 식순 노출, 연락처 노출 토글에 공용으로 쓴다 */
-function isShown(value: unknown): boolean {
-  return !(value === false || value === "false" || value === "아니오" || value === "아니요" || value === "off")
-}
-
-/** 목록 항목을 인접한 위치와 맞바꾼다 — 갤러리 사진 순서, 섹션 삽입 이미지 순서 재정렬에 공용으로 쓴다 */
-function moveArrayItem<T>(arr: T[], index: number, direction: -1 | 1): T[] {
-  const target = index + direction
-  if (index < 0 || target < 0 || target >= arr.length) return arr
-  const next = [...arr]
-  ;[next[index], next[target]] = [next[target], next[index]]
-  return next
-}
-
-/**
- * 테마 CSS에서 사이즈 토큰의 실제 폴백 값을 읽는다 (예: `var(--text-title, 18px)` → 18).
- * 사이즈 토큰은 themes.styles 에 기본값을 따로 저장하지 않고 CSS 폴백을 유일한 기본값 출처로
- * 삼기로 했으므로(THEME_TOKEN_GUIDE.md §1.2), 슬라이더에 보여줄 "테마 기본값"은 여기서 파싱한다.
- */
-function extractTokenDefault(css: string, tokenName: string): number | null {
-  const escaped = tokenName.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")
-  const match = new RegExp(`var\\(${escaped}\\s*,\\s*(\\d+(?:\\.\\d+)?)px\\)`).exec(css)
-  return match ? Number(match[1]) : null
-}
+// FieldType/FieldDef 및 필드 정의·라벨 상수, moveArrayItem/extractTokenDefault 헬퍼는
+// ./field-defs.ts 로 이동했다(아래 import). 로직 변경 없음.
 
 export default function CustomizeClient({
   invitationId,
@@ -207,6 +109,11 @@ export default function CustomizeClient({
   invitation: Record<string, unknown>
   customer: Record<string, unknown> | null
 }) {
+  // 마지막으로 이 화면이 읽은 updated_at — save()가 그 사이 다른 관리자가 먼저
+  // 저장했는지 판별하는 기준선. 저장 성공 시마다 갱신한다(§save 함수 하단).
+  const lastKnownUpdatedAtRef = useRef<string | null>(
+    typeof invitation.updated_at === "string" ? invitation.updated_at : null
+  )
   const [activeThemeRow, setActiveThemeRow] = useState<ThemeRow>(themeRow)
   const [themeVersionId, setThemeVersionId] = useState<string | null>(
     typeof invitation.theme_version_id === "string" ? invitation.theme_version_id : null
@@ -329,6 +236,35 @@ export default function CustomizeClient({
   const [sectionImages, setSectionImages] = useState<SectionImage[]>(
     () => extractSectionImages(invitation.customization_overrides)
   )
+
+  /** 블럭별 배경 농담 — 테마 메인 배경은 그대로 두고 섹션마다 한 겹 덮는다 */
+  const [blockTint, setBlockTint] = useState<string>(
+    () => extractBlockTint(invitation.customization_overrides)
+  )
+  const [blockTintOpacity, setBlockTintOpacity] = useState(
+    () => extractBlockTintOpacity(invitation.customization_overrides)
+  )
+  /** 스크롤 모션 — 고객 셀프편집 화면(edit-client.tsx)에서도 동일 값을 바꿀 수 있다 */
+  const [scrollMotion, setScrollMotion] = useState<ScrollMotionSettings>(
+    () => extractScrollMotion(invitation.customization_overrides)
+  )
+  /** 오프닝 인트로 — 진입 시 잠깐 보여줄 내용(이름/문구/이미지)과 서체·크기·정렬. 기본 꺼짐 */
+  const [intro, setIntro] = useState<IntroSettings>(
+    () => extractIntroSettings(invitation.customization_overrides)
+  )
+  const setIntroField = <K extends keyof IntroSettings>(key: K, value: IntroSettings[K]) =>
+    setIntro((cur) => ({ ...cur, [key]: value }))
+  const [uploadingIntroImage, setUploadingIntroImage] = useState(false)
+  const uploadIntroImage = async (file: File) => {
+    setUploadingIntroImage(true)
+    try {
+      setIntroField("imageUrl", await uploadImage(file, "invitations/intro"))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "이미지 업로드에 실패했습니다.")
+    } finally {
+      setUploadingIntroImage(false)
+    }
+  }
   const [isUploadingSectionImage, setIsUploadingSectionImage] = useState(false)
   const addSectionImage = async (file: File) => {
     setIsUploadingSectionImage(true)
@@ -350,6 +286,21 @@ export default function CustomizeClient({
     setSectionImages((cur) => cur.filter((img) => img.id !== id))
   const moveSectionImage = (id: string, direction: -1 | 1) =>
     setSectionImages((cur) => moveArrayItem(cur, cur.findIndex((img) => img.id === id), direction))
+
+  // 혼주 계좌는 값이 배열이라 문자열 맵인 content 에 담기지 않는다 — 갤러리 이미지처럼
+  // 별도 state 로 들고 저장 시 합친다. null 이면 "배열 값이 없음"이고, 이 경우 예전
+  // 자유 입력 문자열(content 에 그대로 실려 있다)을 계속 쓴다.
+  const [extraGroomList, setExtraGroomList] = useState<AccountEntry[] | null>(() =>
+    parseAccountList(initialRaw.extra_account_groom)
+  )
+  const [extraBrideList, setExtraBrideList] = useState<AccountEntry[] | null>(() =>
+    parseAccountList(initialRaw.extra_account_bride)
+  )
+  // 그 외 연락처(혼주 등)도 같은 이유로 같은 방식이다 — extra_contacts 는 legacy 자유 입력이
+  // 있던 적이 없어(신규 필드) 문자열 마이그레이션 분기가 필요 없다.
+  const [extraContactsList, setExtraContactsList] = useState<ContactEntry[] | null>(() =>
+    parseContactList(initialRaw.extra_contacts)
+  )
 
   const [content, setContent] = useState<Record<string, string>>(() => {
     const out: Record<string, string> = {}
@@ -379,12 +330,20 @@ export default function CustomizeClient({
   const [galleryAlign, setGalleryAlign] = useState<"center" | "bottom">(
     () => (initialRaw.gallery_align === "bottom" ? "bottom" : "center")
   )
-  const [sequenceRows, setSequenceRows] = useState<SequenceRow[]>(() => normalizeSequenceRows(initialRaw.wedding_programs))
-  const [showProgram, setShowProgram] = useState(() => isShown(initialRaw.show_wedding_program))
-  const [phoneExpose, setPhoneExpose] = useState(() => isShown(initialRaw.phone_expose))
+  const [greetingImageRatio, setGreetingImageRatio] = useState<"natural" | "fill">(
+    () => (initialRaw.greeting_image_ratio === "fill" ? "fill" : "natural")
+  )
+  const [sequenceRows, setSequenceRows] = useState<SequenceEvent[]>(() => normalizeSequence(initialRaw.wedding_programs))
+  const [showProgram, setShowProgram] = useState(() => !isToggledOff(initialRaw.show_wedding_program))
+  const [phoneExpose, setPhoneExpose] = useState(() => !isToggledOff(initialRaw.phone_expose))
   // 연락처 표시가 켜져 있어도 신랑/신부 본인만 개별로 숨길 수 있다 (혼주 연락처는 전체 스위치만 따른다)
-  const [groomShowPhone, setGroomShowPhone] = useState(() => isShown(initialRaw.groom_show_phone))
-  const [brideShowPhone, setBrideShowPhone] = useState(() => isShown(initialRaw.bride_show_phone))
+  const [groomShowPhone, setGroomShowPhone] = useState(() => !isToggledOff(initialRaw.groom_show_phone))
+  const [brideShowPhone, setBrideShowPhone] = useState(() => !isToggledOff(initialRaw.bride_show_phone))
+  // 나중에 추가된 옵트인 설정 3종 — 미설정(기존 청첩장)은 모두 꺼짐이어야 하므로
+  // isToggledOff(미설정=켜짐) 가 아니라 isToggledOn(미설정=꺼짐) 으로 읽는다.
+  const [galleryZoomBlock, setGalleryZoomBlock] = useState(() => isToggledOn(initialRaw.gallery_zoom_block))
+  const [accountCollapsed, setAccountCollapsed] = useState(() => isToggledOn(initialRaw.account_collapsed))
+  const [bgmAutoplay, setBgmAutoplay] = useState(() => isToggledOn(initialRaw.bgm_autoplay))
   const [bgmUrl, setBgmUrl] = useState(String(invitation.bgm_url ?? ""))
   const [bgms, setBgms] = useState<{ id: string; name: string; url: string }[]>([])
   const [fonts, setFonts] = useState<RegisteredFont[]>([])
@@ -400,7 +359,6 @@ export default function CustomizeClient({
   const [uploadingOgImage, setUploadingOgImage] = useState(false)
 
   const [uploadingKey, setUploadingKey] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (!showBgm) return
@@ -413,6 +371,16 @@ export default function CustomizeClient({
   // 폰트 선택 드롭다운에서 이름만으로는 어떤 폰트인지 알기 어려우므로 그 폰트로 직접 렌더해 보여준다
   useInjectFontFaces(fonts)
 
+  // 배열이 있을 때만 덮어쓴다 — null 이면 계좌는 예전 자유 입력 문자열을 content 가 그대로
+  // 들고 있고, 연락처는 애초에 값 자체가 없다는 뜻이다.
+  const extraArrayFieldsPayload = useMemo(() => {
+    const out: Record<string, unknown> = {}
+    if (extraGroomList !== null) out.extra_account_groom = extraGroomList.filter(isAccountFilled)
+    if (extraBrideList !== null) out.extra_account_bride = extraBrideList.filter(isAccountFilled)
+    if (extraContactsList !== null) out.extra_contacts = extraContactsList.filter(isContactFilled)
+    return out
+  }, [extraGroomList, extraBrideList, extraContactsList])
+
   // 미리보기용 raw: 저장된 값 위에 현재 편집 중인 값을 얹는다 (발행 파이프라인과 동일 함수로 렌더)
   const liveRaw = useMemo(() => ({
     ...initialRaw,
@@ -420,15 +388,20 @@ export default function CustomizeClient({
     wedding_date: weddingDate,
     wedding_time: weddingTime,
     gallery_images: galleryImages,
+    ...extraArrayFieldsPayload,
     gallery_view_type: galleryViewType,
     gallery_align: galleryAlign,
+    greeting_image_ratio: greetingImageRatio,
     wedding_programs: sequenceRows,
     show_wedding_program: showProgram ? "예" : "아니오",
     phone_expose: phoneExpose ? "예" : "아니오",
     groom_show_phone: groomShowPhone ? "예" : "아니오",
     bride_show_phone: brideShowPhone ? "예" : "아니오",
+    gallery_zoom_block: galleryZoomBlock ? "예" : "아니오",
+    account_collapsed: accountCollapsed ? "예" : "아니오",
+    bgm_autoplay: bgmAutoplay ? "예" : "아니오",
     bgm_url: bgmUrl,
-  }), [initialRaw, content, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone, bgmUrl])
+  }), [initialRaw, content, extraArrayFieldsPayload, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign, greetingImageRatio, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone, galleryZoomBlock, accountCollapsed, bgmAutoplay, bgmUrl])
 
   const data = useMemo(() => buildFieldData(liveRaw), [liveRaw])
 
@@ -466,6 +439,12 @@ export default function CustomizeClient({
       (t) => t.type === "font" || (typeof css === "string" && css.includes(`var(${t.name}`))
     )
   }, [activeThemeRow])
+  /** 테마가 스스로 섹션 배경을 교대하면(color-atelier 의 data-alt) 이 설정은 대상이 아니다 —
+   *  그 위에 또 덮으면 의도한 교대가 뭉개지고, 효과 없는 컨트롤은 버그로 읽힌다 */
+  const supportsBlockTint = useMemo(
+    () => !(activeThemeRow.template_html || "").includes("data-alt"),
+    [activeThemeRow]
+  )
   const typographySizeTokens = useMemo(() => visibleSizeTokens.filter((t) => t.group === "typography"), [visibleSizeTokens])
   const layoutSizeTokens = useMemo(() => visibleSizeTokens.filter((t) => t.group === "layout"), [visibleSizeTokens])
   const sizeTokenDefaults = useMemo(() => {
@@ -495,13 +474,73 @@ export default function CustomizeClient({
     [slots, blockManifest]
   )
 
+  /** 블럭 순서 — hero(항상 맨 앞)와 share(항상 맨 뒤, §요구사항)를 뺀 "드래그 가능한" 블럭 키만 담는다.
+   * 저장된 순서에 없는 키는 정렬 시 자동으로 원래(테마 기본) 위치를 유지한다(Array.sort는 안정 정렬). */
+  const [blockOrder, setBlockOrder] = useState<string[]>(
+    () => (extractBlockOrder(invitation.block_order) ?? []).filter((k) => k !== "hero" && k !== "share")
+  )
+  const shareBlock = useMemo(() => editableBlocks.find((b) => b.key === "share"), [editableBlocks])
+  const draggableBlocks = useMemo(() => {
+    const rest = editableBlocks.filter((b) => b.key !== "share" && b.key !== "hero")
+    const pos = new Map(blockOrder.map((k, i) => [k, i]))
+    return [...rest].sort((a, b) => {
+      const ai = pos.has(a.key) ? pos.get(a.key)! : Infinity
+      const bi = pos.has(b.key) ? pos.get(b.key)! : Infinity
+      return ai - bi
+    })
+  }, [editableBlocks, blockOrder])
+  /** 실제 렌더링(미리보기·저장)에 쓰는 전체 순서 — hero를 맨 앞에, share를 맨 뒤에 명시적으로 고정한다 */
+  const fullBlockOrder = useMemo(
+    () => ["hero", ...draggableBlocks.map((b) => b.key), "share"],
+    [draggableBlocks]
+  )
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
+  const handleBlockDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const keys = draggableBlocks.map((b) => b.key)
+    const oldIndex = keys.indexOf(String(active.id))
+    const newIndex = keys.indexOf(String(over.id))
+    if (oldIndex === -1 || newIndex === -1) return
+    setBlockOrder(arrayMove(keys, oldIndex, newIndex))
+  }
+
   const uploadImageField = async (key: string, file: File) => {
     setUploadingKey(key)
     try {
-      const url = await uploadImage(file, "invitations/content")
+      // 공유 썸네일은 목록에서 작게 보이는 그림이라 갤러리 사진과 같은 크기가 필요 없다
+      const url = await uploadImage(
+        file,
+        "invitations/content",
+        isShareThumbnailField(key) ? SHARE_THUMBNAIL_OPTIONS : undefined,
+      )
       setField(key, url)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "이미지 업로드에 실패했습니다.")
+    } finally {
+      setUploadingKey(null)
+    }
+  }
+
+  const uploadCalendarDayShape = async (blockKey: string, file: File) => {
+    setUploadingKey("calendarDayCustomShapeUrl")
+    try {
+      const url = await uploadImage(file, "invitations/content")
+      setBlockOverride(blockKey, { calendarDayCustomShapeUrl: url })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "강조 이미지 업로드에 실패했습니다.")
+    } finally {
+      setUploadingKey(null)
+    }
+  }
+
+  const uploadGreetingIcon = async (blockKey: string, file: File) => {
+    setUploadingKey("greetingIconCustomUrl")
+    try {
+      const url = await uploadImage(file, "invitations/content")
+      setBlockOverride(blockKey, { greetingIconCustomUrl: url })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "아이콘 이미지 업로드에 실패했습니다.")
     } finally {
       setUploadingKey(null)
     }
@@ -534,8 +573,38 @@ export default function CustomizeClient({
   const moveGalleryImage = (index: number, direction: -1 | 1) =>
     setGalleryImages((cur) => moveArrayItem(cur, index, direction))
 
-  const save = async () => {
-    setSaving(true)
+  // 이탈 경고 — save()가 실제로 보내는 값들과 같은 필드 집합의 지문을 비교해 저장 안 한
+  // 변경사항이 있으면 새로고침/탭 닫기 시 브라우저 확인을 받는다(§useUnsavedChangesWarning).
+  const dirtyFingerprint = JSON.stringify({
+    overrides, disabledSlots, blockOverrides, sectionImages, scrollMotion, intro,
+    content, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign,
+    greetingImageRatio, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone,
+    galleryZoomBlock, accountCollapsed, bgmAutoplay, extraGroomList, extraBrideList, extraContactsList,
+    bgmUrl, themeVersionId, blockOrder, ogTitle, ogDescription, ogImage,
+  })
+  const [initialFingerprint, setInitialFingerprint] = useState(dirtyFingerprint)
+  const isDirty = dirtyFingerprint !== initialFingerprint
+  useUnsavedChangesWarning(isDirty)
+
+  const save = async (): Promise<boolean> => {
+    // 동시 편집 충돌 감지 — 이 화면이 마지막으로 읽은 updated_at 이후 다른 관리자가
+    // 먼저 저장했다면 그대로 덮어쓰지 않고 먼저 확인을 받는다(last-write-wins 방지).
+    if (lastKnownUpdatedAtRef.current) {
+      const { data: current } = await supabase
+        .from("invitations")
+        .select("updated_at")
+        .eq("id", invitationId)
+        .maybeSingle()
+      if (current && current.updated_at !== lastKnownUpdatedAtRef.current) {
+        const overwrite = await confirmDialog({
+          title: "다른 관리자가 먼저 저장한 변경사항이 있습니다",
+          description: "계속 저장하면 그 변경사항이 덮어써집니다. 계속하시겠습니까?",
+          destructive: true,
+          confirmText: "덮어쓰고 저장",
+        })
+        if (!overwrite) return false
+      }
+    }
 
     const cleanTokens: Record<string, string | number> = {}
     for (const [k, v] of Object.entries(overrides)) {
@@ -547,8 +616,10 @@ export default function CustomizeClient({
       : {}
     const preservedOverrideKeys: Record<string, unknown> = {}
     // "blocks" 를 여기서 빠뜨리면 매번 옛 값이 되살아난다 — disabled_slots 때 겪은 실수의 반복,
-    // PLAN_DESIGN_CONTROLS.md §5.3
-    for (const [k, v] of Object.entries(existingOverrides)) if (!k.startsWith("--") && k !== "disabled_slots" && k !== "blocks" && k !== "sectionImages") preservedOverrideKeys[k] = v
+    // PLAN_DESIGN_CONTROLS.md §5.3. scrollMotion/introEnabled도 아래에서 명시적으로 다시 채워
+    // 넣으므로 동일하게 제외한다.
+    const MANAGED_OVERRIDE_KEYS = new Set(["disabled_slots", "blocks", "sectionImages", "scrollMotion", "introEnabled", "intro"])
+    for (const [k, v] of Object.entries(existingOverrides)) if (!k.startsWith("--") && !MANAGED_OVERRIDE_KEYS.has(k)) preservedOverrideKeys[k] = v
 
     const existingContentData = (invitation.content_data && typeof invitation.content_data === "object")
       ? invitation.content_data as Record<string, unknown>
@@ -562,44 +633,53 @@ export default function CustomizeClient({
       wedding_date: weddingDate,
       wedding_time: weddingTime,
       gallery_images: galleryImages,
+      ...extraArrayFieldsPayload,
       gallery_view_type: galleryViewType,
       gallery_align: galleryAlign,
+      greeting_image_ratio: greetingImageRatio,
       wedding_programs: sequenceRows,
       show_wedding_program: showProgram ? "예" : "아니오",
       phone_expose: phoneExpose ? "예" : "아니오",
       groom_show_phone: groomShowPhone ? "예" : "아니오",
       bride_show_phone: brideShowPhone ? "예" : "아니오",
+      gallery_zoom_block: galleryZoomBlock ? "예" : "아니오",
+      account_collapsed: accountCollapsed ? "예" : "아니오",
+      bgm_autoplay: bgmAutoplay ? "예" : "아니오",
     }
 
     const existingOgMeta = (invitation.og_meta && typeof invitation.og_meta === "object")
       ? invitation.og_meta as Record<string, unknown>
       : {}
 
+    const nextUpdatedAt = new Date().toISOString()
     const { error } = await supabase
       .from("invitations")
       .update({
         content_data: contentPayload,
-        customization_overrides: { ...preservedOverrideKeys, ...cleanTokens, disabled_slots: disabledSlots, blocks: blockOverrides, sectionImages },
+        customization_overrides: { ...preservedOverrideKeys, ...cleanTokens, disabled_slots: disabledSlots, blocks: blockOverrides, sectionImages, scrollMotion, intro, introEnabled: intro.enabled, blockTint, blockTintOpacity },
+        block_order: fullBlockOrder,
         bgm_url: bgmUrl || null,
         theme_version_id: themeVersionId,
         og_meta: { ...existingOgMeta, title: ogTitle || null, description: ogDescription || null, image: ogImage || null },
-        updated_at: new Date().toISOString(),
+        updated_at: nextUpdatedAt,
       })
       .eq("id", invitationId)
-    setSaving(false)
     if (error) {
       toast.error(`저장 실패: ${error.message}`)
-    } else {
-      toast.success("저장되었습니다.")
-      const { data: userData } = await supabase.auth.getUser()
-      logAuditEvent(supabase, {
-        invitationId,
-        actorType: "admin",
-        actorLabel: userData.user?.email ?? null,
-        action: "invitation.save",
-        summary: "청첩장 내용/디자인을 저장했습니다.",
-      })
+      return false
     }
+    lastKnownUpdatedAtRef.current = nextUpdatedAt
+    setInitialFingerprint(dirtyFingerprint)
+    toast.success("저장되었습니다.")
+    const { data: userData } = await supabase.auth.getUser()
+    logAuditEvent(supabase, {
+      invitationId,
+      actorType: "admin",
+      actorLabel: userData.user?.email ?? null,
+      action: "invitation.save",
+      summary: "청첩장 내용/디자인을 저장했습니다.",
+    })
+    return true
   }
 
   const copyInvitationLink = async () => {
@@ -633,7 +713,7 @@ export default function CustomizeClient({
   const auditLogsQuery = useAuditLogsQuery(invitationId)
 
   // "검수 요청 보내기" — 알림톡 자동발송은 아직 없어서(§FEATURE_ROADMAP.md §9, 별도 비용 발생)
-  // 이번 라운드에는 링크+비밀번호를 클립보드에 복사해 관리자가 직접 전달하는 방식으로 시작한다.
+  // 이번 라운드에는 링크를 클립보드에 복사해 관리자가 직접 전달하는 방식으로 시작한다.
   const sendReviewRequest = async () => {
     if (!publicSlug) return
     setSendingReview(true)
@@ -647,9 +727,16 @@ export default function CustomizeClient({
       setReviewStatus("in_review")
       setReviewRound(nextRound)
 
-      const text = `${window.location.origin}/review/${publicSlug}\n비밀번호: 등록된 고객 연락처 뒷 4자리`
-      await navigator.clipboard.writeText(text)
-      toast.success("검수 링크가 복사되었습니다. (비밀번호는 등록된 고객 연락처 뒷 4자리입니다) 고객에게 전달해주세요.")
+      // 링크만 복사한다. 예전에는 뒤에 비밀번호 안내를 줄바꿈으로 붙였는데, 카카오톡에
+      // 붙여넣으면 그 줄까지 한 덩어리로 인식돼 주소가
+      //   .../review/vow-hlwh0s%20비밀번호:%20등록된%20고객%20연락처%20뒷%204자리
+      // 처럼 깨진 링크가 됐다. 안내 문구는 토스트로만 남긴다 — 관리자는 보고, 링크는 깨끗하다.
+      const copied = await writeToClipboard(`${window.location.origin}/review/${publicSlug}`)
+      toast.success(
+        copied
+          ? "검수 링크가 복사되었습니다. 비밀번호는 등록된 고객 연락처 뒷 4자리입니다."
+          : "검수 요청을 보냈습니다. 링크 복사에 실패했으니 주소창에서 직접 복사해주세요.",
+      )
       const { data: userData } = await supabase.auth.getUser()
       logAuditEvent(supabase, {
         invitationId,
@@ -684,11 +771,15 @@ export default function CustomizeClient({
     // 스크롤시키는 방식(assets/themes/[id] 페이지와 동일 패턴)으로 우측 미리보기를 항상 고정한다.
     // 이 2단 고정 레이아웃은 미리보기 420px를 뺀 나머지가 편집 폭이 되므로 좁은 화면(노트북/태블릿)에서
     // 찌그러진다 — xl(1280px) 미만에서는 1단으로 쌓고(미리보기를 위로), 위에서만 2단 고정을 적용한다.
-    <div className="grid gap-6 font-sans xl:h-[calc(100vh-100px)] xl:grid-cols-[minmax(0,1fr)_420px]">
+    // 이때 xl 미만에서 컬럼을 명시하지 않으면 암시적 트랙이 미리보기 iframe(375px+여백)에
+    // 맞춰 404px로 커지고, 같은 트랙을 공유하는 편집 패널까지 화면 밖으로 밀려 오른쪽이
+    // 잘린다(가로 스크롤도 없어 접근 불가) — 기본값을 minmax(0,1fr)로 고정해 트랙이
+    // 컨테이너 너비를 넘지 않게 한다.
+    <div className="mx-auto grid max-w-[1280px] grid-cols-[minmax(0,1fr)] gap-6 font-sans xl:h-[calc(100vh-100px)] xl:grid-cols-[minmax(0,1fr)_420px]">
       {/* 편집 */}
       <div className="order-2 min-w-0 pb-24 xl:order-1 xl:h-full xl:max-w-3xl xl:overflow-y-auto xl:pb-0 xl:pr-1">
         <div className="mb-6">
-          <h1 className="text-2xl font-semibold text-foreground">청첩장 커스터마이즈</h1>
+          <h1 className="text-2xl font-semibold text-foreground">청첩장 편집기</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {groom && bride ? `${groom} ♥ ${bride}` : "청첩장"}
           </p>
@@ -798,6 +889,25 @@ export default function CustomizeClient({
                       />
                     ))}
                   </FieldGroup>
+                  {visibleContentFields.some((f) => f.key === "greeting_image") && (
+                    <Field className="mt-4">
+                      <FieldLabel>인사말 이미지 비율</FieldLabel>
+                      <RadioGroup
+                        value={greetingImageRatio}
+                        onValueChange={(v) => setGreetingImageRatio(v as "natural" | "fill")}
+                        className="flex flex-row gap-6"
+                      >
+                        <div className="flex items-center gap-2">
+                          <RadioGroupItem value="natural" id="greeting-ratio-natural" />
+                          <Label htmlFor="greeting-ratio-natural" className="font-normal cursor-pointer">현재 비율</Label>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <RadioGroupItem value="fill" id="greeting-ratio-fill" />
+                          <Label htmlFor="greeting-ratio-fill" className="font-normal cursor-pointer">좌우로 꽉 채우기</Label>
+                        </div>
+                      </RadioGroup>
+                    </Field>
+                  )}
                 </CardContent>
               </Card>
             )}
@@ -846,6 +956,17 @@ export default function CustomizeClient({
                         </RadioGroup>
                       </Field>
                     )}
+
+                    <Field>
+                      <div className="flex items-center gap-3">
+                        <Switch id="galleryZoomBlock" checked={galleryZoomBlock} onCheckedChange={setGalleryZoomBlock} />
+                        <Label htmlFor="galleryZoomBlock" className="font-normal cursor-pointer">사진 확대 방지</Label>
+                      </div>
+                      <FieldDescription>
+                        켜면 하객이 갤러리 사진을 크게 볼 수 없습니다 — 사진을 눌러 확대(라이트박스)하는 기능이 꺼지고,
+                        모바일 핀치줌·더블탭과 PC 우클릭·드래그·Ctrl+휠 확대가 모두 차단됩니다.
+                      </FieldDescription>
+                    </Field>
 
                     <Field>
                       <FieldLabel>사진 목록</FieldLabel>
@@ -951,19 +1072,30 @@ export default function CustomizeClient({
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base font-medium">마음 전하실 곳 (계좌)</CardTitle>
-                  <CardDescription>혼주 계좌는 아버지·어머니 계좌를 함께 적는 등 형식이 자유로워 텍스트로 직접 입력합니다.</CardDescription>
+                  <CardDescription>혼주 계좌는 필요한 만큼 추가·삭제할 수 있습니다. 계좌마다 따로 넣어야 하객 화면에서 계좌번호만 정확히 복사됩니다.</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-6">
+                  <Field>
+                    <div className="flex items-center gap-3">
+                      <Switch id="accountCollapsed" checked={accountCollapsed} onCheckedChange={setAccountCollapsed} />
+                      <Label htmlFor="accountCollapsed" className="font-normal cursor-pointer">계좌 정보 접어두기</Label>
+                    </div>
+                    <FieldDescription>
+                      켜면 청첩장에서 계좌 정보가 바로 보이지 않고 &ldquo;마음 전하실 곳 보기&rdquo; 버튼을 눌러야 펼쳐집니다.
+                    </FieldDescription>
+                  </Field>
                   <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                     <FieldGroup className="space-y-4">
                       <p className="text-sm font-medium text-muted-foreground">신랑측</p>
                       {ACCOUNT_FIELD_DEFS.slice(0, 3).map((f) => (
                         <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
                       ))}
-                      <TextField
-                        def={ACCOUNT_FIELD_DEFS.find((f) => f.key === "extra_account_groom")!}
-                        value={content.extra_account_groom || ""}
-                        onChange={(v) => setField("extra_account_groom", v)}
+                      <ExtraAccountEditor
+                        label="신랑측 혼주 계좌"
+                        legacyText={content.extra_account_groom || ""}
+                        list={extraGroomList}
+                        onChangeList={setExtraGroomList}
+                        onChangeLegacy={(v) => setField("extra_account_groom", v)}
                       />
                     </FieldGroup>
                     <FieldGroup className="space-y-4">
@@ -971,10 +1103,12 @@ export default function CustomizeClient({
                       {ACCOUNT_FIELD_DEFS.slice(3, 6).map((f) => (
                         <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
                       ))}
-                      <TextField
-                        def={ACCOUNT_FIELD_DEFS.find((f) => f.key === "extra_account_bride")!}
-                        value={content.extra_account_bride || ""}
-                        onChange={(v) => setField("extra_account_bride", v)}
+                      <ExtraAccountEditor
+                        label="신부측 혼주 계좌"
+                        legacyText={content.extra_account_bride || ""}
+                        list={extraBrideList}
+                        onChangeList={setExtraBrideList}
+                        onChangeLegacy={(v) => setField("extra_account_bride", v)}
                       />
                     </FieldGroup>
                   </div>
@@ -1032,6 +1166,17 @@ export default function CustomizeClient({
                         </FieldGroup>
                       </div>
                     )}
+                    {phoneExpose && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium">그 외 연락처 (혼주 등)</p>
+                        <ContactListField
+                          idPrefix="extra-contacts"
+                          items={extraContactsList ?? []}
+                          onChange={setExtraContactsList}
+                          addLabel="연락처 추가"
+                        />
+                      </div>
+                    )}
                   </FieldGroup>
                 </CardContent>
               </Card>
@@ -1062,6 +1207,16 @@ export default function CustomizeClient({
                     </Field>
                     <Field>
                       <Input value={bgmUrl} onChange={(e) => setBgmUrl(e.target.value)} placeholder="BGM 파일 URL" />
+                    </Field>
+                    <Field>
+                      <div className="flex items-center gap-3">
+                        <Switch id="bgmAutoplay" checked={bgmAutoplay} onCheckedChange={setBgmAutoplay} />
+                        <Label htmlFor="bgmAutoplay" className="font-normal cursor-pointer">자동 재생</Label>
+                      </div>
+                      <FieldDescription>
+                        꺼두면 청첩장을 열자마자 음악이 나오지 않고, 하객이 우측 상단 ♪ 버튼을 눌렀을 때만 재생됩니다.
+                        (조용한 자리에서 열어본 하객이 당황하지 않도록 기본값은 꺼짐입니다)
+                      </FieldDescription>
                     </Field>
                   </FieldGroup>
                 </CardContent>
@@ -1134,6 +1289,146 @@ export default function CustomizeClient({
 
             <Card>
               <CardHeader>
+                <CardTitle className="text-base font-medium">스크롤 모션</CardTitle>
+                <CardDescription>
+                  하객이 스크롤할 때 각 섹션이 나타나는 방식입니다. 신랑신부도 대시보드에서
+                  직접 바꿀 수 있는 항목입니다.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ScrollMotionField value={scrollMotion} onChange={setScrollMotion} idPrefix="admin-scroll-motion" />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-medium">청첩장 열기 연출</CardTitle>
+                <CardDescription>
+                  하객이 링크에 처음 들어왔을 때 잠깐 나타났다 사라지는 연출입니다. 재방문 시에도
+                  매번 보이므로 취향이 갈릴 수 있어 기본은 꺼짐입니다.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">오프닝 인트로 사용</span>
+                  <Switch checked={intro.enabled} onCheckedChange={(v) => setIntroField("enabled", v)} />
+                </div>
+
+                {intro.enabled && (
+                  <FieldGroup className="space-y-4 border-t pt-5">
+                    <Field>
+                      <FieldLabel>보여줄 내용</FieldLabel>
+                      <RadioGroup
+                        value={intro.mode}
+                        onValueChange={(v) => setIntroField("mode", v as IntroSettings["mode"])}
+                        className="flex flex-col gap-2"
+                      >
+                        {INTRO_MODES.map((m) => (
+                          <div key={m.value} className="flex items-center gap-2">
+                            <RadioGroupItem value={m.value} id={`intro-mode-${m.value}`} />
+                            <Label htmlFor={`intro-mode-${m.value}`} className="font-normal cursor-pointer">
+                              {m.label}
+                              <span className="ml-1.5 text-xs text-muted-foreground">{m.description}</span>
+                            </Label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    </Field>
+
+                    {intro.mode === "text" && (
+                      <Field>
+                        <FieldLabel htmlFor="introText">문구</FieldLabel>
+                        <Textarea
+                          id="introText"
+                          value={intro.text}
+                          onChange={(e) => setIntroField("text", e.target.value)}
+                          placeholder={"예: 저희 두 사람\n결혼합니다"}
+                          rows={3}
+                        />
+                        <FieldDescription>줄바꿈은 입력한 그대로 표시됩니다.</FieldDescription>
+                      </Field>
+                    )}
+
+                    {intro.mode === "image" && (
+                      <ImageField
+                        def={{ key: "intro_image", label: "인트로 이미지", type: "image" }}
+                        value={intro.imageUrl}
+                        uploading={uploadingIntroImage}
+                        onUpload={uploadIntroImage}
+                        onClear={() => setIntroField("imageUrl", "")}
+                      />
+                    )}
+
+                    {/* 서체·크기는 글자를 보여줄 때만 의미가 있다 (이미지 모드에서는 감춘다) */}
+                    {intro.mode !== "image" && (
+                      <>
+                        <Field>
+                          <FieldLabel>서체</FieldLabel>
+                          <div className="flex items-start gap-2">
+                            <div className="flex min-w-0 flex-1 flex-col gap-2">
+                              {fonts.length > 0 && (
+                                <Select
+                                  value={fonts.map((f) => buildFontStack(f, "--font-kr")).find((s) => s === intro.fontFamily) || ""}
+                                  onValueChange={(v) => { if (v) setIntroField("fontFamily", v) }}
+                                >
+                                  <SelectTrigger className="w-full" style={intro.fontFamily ? { fontFamily: intro.fontFamily } : undefined}>
+                                    <SelectValue placeholder="에셋에 등록된 폰트 선택…" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {fonts.map((f) => (
+                                      <SelectItem key={f.id} value={buildFontStack(f, "--font-kr")} style={fontPreviewStyle(f)}>{f.name}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              )}
+                              <Input
+                                value={intro.fontFamily}
+                                onChange={(e) => setIntroField("fontFamily", e.target.value)}
+                                placeholder="비워두면 테마 한글 폰트"
+                              />
+                            </div>
+                            {intro.fontFamily && (
+                              <Button type="button" variant="ghost" size="icon-sm" title="테마 기본 폰트로" onClick={() => setIntroField("fontFamily", "")}>
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </Field>
+
+                        <SizeSliderField
+                          label="글자 크기"
+                          value={intro.fontSize}
+                          defaultValue={DEFAULT_INTRO_SETTINGS.fontSize}
+                          min={INTRO_FONT_SIZE_MIN}
+                          max={INTRO_FONT_SIZE_MAX}
+                          onChange={(v) => setIntroField("fontSize", v)}
+                          onReset={() => setIntroField("fontSize", DEFAULT_INTRO_SETTINGS.fontSize)}
+                        />
+                      </>
+                    )}
+
+                    <Field>
+                      <FieldLabel>정렬</FieldLabel>
+                      <RadioGroup
+                        value={intro.align}
+                        onValueChange={(v) => setIntroField("align", v as IntroSettings["align"])}
+                        className="flex flex-row gap-6"
+                      >
+                        {INTRO_ALIGNS.map((a) => (
+                          <div key={a.value} className="flex items-center gap-2">
+                            <RadioGroupItem value={a.value} id={`intro-align-${a.value}`} />
+                            <Label htmlFor={`intro-align-${a.value}`} className="font-normal cursor-pointer">{a.label}</Label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    </Field>
+                  </FieldGroup>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
                 <CardTitle className="text-base font-medium">색상</CardTitle>
                 <CardDescription>비워두면 테마 기본값이 사용됩니다.</CardDescription>
               </CardHeader>
@@ -1168,6 +1463,49 @@ export default function CustomizeClient({
                     )
                   })}
                 </div>
+
+                {supportsBlockTint && (
+                  <div className="mt-5 border-t pt-5">
+                    <Field>
+                      <FieldLabel>블럭별 배경 농담</FieldLabel>
+                      <RadioGroup
+                        value={blockTint}
+                        onValueChange={setBlockTint}
+                        className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+                      >
+                        {BLOCK_TINT_PATTERNS.map((p) => (
+                          <div key={p.value} className="flex items-center gap-2">
+                            <RadioGroupItem value={p.value} id={`tint-${p.value}`} />
+                            <Label htmlFor={`tint-${p.value}`} className="font-normal cursor-pointer">{p.label}</Label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                      <p className="text-xs text-muted-foreground">
+                        배경색은 그대로 두고 섹션마다 한 겹 덮어 경계를 만듭니다.
+                        A·B는 흰색, C는 검정을 덮으며 농도는 아래에서 조절합니다.
+                      </p>
+                    </Field>
+
+                    <div className="mt-4 grid grid-cols-1 gap-4 border-t pt-4">
+                      {(Object.keys(BLOCK_TINT_DEFAULT_OPACITY) as BlockTintStep[]).map((step) => (
+                        <SizeSliderField
+                          key={step}
+                          label={BLOCK_TINT_STEP_LABELS[step]}
+                          unit="%"
+                          value={blockTintOpacity[step] === BLOCK_TINT_DEFAULT_OPACITY[step] ? undefined : blockTintOpacity[step]}
+                          defaultValue={BLOCK_TINT_DEFAULT_OPACITY[step]}
+                          min={0}
+                          max={100}
+                          onChange={(v) => setBlockTintOpacity((prev) => ({ ...prev, [step]: v }))}
+                          onReset={() => setBlockTintOpacity((prev) => ({ ...prev, [step]: BLOCK_TINT_DEFAULT_OPACITY[step] }))}
+                        />
+                      ))}
+                      <p className="text-xs text-muted-foreground">
+                        0%면 그 단계는 아무것도 덮지 않습니다 — A의 기본값이 0%인 이유입니다.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -1182,6 +1520,7 @@ export default function CustomizeClient({
                     const value = typeof overrides[t.name] === "string" ? (overrides[t.name] as string) : ""
                     const placeholder = themeTokens[t.name] || "테마 기본값"
                     const matchedFontStack = fonts.map((f) => buildFontStack(f, t.name)).find((stack) => stack === value)
+                    const matchedFont = fonts.find((f) => buildFontStack(f, t.name) === value)
                     return (
                       <Field key={t.name}>
                         <FieldLabel>{t.label}</FieldLabel>
@@ -1203,6 +1542,7 @@ export default function CustomizeClient({
                               </Select>
                             )}
                             <Input value={value} onChange={(e) => setOverride(t.name, e.target.value)} placeholder={placeholder} />
+                            <FontVariantFields tokenName={t.name} font={matchedFont} overrides={overrides} setOverride={setOverride} clearOverride={clearOverride} />
                           </div>
                           {value && (
                             <Button type="button" variant="ghost" size="icon-sm" title="테마 기본값으로" onClick={() => clearOverride(t.name)}>
@@ -1270,13 +1610,16 @@ export default function CustomizeClient({
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Accordion
-                    type="single"
-                    collapsible
-                    value={focusBlock ?? ""}
-                    onValueChange={(v) => setFocusBlock(v || null)}
-                  >
-                    {editableBlocks.map((b) => {
+                  <p className="mb-2 text-xs text-muted-foreground">왼쪽 손잡이를 드래그해서 블럭 순서를 바꿀 수 있습니다.</p>
+                  <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleBlockDragEnd}>
+                    <SortableContext items={draggableBlocks.map((b) => b.key)} strategy={verticalListSortingStrategy}>
+                      <Accordion
+                        type="single"
+                        collapsible
+                        value={focusBlock ?? ""}
+                        onValueChange={(v) => setFocusBlock(v || null)}
+                      >
+                        {draggableBlocks.map((b) => {
                       const hasToggle = slots.includes(b.key)
                       const hasExpandable = b.title || b.padding
                       const isOn = !disabledSlots.includes(b.key)
@@ -1284,17 +1627,27 @@ export default function CustomizeClient({
 
                       if (!hasExpandable) {
                         return (
-                          <div key={b.key} className="flex items-center justify-between border-b py-4 last:border-b-0">
-                            <span className={cn("text-sm font-medium", !isOn && "text-muted-foreground")}>{b.label}</span>
-                            {hasToggle && <Switch checked={isOn} onCheckedChange={(c) => toggleSlot(b.key, c)} />}
-                          </div>
+                          <SortableBlockRow key={b.key} id={b.key}>
+                            {(drag) => (
+                              <div className="flex items-center justify-between border-b py-4 last:border-b-0">
+                                <div className="flex min-w-0 flex-1 items-center gap-2">
+                                  <DragHandle {...drag} />
+                                  <span className={cn("text-sm font-medium", !isOn && "text-muted-foreground")}>{b.label}</span>
+                                </div>
+                                {hasToggle && <Switch checked={isOn} onCheckedChange={(c) => toggleSlot(b.key, c)} />}
+                              </div>
+                            )}
+                          </SortableBlockRow>
                         )
                       }
 
                       return (
-                        <AccordionItem key={b.key} value={b.key}>
+                        <SortableBlockRow key={b.key} id={b.key}>
+                          {(drag) => (
+                        <AccordionItem value={b.key}>
                           <div className="flex items-center gap-2">
-                            <AccordionTrigger className="flex-1">
+                            <DragHandle {...drag} />
+                            <AccordionTrigger className="flex-1 text-[15px] font-semibold">
                               <span className={cn(!isOn && "text-muted-foreground")}>{b.label}</span>
                             </AccordionTrigger>
                             {hasToggle && (
@@ -1305,7 +1658,7 @@ export default function CustomizeClient({
                               />
                             )}
                           </div>
-                          <AccordionContent className="space-y-4">
+                          <AccordionContent className="space-y-4 [&_[data-slot=field-label]]:text-xs [&_[data-slot=field-label]]:font-normal [&_[data-slot=field-label]]:text-muted-foreground">
                             {b.title && (
                               <>
                                 <Field>
@@ -1394,13 +1747,263 @@ export default function CustomizeClient({
                                     onCheckedChange={(c) => setBlockOverride(b.key, { googleCalendarButtonEnabled: c })}
                                   />
                                 </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm">D-day 숫자 굴러 올라오는 연출</span>
+                                  <Switch
+                                    checked={override?.ddayRollingEnabled === true}
+                                    onCheckedChange={(c) => setBlockOverride(b.key, { ddayRollingEnabled: c })}
+                                  />
+                                </div>
+
+                                <Field className="border-t pt-4">
+                                  <FieldLabel>달력 아래 날짜 문구</FieldLabel>
+                                  <Input
+                                    value={override?.calendarDateText ?? ""}
+                                    onChange={(e) => setBlockOverride(b.key, { calendarDateText: e.target.value })}
+                                    placeholder="비워두면 예식일로 자동 표시"
+                                  />
+                                </Field>
+                                <Field>
+                                  <FieldLabel>달력 아래 시간 문구</FieldLabel>
+                                  <Input
+                                    value={override?.calendarTimeText ?? ""}
+                                    onChange={(e) => setBlockOverride(b.key, { calendarTimeText: e.target.value })}
+                                    placeholder="비워두면 요일·예식 시간으로 자동 표시"
+                                  />
+                                </Field>
+
+                                <Field className="border-t pt-4">
+                                  <FieldLabel>예식일 강조 표시 모양</FieldLabel>
+                                  <RadioGroup
+                                    value={override?.calendarDayShape || "circle"}
+                                    onValueChange={(v) => setBlockOverride(b.key, { calendarDayShape: v as "circle" | "heart" | "custom" })}
+                                    className="flex flex-row gap-6"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <RadioGroupItem value="circle" id={`${b.key}-shape-circle`} />
+                                      <Label htmlFor={`${b.key}-shape-circle`} className="font-normal cursor-pointer">동그라미</Label>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <RadioGroupItem value="heart" id={`${b.key}-shape-heart`} />
+                                      <Label htmlFor={`${b.key}-shape-heart`} className="font-normal cursor-pointer">하트</Label>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <RadioGroupItem value="custom" id={`${b.key}-shape-custom`} />
+                                      <Label htmlFor={`${b.key}-shape-custom`} className="font-normal cursor-pointer">직접 업로드</Label>
+                                    </div>
+                                  </RadioGroup>
+                                </Field>
+
+                                {override?.calendarDayShape === "custom" && (
+                                  <>
+                                    <ImageField
+                                      def={{ key: "calendarDayCustomShapeUrl", label: "강조 이미지", type: "image" }}
+                                      value={override?.calendarDayCustomShapeUrl || ""}
+                                      uploading={uploadingKey === "calendarDayCustomShapeUrl"}
+                                      onUpload={(file) => uploadCalendarDayShape(b.key, file)}
+                                      onClear={() => setBlockOverride(b.key, { calendarDayCustomShapeUrl: undefined })}
+                                    />
+                                    {override?.calendarDayCustomShapeUrl?.toLowerCase().split("?")[0].endsWith(".svg") && (
+                                      <BlockColorField
+                                        label="업로드 이미지 색상 (SVG 전용)"
+                                        value={override?.calendarDaySvgColor}
+                                        defaultValue={accent}
+                                        onChange={(v) => setBlockOverride(b.key, { calendarDaySvgColor: v })}
+                                        onReset={() => setBlockOverride(b.key, { calendarDaySvgColor: undefined })}
+                                      />
+                                    )}
+                                  </>
+                                )}
+
+                                <SizeSliderField
+                                  label="강조 표시 크기"
+                                  value={override?.calendarDayShapeSize}
+                                  defaultValue={32}
+                                  min={20}
+                                  max={48}
+                                  onChange={(v) => setBlockOverride(b.key, { calendarDayShapeSize: v })}
+                                  onReset={() => setBlockOverride(b.key, { calendarDayShapeSize: undefined })}
+                                />
+
+                                <BlockColorField
+                                  label="강조일자 텍스트 색상"
+                                  value={override?.calendarDayTextColor}
+                                  defaultValue="#ffffff"
+                                  onChange={(v) => setBlockOverride(b.key, { calendarDayTextColor: v })}
+                                  onReset={() => setBlockOverride(b.key, { calendarDayTextColor: undefined })}
+                                />
+
+                                <BlockColorField
+                                  label="달력 박스 배경색"
+                                  value={override?.calendarBoxColor}
+                                  defaultValue={CALENDAR_BOX_DEFAULT.color}
+                                  onChange={(v) => setBlockOverride(b.key, { calendarBoxColor: v })}
+                                  onReset={() => setBlockOverride(b.key, { calendarBoxColor: undefined })}
+                                />
+                                <SizeSliderField
+                                  label="달력 박스 배경 불투명도"
+                                  unit="%"
+                                  value={override?.calendarBoxOpacity}
+                                  defaultValue={CALENDAR_BOX_DEFAULT.opacity}
+                                  min={0}
+                                  max={100}
+                                  onChange={(v) => setBlockOverride(b.key, { calendarBoxOpacity: v })}
+                                  onReset={() => setBlockOverride(b.key, { calendarBoxOpacity: undefined })}
+                                />
+                              </>
+                            )}
+                            {b.key === "account" && (
+                              <Field className="border-t pt-4">
+                                <FieldLabel>계좌 표시 방식</FieldLabel>
+                                <RadioGroup
+                                  value={override?.accountLayout || "list"}
+                                  onValueChange={(v) => setBlockOverride(b.key, { accountLayout: v as "list" | "card" })}
+                                  className="flex flex-row gap-6"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <RadioGroupItem value="list" id={`${b.key}-layout-list`} />
+                                    <Label htmlFor={`${b.key}-layout-list`} className="font-normal cursor-pointer">목록형</Label>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <RadioGroupItem value="card" id={`${b.key}-layout-card`} />
+                                    <Label htmlFor={`${b.key}-layout-card`} className="font-normal cursor-pointer">2열 카드형</Label>
+                                  </div>
+                                </RadioGroup>
+                                <p className="text-xs text-muted-foreground">
+                                  카드형은 카드를 누르면 계좌번호가 복사됩니다. 예전 자유 입력으로 등록된 혼주 계좌는
+                                  은행·번호가 나뉘어 있지 않아 카드형에서도 기존 줄 형태로 표시됩니다.
+                                </p>
+
+                                {(override?.accountLayout === "card") && (
+                                  <div className="space-y-4 border-t pt-4">
+                                    <Field>
+                                      <FieldLabel>카드 배경색</FieldLabel>
+                                      <RadioGroup
+                                        value={override?.accountCardBg || ACCOUNT_CARD_BG_DEFAULT.source}
+                                        onValueChange={(v) => setBlockOverride(b.key, { accountCardBg: v as "auto" | "accent" | "bg" | "custom" })}
+                                        className="flex flex-row flex-wrap gap-x-6 gap-y-2"
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <RadioGroupItem value="auto" id={`${b.key}-cardbg-auto`} />
+                                          <Label htmlFor={`${b.key}-cardbg-auto`} className="font-normal cursor-pointer">자동</Label>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <RadioGroupItem value="accent" id={`${b.key}-cardbg-accent`} />
+                                          <Label htmlFor={`${b.key}-cardbg-accent`} className="font-normal cursor-pointer">테마 포인트 색상</Label>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <RadioGroupItem value="bg" id={`${b.key}-cardbg-bg`} />
+                                          <Label htmlFor={`${b.key}-cardbg-bg`} className="font-normal cursor-pointer">테마 배경색</Label>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <RadioGroupItem value="custom" id={`${b.key}-cardbg-custom`} />
+                                          <Label htmlFor={`${b.key}-cardbg-custom`} className="font-normal cursor-pointer">직접 선택</Label>
+                                        </div>
+                                      </RadioGroup>
+                                      <p className="text-xs text-muted-foreground">
+                                        자동은 섹션 배경이 밝든 어둡든 대비가 생기게 맞춥니다. 테마 색을 고르면 테마를 바꿔도
+                                        카드가 함께 따라가지만, 섹션 배경과 같은 색이면 카드가 보이지 않습니다 — 고르고 나서
+                                        미리보기를 확인하세요.
+                                      </p>
+                                    </Field>
+
+                                    {override?.accountCardBg === "custom" && (
+                                      <BlockColorField
+                                        label="카드 배경 직접 선택"
+                                        value={override?.accountCardBgColor}
+                                        defaultValue={ACCOUNT_CARD_BG_DEFAULT.color}
+                                        onChange={(v) => setBlockOverride(b.key, { accountCardBgColor: v })}
+                                        onReset={() => setBlockOverride(b.key, { accountCardBgColor: undefined })}
+                                      />
+                                    )}
+
+                                    <SizeSliderField
+                                      label="카드 배경 불투명도"
+                                      unit="%"
+                                      value={override?.accountCardBgOpacity}
+                                      defaultValue={ACCOUNT_CARD_BG_DEFAULT.opacity}
+                                      min={0}
+                                      max={100}
+                                      onChange={(v) => setBlockOverride(b.key, { accountCardBgOpacity: v })}
+                                      onReset={() => setBlockOverride(b.key, { accountCardBgOpacity: undefined })}
+                                    />
+                                  </div>
+                                )}
+                              </Field>
+                            )}
+                            {b.key === "greeting" && (
+                              <>
+                                <Field className="border-t pt-4">
+                                  <FieldLabel>인사말 아이콘 모양</FieldLabel>
+                                  <RadioGroup
+                                    value={override?.greetingIconShape || "heart"}
+                                    onValueChange={(v) => setBlockOverride(b.key, { greetingIconShape: v as "heart" | "custom" })}
+                                    className="flex flex-row gap-6"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <RadioGroupItem value="heart" id={`${b.key}-icon-heart`} />
+                                      <Label htmlFor={`${b.key}-icon-heart`} className="font-normal cursor-pointer">하트</Label>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <RadioGroupItem value="custom" id={`${b.key}-icon-custom`} />
+                                      <Label htmlFor={`${b.key}-icon-custom`} className="font-normal cursor-pointer">직접 업로드</Label>
+                                    </div>
+                                  </RadioGroup>
+                                </Field>
+
+                                {override?.greetingIconShape === "custom" && (
+                                  <ImageField
+                                    def={{ key: "greetingIconCustomUrl", label: "아이콘 이미지", type: "image" }}
+                                    value={override?.greetingIconCustomUrl || ""}
+                                    uploading={uploadingKey === "greetingIconCustomUrl"}
+                                    onUpload={(file) => uploadGreetingIcon(b.key, file)}
+                                    onClear={() => setBlockOverride(b.key, { greetingIconCustomUrl: undefined })}
+                                  />
+                                )}
+
+                                <SizeSliderField
+                                  label="아이콘 크기"
+                                  value={override?.greetingIconSize}
+                                  defaultValue={24}
+                                  min={12}
+                                  max={64}
+                                  onChange={(v) => setBlockOverride(b.key, { greetingIconSize: v })}
+                                  onReset={() => setBlockOverride(b.key, { greetingIconSize: undefined })}
+                                />
+
+                                <BlockColorField
+                                  label="아이콘 색상"
+                                  value={override?.greetingIconColor}
+                                  defaultValue={accent}
+                                  onChange={(v) => setBlockOverride(b.key, { greetingIconColor: v })}
+                                  onReset={() => setBlockOverride(b.key, { greetingIconColor: undefined })}
+                                />
                               </>
                             )}
                           </AccordionContent>
                         </AccordionItem>
+                          )}
+                        </SortableBlockRow>
                       )
                     })}
-                  </Accordion>
+                      </Accordion>
+                    </SortableContext>
+                  </DndContext>
+
+                  {shareBlock && (
+                    <div className="flex items-center justify-between border-t py-4">
+                      <div className="flex items-center gap-2">
+                        <span className={cn("text-sm font-medium", disabledSlots.includes("share") && "text-muted-foreground")}>{shareBlock.label}</span>
+                        <span className="text-xs text-muted-foreground">항상 맨 아래에 위치합니다</span>
+                      </div>
+                      {slots.includes("share") && (
+                        <Switch
+                          checked={!disabledSlots.includes("share")}
+                          onCheckedChange={(c) => toggleSlot("share", c)}
+                        />
+                      )}
+                    </div>
+                  )}
 
                   {standaloneToggleSlots.length > 0 && (
                     <div className={cn("space-y-1", editableBlocks.length > 0 && "mt-2 border-t pt-3")}>
@@ -1601,11 +2204,11 @@ export default function CustomizeClient({
         {/* xl 미만(1단 레이아웃)에서는 실제 스크롤이 main이 아니라 html에서 일어나(admin 레이아웃의
             고질적인 문제) sticky가 기준을 잃으므로 fixed로 뷰포트 하단에 고정하고(사이드바 폭만큼
             lg:left-64 로 비켜준다), xl 이상에서는 원래의(검증된) 컬럼 내부 sticky로 되돌린다. */}
-        <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t bg-background px-4 py-4 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] lg:left-64 lg:px-6 xl:sticky xl:inset-x-auto xl:left-auto xl:z-auto xl:mt-6 xl:px-0 xl:shadow-none">
-          <Button onClick={save} disabled={saving} className="gap-2">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {saving ? "저장 중…" : "저장"}
-          </Button>
+        {/* 버튼이 6개라 좁은 화면에서는 한 줄에 안 들어간다. 줄바꿈(flex-wrap)을 쓰면 바가
+            2~3줄로 높아져 편집 패널의 pb-24(96px)를 넘어 내용을 가리므로, 높이는 한 줄로
+            유지한 채 가로 스크롤시킨다 — 가장 많이 쓰는 "저장"이 맨 앞이라 항상 보인다. */}
+        <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 overflow-x-auto border-t bg-background px-4 py-4 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] [&>*]:shrink-0 lg:left-64 lg:px-6 xl:sticky xl:inset-x-auto xl:left-auto xl:z-auto xl:mt-6 xl:flex-wrap xl:overflow-x-visible xl:px-0 xl:shadow-none">
+          <SaveButton onSave={save} className="gap-2" />
           {publicSlug && (
             <Button variant="outline" asChild>
               <a href={`/w/${publicSlug}`} target="_blank" rel="noreferrer" className="gap-2">
@@ -1618,6 +2221,7 @@ export default function CustomizeClient({
               <Copy className="h-3.5 w-3.5" /> 청첩장 주소 복사하기
             </Button>
           )}
+          {publicSlug && <QrCodeDialog path={`/w/${publicSlug}`} fileBaseName={publicSlug} />}
           {publicSlug && (
             <Button variant="outline" className="gap-2" onClick={copyDashboardLink}>
               <Copy className="h-3.5 w-3.5" /> 고객용 대시보드 복사하기
@@ -1637,7 +2241,7 @@ export default function CustomizeClient({
       <div className="order-1 xl:order-2 xl:h-full xl:overflow-hidden">
         <div className="mb-2.5 text-xs text-muted-foreground">실시간 미리보기 (실제 데이터)</div>
         {/* 좁은 화면(패널 폭이 380px 미만인 태블릿·모바일)에서는 가로 스크롤 대신 비율을 유지한 채 축소한다 */}
-        <div className="rounded-2xl bg-muted/40 py-5 px-3">
+        <div className="relative rounded-2xl bg-muted/40 py-5 px-3">
           <ScaledPreview width={380} height={680}>
             <InvitationFrame
               template={template}
@@ -1646,134 +2250,30 @@ export default function CustomizeClient({
               slots={previewSlots}
               fontFaces={fontFaces}
               blockOverrides={blockOverrides}
+              blockTint={blockTint}
+              blockTintOpacity={blockTintOpacity}
+              blockOrder={fullBlockOrder}
               hiddenBlocks={hiddenBlocks}
               sectionImages={sectionImages}
+              scrollMotion={scrollMotion}
+              intro={intro}
               focusBlock={focusBlock}
               width={380}
               height={680}
             />
           </ScaledPreview>
+          {/* 테마 전환 중 — "지금 다시 그리는 중"임을 보여주는 shimmer. Visibility 원칙:
+              흰 화면만 보이면 로딩인지 깨진 것인지 구분이 안 된다. */}
+          {switchingTheme && (
+            <div className="absolute inset-3 flex items-center justify-center rounded-xl bg-background/60 backdrop-blur-sm">
+              <div className="h-full w-full animate-pulse rounded-xl bg-muted/70" />
+            </div>
+          )}
         </div>
       </div>
     </div>
   )
 }
 
-/** 사이즈 토큰 슬라이더 — 색 토큰 UI와 동일한 "미설정=테마 기본값, 값 있으면 되돌리기 버튼" 규칙을 따른다 */
-function SizeSliderField({ label, value, defaultValue, min, max, onChange, onReset }: {
-  label: string
-  value: number | undefined
-  defaultValue: number
-  min: number
-  max: number
-  onChange: (v: number) => void
-  onReset: () => void
-}) {
-  const isSet = value != null
-  const current = value ?? defaultValue
-  return (
-    <Field>
-      <div className="flex items-center justify-between">
-        <FieldLabel>{label}</FieldLabel>
-        <span className={cn("text-xs tabular-nums", isSet ? "text-foreground" : "text-muted-foreground")}>
-          {current}px{!isSet && " · 기본값"}
-        </span>
-      </div>
-      <div className="flex items-center gap-2">
-        <Slider value={[current]} min={min} max={max} step={1} onValueChange={([v]) => onChange(v)} className="flex-1" />
-        {isSet && (
-          <Button type="button" variant="ghost" size="icon-sm" title="테마 기본값으로" onClick={onReset}>
-            <X className="h-3.5 w-3.5" />
-          </Button>
-        )}
-      </div>
-    </Field>
-  )
-}
-
-function TextField({ def, value, onChange }: { def: FieldDef; value: string; onChange: (v: string) => void }) {
-  return (
-    <Field>
-      <FieldLabel htmlFor={def.key}>{def.label}</FieldLabel>
-      {def.type === "textarea" ? (
-        <Textarea id={def.key} value={value} onChange={(e) => onChange(e.target.value)} rows={4} />
-      ) : (
-        <Input id={def.key} type={def.type === "tel" ? "tel" : "text"} value={value} onChange={(e) => onChange(e.target.value)} />
-      )}
-    </Field>
-  )
-}
-
-function ImageField({ def, value, uploading, onUpload, onClear }: {
-  def: FieldDef; value: string; uploading: boolean; onUpload: (file: File) => void; onClear: () => void
-}) {
-  const inputRef = useRef<HTMLInputElement>(null)
-  return (
-    <Field>
-      <FieldLabel>{def.label}</FieldLabel>
-      <div className="flex items-center gap-3">
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted">
-          {value ? (
-            <img src={value} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <ImageIcon className="h-5 w-5 text-muted-foreground" />
-          )}
-        </div>
-        <div className="flex flex-col items-start gap-1.5">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={uploading}
-            onClick={() => inputRef.current?.click()}
-            className="gap-1.5"
-          >
-            {uploading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {uploading ? "업로드 중…" : "이미지 선택"}
-          </Button>
-          {value && (
-            <Button type="button" variant="ghost" size="sm" onClick={onClear} className="h-auto px-1 py-0 text-xs text-muted-foreground">
-              제거
-            </Button>
-          )}
-        </div>
-      </div>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        disabled={uploading}
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f); e.target.value = "" }}
-      />
-    </Field>
-  )
-}
-
-function GalleryUploadButton({ uploading, onSelect }: { uploading: boolean; onSelect: (files: FileList) => void }) {
-  const inputRef = useRef<HTMLInputElement>(null)
-  return (
-    <div>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={uploading}
-        onClick={() => inputRef.current?.click()}
-        className="gap-1.5"
-      >
-        {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-        {uploading ? "업로드 중…" : "이미지 추가"}
-      </Button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        className="hidden"
-        disabled={uploading}
-        onChange={(e) => { if (e.target.files?.length) onSelect(e.target.files); e.target.value = "" }}
-      />
-    </div>
-  )
-}
+// SortableBlockRow, DragHandle, SizeSliderField, BlockColorField, TextField, ImageField,
+// GalleryUploadButton — 프레젠테이션 전용 하위 컴포넌트는 ./fields.tsx 로 이동했다.

@@ -1,7 +1,10 @@
 "use client"
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { SaveButton } from "@/components/ui/save-button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -17,11 +20,16 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
-import { Save, Globe, Mail, CreditCard, Bell, Shield, Image as ImageIcon, Upload, Loader2, Check, Users, Trash2, Plus } from "lucide-react"
+import { Save, Globe, Mail, Bell, Shield, Image as ImageIcon, Upload, Loader2, Check, Users, Trash2, Plus } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { BUCKET_NAME } from "@/lib/storage"
 import { createClient } from "@supabase/supabase-js"
 import { DATA_RETENTION_SETTINGS_KEY, DEFAULT_RETENTION_DAYS, parseRetentionSettings } from "@/lib/data-retention"
 import { SELF_EDIT_SETTINGS_KEY, parseSelfEditSettings } from "@/lib/self-edit"
+import {
+  TELEGRAM_SETTINGS_KEY, TELEGRAM_KIND_LABELS, parseTelegramSettings,
+  type TelegramNotificationSettings,
+} from "@/lib/telegram"
 import {
   BUSINESS_INFO_SETTINGS_KEY,
   DATA_TRANSFER_SETTINGS_KEY,
@@ -35,10 +43,11 @@ import {
 import { useProfilesQuery } from "@/hooks/queries/useCustomers"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
+import { confirmDialog } from "@/components/ui/confirm-dialog"
 import PaperTypesCard from "./paper-types-card"
 
 export default function AdminSettingsPage() {
-  const [isSaving, setIsSaving] = useState(false)
+  useDocumentTitle("시스템 설정")
   const [isFeatureOpen, setIsFeatureOpen] = useState(true)
 
   const queryClient = useQueryClient()
@@ -126,7 +135,7 @@ export default function AdminSettingsPage() {
       return
     }
 
-    if (!confirm("이 직원 계정을 정말 삭제하시겠습니까? 관련 담당자 매핑이 해제될 수 있습니다.")) {
+    if (!(await confirmDialog({ title: "이 직원 계정을 삭제하시겠습니까?", description: "관련 담당자 매핑이 해제될 수 있습니다.", destructive: true, confirmText: "삭제" }))) {
       return
     }
 
@@ -169,17 +178,25 @@ export default function AdminSettingsPage() {
 
   // 데이터 자동 파기 정책 — 예식일 + 보관일수가 지나면 청첩장을 자동 삭제한다 (§lib/data-retention.ts)
   const [retentionDays, setRetentionDays] = useState<number>(DEFAULT_RETENTION_DAYS)
-  const [isSavingRetention, setIsSavingRetention] = useState(false)
 
   // 신랑신부 셀프 편집 기능 on/off (§lib/self-edit.ts)
   const [selfEditEnabled, setSelfEditEnabled] = useState(false)
   const [isSavingSelfEdit, setIsSavingSelfEdit] = useState(false)
 
+  // 텔레그램 알림 종류별 on/off (§lib/telegram.ts) — 발송 시점에 서버가 이 값을 읽는다
+  const [telegramSettings, setTelegramSettings] = useState<TelegramNotificationSettings>(
+    parseTelegramSettings(null)
+  )
+
+  // 로그인한 관리자 본인의 비밀번호 변경
+  const [adminEmail, setAdminEmail] = useState("")
+  const [pwCurrent, setPwCurrent] = useState("")
+  const [pwNext, setPwNext] = useState("")
+  const [pwConfirm, setPwConfirm] = useState("")
+
   // 개인정보 처리방침에 채워 넣을 사업자 정보 · CPO · 국외이전 고지 (§lib/business-info.ts)
   const [businessInfo, setBusinessInfo] = useState<BusinessInfo>(EMPTY_BUSINESS_INFO)
-  const [isSavingBusinessInfo, setIsSavingBusinessInfo] = useState(false)
   const [dataTransfer, setDataTransfer] = useState<DataTransferInfo>(EMPTY_DATA_TRANSFER_INFO)
-  const [isSavingDataTransfer, setIsSavingDataTransfer] = useState(false)
 
   useEffect(() => {
     fetchCurrentSetting()
@@ -259,34 +276,109 @@ export default function AdminSettingsPage() {
       .maybeSingle()
 
     setDataTransfer(parseDataTransferInfo(dataTransferData?.value))
+
+    const { data: telegramData } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', TELEGRAM_SETTINGS_KEY)
+      .maybeSingle()
+
+    setTelegramSettings(parseTelegramSettings(telegramData?.value))
+
+    const { data: { user } } = await supabase.auth.getUser()
+    setAdminEmail(user?.email ?? "")
   }
 
-  const handleSaveBusinessInfo = async () => {
-    setIsSavingBusinessInfo(true)
+  const handleSaveBusinessInfo = async (): Promise<boolean> => {
     const { error } = await supabase.from('settings').upsert({
       key: BUSINESS_INFO_SETTINGS_KEY,
       value: businessInfo,
     })
-    setIsSavingBusinessInfo(false)
     if (error) {
       toast.error('사업자 정보 저장에 실패했습니다.')
-    } else {
-      toast.success('사업자 정보가 저장되었습니다.')
+      return false
     }
+    toast.success('사업자 정보가 저장되었습니다.')
+    return true
   }
 
-  const handleSaveDataTransfer = async () => {
-    setIsSavingDataTransfer(true)
+  const handleSaveDataTransfer = async (): Promise<boolean> => {
     const { error } = await supabase.from('settings').upsert({
       key: DATA_TRANSFER_SETTINGS_KEY,
       value: dataTransfer,
     })
-    setIsSavingDataTransfer(false)
     if (error) {
       toast.error('국외이전 정보 저장에 실패했습니다.')
-    } else {
-      toast.success('국외이전 정보가 저장되었습니다.')
+      return false
     }
+    toast.success('국외이전 정보가 저장되었습니다.')
+    return true
+  }
+
+  const handleSaveTelegramSettings = async (): Promise<boolean> => {
+    const { error } = await supabase.from('settings').upsert({
+      key: TELEGRAM_SETTINGS_KEY,
+      value: telegramSettings,
+    })
+    if (error) {
+      toast.error('알림 설정 저장에 실패했습니다.')
+      return false
+    }
+    toast.success('알림 설정이 저장되었습니다.')
+    return true
+  }
+
+  /**
+   * 로그인한 관리자 본인의 비밀번호 변경.
+   *
+   * Supabase 의 updateUser 는 현재 비밀번호를 묻지 않는다 — 자리를 비운 사이 열려 있는
+   * 화면으로 남이 비밀번호를 갈아끼울 수 있다는 뜻이라, 세션을 남기지 않는 임시 클라이언트로
+   * 현재 비밀번호를 먼저 확인한다(직원 계정 생성과 같은 방식). 임시 클라이언트를 쓰는 이유는
+   * signInWithPassword 가 성공하면서 현재 탭의 세션을 덮어쓰는 것을 막기 위해서다.
+   */
+  const handleChangeAdminPassword = async (): Promise<boolean> => {
+    if (!adminEmail) {
+      toast.error('로그인 정보를 확인하지 못했습니다. 새로고침 후 다시 시도해 주세요.')
+      return false
+    }
+    if (pwNext.length < 6) {
+      toast.error('새 비밀번호는 6자 이상이어야 합니다.')
+      return false
+    }
+    if (pwNext !== pwConfirm) {
+      toast.error('새 비밀번호와 확인이 일치하지 않습니다.')
+      return false
+    }
+    if (pwNext === pwCurrent) {
+      toast.error('현재 비밀번호와 다른 비밀번호를 입력해 주세요.')
+      return false
+    }
+
+    const tempClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
+      { auth: { persistSession: false } }
+    )
+    const { error: signInError } = await tempClient.auth.signInWithPassword({
+      email: adminEmail,
+      password: pwCurrent,
+    })
+    if (signInError) {
+      toast.error('현재 비밀번호가 올바르지 않습니다.')
+      return false
+    }
+
+    const { error } = await supabase.auth.updateUser({ password: pwNext })
+    if (error) {
+      toast.error(error.message || '비밀번호 변경에 실패했습니다.')
+      return false
+    }
+
+    setPwCurrent("")
+    setPwNext("")
+    setPwConfirm("")
+    toast.success('비밀번호가 변경되었습니다.')
+    return true
   }
 
   const handleSaveSelfEdit = async (nextEnabled: boolean) => {
@@ -305,27 +397,26 @@ export default function AdminSettingsPage() {
     }
   }
 
-  const handleSaveRetention = async () => {
+  const handleSaveRetention = async (): Promise<boolean> => {
     if (!Number.isFinite(retentionDays) || retentionDays < 1) {
       toast.error('보관일수는 1일 이상이어야 합니다.')
-      return
+      return false
     }
-    setIsSavingRetention(true)
     const { error } = await supabase.from('settings').upsert({
       key: DATA_RETENTION_SETTINGS_KEY,
       value: { daysAfterWedding: Math.floor(retentionDays) },
     })
-    setIsSavingRetention(false)
     if (error) {
       toast.error('데이터 보관 정책 저장에 실패했습니다.')
-    } else {
-      toast.success('데이터 보관 정책이 저장되었습니다.')
+      return false
     }
+    toast.success('데이터 보관 정책이 저장되었습니다.')
+    return true
   }
 
   const fetchImages = async () => {
     setIsLoadingImages(true)
-    const { data, error } = await supabase.storage.from('vow-seoul-storage').list('main-images')
+    const { data, error } = await supabase.storage.from(BUCKET_NAME).list('main-images')
     if (data) {
       const validImages = data.filter(file => file.name !== '.emptyFolderPlaceholder' && file.name !== '.DS_Store')
       setImages(validImages)
@@ -344,7 +435,7 @@ export default function AdminSettingsPage() {
 
     try {
       const { error: uploadError } = await supabase.storage
-        .from('vow-seoul-storage')
+        .from(BUCKET_NAME)
         .upload(filePath, file)
       
       if (uploadError) throw uploadError
@@ -358,7 +449,7 @@ export default function AdminSettingsPage() {
 
       setLogoPath(filePath)
       // Force refresh cached logo url in localStorage
-      const publicUrl = supabase.storage.from('vow-seoul-storage').getPublicUrl(filePath).data.publicUrl
+      const publicUrl = supabase.storage.from(BUCKET_NAME).getPublicUrl(filePath).data.publicUrl
       if (typeof window !== 'undefined' && publicUrl) {
         localStorage.setItem('vow_seoul_custom_logo', publicUrl)
       }
@@ -382,7 +473,7 @@ export default function AdminSettingsPage() {
     const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`
     const filePath = `main-images/${fileName}`
 
-    const { error } = await supabase.storage.from('vow-seoul-storage').upload(filePath, file)
+    const { error } = await supabase.storage.from(BUCKET_NAME).upload(filePath, file)
     
     setIsUploading(false)
     if (error) {
@@ -410,35 +501,33 @@ export default function AdminSettingsPage() {
     }
   }
 
-  const handleSaveHeroContent = async () => {
-    setIsSaving(true)
+  const handleSaveHeroContent = async (): Promise<boolean> => {
     const { error } = await supabase.from('settings').upsert({
       key: 'hero_content',
       value: heroContent
     })
-    setIsSaving(false)
     if (error) {
       toast.error('메인 텍스트 저장에 실패했습니다.')
-    } else {
-      toast.success('메인 텍스트 설정이 저장되었습니다.')
+      return false
     }
+    toast.success('메인 텍스트 설정이 저장되었습니다.')
+    return true
   }
 
-  const handleSave = async () => {
-    setIsSaving(true)
+  const handleSave = async (): Promise<boolean> => {
     const { error } = await supabase.from('settings').upsert({
       key: 'is_feature_open',
       value: { open: isFeatureOpen }
     })
-    setIsSaving(false)
     if (error) {
       toast.error('설정 저장에 실패했습니다.')
-    } else {
-      toast.success('설정이 성공적으로 저장되었습니다.')
+      return false
     }
+    toast.success('설정이 성공적으로 저장되었습니다.')
+    return true
   }
 
-  const currentImageUrl = supabase.storage.from('vow-seoul-storage').getPublicUrl(currentMainImagePath).data.publicUrl
+  const currentImageUrl = supabase.storage.from(BUCKET_NAME).getPublicUrl(currentMainImagePath).data.publicUrl
 
 
   return (
@@ -453,7 +542,6 @@ export default function AdminSettingsPage() {
           <TabsTrigger value="general">일반</TabsTrigger>
           <TabsTrigger value="homepage">홈페이지</TabsTrigger>
           <TabsTrigger value="email">고객지원</TabsTrigger>
-          <TabsTrigger value="payment">결제</TabsTrigger>
           <TabsTrigger value="notification">알림</TabsTrigger>
           <TabsTrigger value="security">보안</TabsTrigger>
           <TabsTrigger value="staff">직원 관리</TabsTrigger>
@@ -472,25 +560,6 @@ export default function AdminSettingsPage() {
               <CardDescription>사이트 기본 정보를 설정합니다</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="siteName">사이트 이름</Label>
-                  <Input id="siteName" defaultValue="VOW SEOUL" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="siteUrl">사이트 URL</Label>
-                  <Input id="siteUrl" defaultValue="https://vowseoul.com" />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="siteDescription">사이트 설명</Label>
-                <Textarea 
-                  id="siteDescription" 
-                  defaultValue="프리미엄 모바일 청첩장 서비스"
-                  rows={3}
-                />
-              </div>
-              <Separator />
               <div className="space-y-4">
                 <h4 className="text-sm font-medium">로고 설정</h4>
                 <p className="text-xs text-muted-foreground">사이트 상단 네비게이션 및 다양한 화면에 표시될 로고 이미지(SVG 권장)를 설정합니다.</p>
@@ -499,7 +568,7 @@ export default function AdminSettingsPage() {
                     {logoPath ? (
                       /* eslint-disable-next-line @next/next/no-img-element */
                       <img 
-                        src={supabase.storage.from('vow-seoul-storage').getPublicUrl(logoPath).data.publicUrl} 
+                        src={supabase.storage.from(BUCKET_NAME).getPublicUrl(logoPath).data.publicUrl}
                         alt="Logo Preview" 
                         className="max-w-full max-h-full object-contain"
                       />
@@ -555,65 +624,9 @@ export default function AdminSettingsPage() {
                   </div>
                   <Switch checked={isFeatureOpen} onCheckedChange={setIsFeatureOpen} />
                 </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">점검 모드</p>
-                    <p className="text-xs text-muted-foreground">점검 중에는 사용자가 서비스에 접근할 수 없습니다</p>
-                  </div>
-                  <Switch />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">신규 가입 허용</p>
-                    <p className="text-xs text-muted-foreground">새로운 회원 가입을 허용합니다</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
               </div>
               <div className="flex justify-end">
-                <Button onClick={handleSave} disabled={isSaving}>
-                  <Save className="w-4 h-4 mr-2" />
-                  {isSaving ? "저장 중..." : "저장"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="w-5 h-5" />
-                데이터 보관 정책
-              </CardTitle>
-              <CardDescription>
-                예식일로부터 지정한 일수가 지나면 청첩장이 자동으로 삭제(소프트 삭제)됩니다.
-                청첩장 목록에서 &quot;SAMPLE&quot;로 지정한 청첩장은 예식일과 무관하게 항상 제외됩니다.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium">예식일 기준 보관일수</p>
-                  <p className="text-xs text-muted-foreground">
-                    변경하면 기존 청첩장에도 즉시 적용됩니다 (매일 자동 실행되는 파기 작업이 이 값을 그때그때 읽습니다).
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min={1}
-                    value={retentionDays}
-                    onChange={(e) => setRetentionDays(Number(e.target.value))}
-                    className="w-24"
-                  />
-                  <span className="text-sm text-muted-foreground">일 후</span>
-                </div>
-              </div>
-              <div className="flex justify-end">
-                <Button onClick={handleSaveRetention} disabled={isSavingRetention}>
-                  <Save className="w-4 h-4 mr-2" />
-                  {isSavingRetention ? "저장 중..." : "저장"}
-                </Button>
+                <SaveButton onSave={handleSave} />
               </div>
             </CardContent>
           </Card>
@@ -709,7 +722,7 @@ export default function AdminSettingsPage() {
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                         {images.map((img) => {
                           const imgPath = `main-images/${img.name}`
-                          const url = supabase.storage.from('vow-seoul-storage').getPublicUrl(imgPath).data.publicUrl
+                          const url = supabase.storage.from(BUCKET_NAME).getPublicUrl(imgPath).data.publicUrl
                           const isSelected = selectedImagePath === imgPath
 
                           return (
@@ -848,10 +861,7 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
               <div className="flex justify-end mt-4">
-                <Button onClick={handleSaveHeroContent} disabled={isSaving}>
-                  <Save className="w-4 h-4 mr-2" />
-                  {isSaving ? "저장 중..." : "메인 텍스트 저장"}
-                </Button>
+                <SaveButton onSave={handleSaveHeroContent} idleLabel="메인 텍스트 저장" />
               </div>
             </CardContent>
           </Card>
@@ -910,77 +920,12 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
               <div className="flex justify-end">
-                <Button onClick={handleSaveBusinessInfo} disabled={isSavingBusinessInfo}>
-                  <Save className="w-4 h-4 mr-2" />
-                  {isSavingBusinessInfo ? "저장 중..." : "저장"}
-                </Button>
+                <SaveButton onSave={handleSaveBusinessInfo} />
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Payment Settings */}
-        <TabsContent value="payment">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CreditCard className="w-5 h-5" />
-                결제 설정
-              </CardTitle>
-              <CardDescription>결제 게이트웨이 설정을 관리합니다</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="pgProvider">PG사 선택</Label>
-                <Select defaultValue="tosspay">
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="tosspay">토스페이먼츠</SelectItem>
-                    <SelectItem value="kakaopay">카카오페이</SelectItem>
-                    <SelectItem value="naverpay">네이버페이</SelectItem>
-                    <SelectItem value="inicis">KG이니시스</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="merchantId">상점 ID</Label>
-                  <Input id="merchantId" placeholder="상점 ID를 입력하세요" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="merchantKey">상점 키</Label>
-                  <Input id="merchantKey" type="password" placeholder="상점 키를 입력하세요" />
-                </div>
-              </div>
-              <Separator />
-              <div className="space-y-4">
-                <h4 className="text-sm font-medium">결제 옵션</h4>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">테스트 모드</p>
-                    <p className="text-xs text-muted-foreground">실제 결제 대신 테스트 결제를 사용합니다</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">자동 환불</p>
-                    <p className="text-xs text-muted-foreground">취소 요청 시 자동으로 환불 처리합니다</p>
-                  </div>
-                  <Switch />
-                </div>
-              </div>
-              <div className="flex justify-end">
-                <Button onClick={handleSave} disabled={isSaving}>
-                  <Save className="w-4 h-4 mr-2" />
-                  {isSaving ? "저장 중..." : "저장"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         {/* Notification Settings */}
         <TabsContent value="notification">
@@ -988,58 +933,35 @@ export default function AdminSettingsPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Bell className="w-5 h-5" />
-                알림 설정
+                텔레그램 알림
               </CardTitle>
-              <CardDescription>알림 발송 조건을 설정합니다</CardDescription>
+              <CardDescription>
+                고객이 무언가를 제출하면 관리자 텔레그램으로 즉시 알립니다. 관리자 대시보드의 벨 알림을 보완하는 용도입니다.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
-                <h4 className="text-sm font-medium">관리자 알림</h4>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">신규 주문 알림</p>
-                    <p className="text-xs text-muted-foreground">새로운 주문이 들어오면 알림을 받습니다</p>
+                {TELEGRAM_KIND_LABELS.map(({ kind, label, description }) => (
+                  <div key={kind} className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">{label}</p>
+                      <p className="text-xs text-muted-foreground">{description}</p>
+                    </div>
+                    <Switch
+                      checked={telegramSettings[kind]}
+                      onCheckedChange={(checked) => setTelegramSettings((p) => ({ ...p, [kind]: checked }))}
+                      aria-label={label}
+                    />
                   </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">문의 알림</p>
-                    <p className="text-xs text-muted-foreground">새로운 문의가 등록되면 알림을 받습니다</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">환불 요청 알림</p>
-                    <p className="text-xs text-muted-foreground">환불 요청이 들어오면 알림을 받습니다</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
+                ))}
               </div>
               <Separator />
-              <div className="space-y-4">
-                <h4 className="text-sm font-medium">사용자 알림</h4>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">결제 완료 알림</p>
-                    <p className="text-xs text-muted-foreground">결제가 완료되면 사용자에게 알림을 발송합니다</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">마케팅 알림</p>
-                    <p className="text-xs text-muted-foreground">프로모션 및 이벤트 알림을 발송합니다</p>
-                  </div>
-                  <Switch />
-                </div>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                크론(자동 파기 등) 실패 알림은 시스템 경보라 끌 수 없습니다.
+                봇 토큰·채팅 ID가 서버에 설정되지 않은 경우에는 위 설정과 무관하게 아무 알림도 발송되지 않습니다.
+              </p>
               <div className="flex justify-end">
-                <Button onClick={handleSave} disabled={isSaving}>
-                  <Save className="w-4 h-4 mr-2" />
-                  {isSaving ? "저장 중..." : "저장"}
-                </Button>
+                <SaveButton onSave={handleSaveTelegramSettings} />
               </div>
             </CardContent>
           </Card>
@@ -1057,62 +979,54 @@ export default function AdminSettingsPage() {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">2단계 인증</p>
-                    <p className="text-xs text-muted-foreground">관리자 로그인 시 2단계 인증을 사용합니다</p>
-                  </div>
-                  <Switch />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">IP 제한</p>
-                    <p className="text-xs text-muted-foreground">특정 IP에서만 관리자 접속을 허용합니다</p>
-                  </div>
-                  <Switch />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">세션 타임아웃</p>
-                    <p className="text-xs text-muted-foreground">일정 시간 후 자동 로그아웃</p>
-                  </div>
-                  <Select defaultValue="60">
-                    <SelectTrigger className="w-32">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="30">30분</SelectItem>
-                      <SelectItem value="60">1시간</SelectItem>
-                      <SelectItem value="120">2시간</SelectItem>
-                      <SelectItem value="480">8시간</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <Separator />
-              <div className="space-y-4">
-                <h4 className="text-sm font-medium">비밀번호 변경</h4>
+                <h4 className="text-sm font-medium">내 비밀번호 변경</h4>
+                <p className="text-xs text-muted-foreground">
+                  지금 로그인한 관리자 계정({adminEmail || "…"})의 비밀번호를 바꿉니다.
+                  다른 직원의 비밀번호는 여기서 바꿀 수 없습니다.
+                </p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="currentPassword">현재 비밀번호</Label>
-                    <Input id="currentPassword" type="password" />
+                    <Input
+                      id="currentPassword"
+                      type="password"
+                      autoComplete="current-password"
+                      value={pwCurrent}
+                      onChange={(e) => setPwCurrent(e.target.value)}
+                    />
                   </div>
                   <div></div>
                   <div className="space-y-2">
                     <Label htmlFor="newPassword">새 비밀번호</Label>
-                    <Input id="newPassword" type="password" />
+                    <Input
+                      id="newPassword"
+                      type="password"
+                      autoComplete="new-password"
+                      value={pwNext}
+                      onChange={(e) => setPwNext(e.target.value)}
+                      placeholder="6자 이상"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="confirmPassword">비밀번호 확인</Label>
-                    <Input id="confirmPassword" type="password" />
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      autoComplete="new-password"
+                      value={pwConfirm}
+                      onChange={(e) => setPwConfirm(e.target.value)}
+                    />
                   </div>
                 </div>
               </div>
               <div className="flex justify-end">
-                <Button onClick={handleSave} disabled={isSaving}>
-                  <Save className="w-4 h-4 mr-2" />
-                  {isSaving ? "저장 중..." : "저장"}
-                </Button>
+                <SaveButton
+                  onSave={handleChangeAdminPassword}
+                  idleLabel="비밀번호 변경"
+                  pendingLabel="변경 중…"
+                  successLabel="변경됨"
+                  disabled={!pwCurrent || !pwNext || !pwConfirm}
+                />
               </div>
             </CardContent>
           </Card>
@@ -1202,10 +1116,43 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
               <div className="flex justify-end">
-                <Button onClick={handleSaveBusinessInfo} disabled={isSavingBusinessInfo}>
-                  <Save className="w-4 h-4 mr-2" />
-                  {isSavingBusinessInfo ? "저장 중..." : "저장"}
-                </Button>
+                <SaveButton onSave={handleSaveBusinessInfo} />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="w-5 h-5" />
+                데이터 보관 정책
+              </CardTitle>
+              <CardDescription>
+                예식일로부터 지정한 일수가 지나면 청첩장이 자동으로 삭제(소프트 삭제)됩니다.
+                청첩장 목록에서 &quot;SAMPLE&quot;로 지정한 청첩장은 예식일과 무관하게 항상 제외됩니다.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">예식일 기준 보관일수</p>
+                  <p className="text-xs text-muted-foreground">
+                    변경하면 기존 청첩장에도 즉시 적용됩니다 (매일 자동 실행되는 파기 작업이 이 값을 그때그때 읽습니다).
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    value={retentionDays}
+                    onChange={(e) => setRetentionDays(Number(e.target.value))}
+                    className="w-24"
+                  />
+                  <span className="text-sm text-muted-foreground">일 후</span>
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <SaveButton onSave={handleSaveRetention} />
               </div>
             </CardContent>
           </Card>
@@ -1251,10 +1198,7 @@ export default function AdminSettingsPage() {
                 </div>
               )}
               <div className="flex justify-end">
-                <Button onClick={handleSaveDataTransfer} disabled={isSavingDataTransfer}>
-                  <Save className="w-4 h-4 mr-2" />
-                  {isSavingDataTransfer ? "저장 중..." : "저장"}
-                </Button>
+                <SaveButton onSave={handleSaveDataTransfer} />
               </div>
             </CardContent>
           </Card>
@@ -1390,6 +1334,7 @@ export default function AdminSettingsPage() {
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7 shrink-0 text-destructive hover:bg-destructive/10"
+                            aria-label="삭제"
                             onClick={() => handleDeleteStaff(profile.id, profile.email)}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -1429,6 +1374,7 @@ export default function AdminSettingsPage() {
                                   variant="ghost"
                                   size="icon"
                                   className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                                  aria-label="삭제"
                                   onClick={() => handleDeleteStaff(profile.id, profile.email)}
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />

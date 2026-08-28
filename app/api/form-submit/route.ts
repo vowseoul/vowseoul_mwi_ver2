@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
+import { sendTelegram, coupleLabel } from "@/lib/telegram"
 
 /**
  * 공개 폼(/form/[slug]) 제출 완료 시 customers 테이블 갱신.
@@ -32,12 +33,27 @@ export async function POST(request: Request) {
 
   const { data: instance, error: instanceError } = await supabase
     .from("form_instances")
-    .select("id, customer_id")
+    .select("id, customer_id, expires_at")
     .eq("id", instanceId)
     .single()
 
   if (instanceError || !instance || instance.customer_id !== customerId) {
     return NextResponse.json({ error: "권한이 없습니다." }, { status: 403 })
+  }
+  // 만료된 링크로는 더 이상 고객 레코드를 갱신할 수 없다. (form_instances.status는
+  // 이 라우트가 불리기 직전에 클라이언트가 이미 'completed'로 바꿔놓으므로 여기서
+  // 참조할 수 없다 — 대신 customers.status로 "이 라우트가 이미 성공했는가"를 본다.)
+  if (instance.expires_at && new Date(instance.expires_at).getTime() < Date.now()) {
+    return NextResponse.json({ error: "만료된 폼입니다." }, { status: 410 })
+  }
+
+  const { data: existingCustomer } = await supabase
+    .from("customers")
+    .select("status")
+    .eq("id", customerId)
+    .maybeSingle()
+  if (existingCustomer?.status === "form_completed") {
+    return NextResponse.json({ error: "이미 제출이 완료된 폼입니다." }, { status: 409 })
   }
 
   const customerUpdates: Record<string, unknown> = { status: "form_completed" }
@@ -60,14 +76,22 @@ export async function POST(request: Request) {
   // 관리자 헤더 벨 알림 — 실패해도 폼 제출 자체는 이미 완료된 것이므로 응답을 막지 않는다.
   const groomName = typeof data?.groom_name === "string" ? data.groom_name : ""
   const brideName = typeof data?.bride_name === "string" ? data.bride_name : ""
-  const coupleName = [groomName, brideName].filter(Boolean).join(" ♥ ") || "고객"
+  const coupleName = coupleLabel(groomName, brideName)
+  const detailPath = `/admin/customers/${customerId}`
   const { error: notifyError } = await supabase.from("notifications").insert({
     type: "form_submitted",
     title: "폼 제출 완료",
     message: `${coupleName}님이 정보 입력 폼을 제출했습니다.`,
-    link_to: `/admin/customers/${customerId}`,
+    link_to: detailPath,
   })
   if (notifyError) console.error("form-submit notification insert failed:", notifyError.message)
+
+  // 텔레그램 알림 — 관리자가 대시보드를 열어보지 않아도 제출 즉시 알 수 있게(벨 알림 보완).
+  // 링크는 배포 도메인을 따로 설정하지 않아도 되도록 요청 URL 에서 origin 을 그대로 딴다.
+  await sendTelegram(
+    `📝 ${coupleName}님이 고객 폼을 완료하셨습니다.\n${new URL(request.url).origin}${detailPath}`,
+    "form_submit"
+  )
 
   return NextResponse.json({ ok: true })
 }

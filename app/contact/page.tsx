@@ -23,7 +23,7 @@ export default async function ContactPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header />
+      <Header hideTemplates />
 
       <main className="flex-1 bg-muted/30">
         <div className="container mx-auto max-w-5xl px-4 py-16 md:py-24">
@@ -93,7 +93,7 @@ export default async function ContactPage() {
         </div>
       </main>
 
-      <Footer />
+      <Footer minimal />
     </div>
   )
 }

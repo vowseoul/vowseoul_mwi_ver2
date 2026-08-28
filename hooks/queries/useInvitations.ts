@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { DATA_RETENTION_SETTINGS_KEY, computeExpiryDate, parseRetentionSettings } from '@/lib/data-retention'
 import { buildContentDataFromForm, deriveOgMetaFromForm, deriveOverridesFromForm, resolveBgmUrlFromSnapshot } from '@/lib/invitation-data'
-import { hashDashboardPassword } from '@/lib/dashboard-password'
+import { hashDashboardPassword, resolveDefaultDashboardPassword } from '@/lib/dashboard-password'
 
 export interface Invitation {
   id: string
@@ -21,13 +21,17 @@ export interface Invitation {
   expires_at: string
   /** true 면 데이터 자동 파기 대상에서 제외된다 (예: 데모/샘플용 청첩장) */
   is_sample: boolean
+  /** 시안 검수 진행 상태 (§lib/review-status.ts) — 편집기에서 검수 요청을 보낼 때 갱신된다 */
+  review_status: 'none' | 'in_review' | 'changes_requested' | 'approved' | null
+  /** 검수 요청을 보낸 횟수 (1차, 2차 …) */
+  review_round: number | null
   created_at: string
   updated_at: string
   customer?: {
     id: string
     groom_name: string
     bride_name: string
-    wedding_date: string
+    wedding_date: string | null
   }
 }
 
@@ -127,7 +131,7 @@ export function useCreateInvitationMutation() {
       } else {
         const { data: fetchedCustomer, error: fetchErr } = await supabase
           .from('customers')
-          .select('groom_name, bride_name, phone, wedding_date, venue_name, venue_address')
+          .select('groom_name, bride_name, phone, wedding_date, venue_name, venue_address, is_sample')
           .eq('id', targetCustomerId)
           .single()
           
@@ -135,13 +139,17 @@ export function useCreateInvitationMutation() {
         customer = fetchedCustomer
       }
 
-      const phoneStr = customer?.phone || '0000'
       // 실제 값(연락처 뒷 4자리)은 해시로만 저장한다 — 평문은 어디에도 남기지 않는다.
-      // 안내는 "연락처 뒷 4자리입니다"라는 고정 규칙 문구로 대신한다(§lib/dashboard-password.ts).
-      const dashboardPassword = phoneStr.slice(-4)
+      // 잘라내는 규칙은 관리자 초기화(§app/api/admin/dashboard-password)와 반드시 같아야
+      // 담당자가 고객에게 안내하는 값과 실제 값이 어긋나지 않는다.
+      const { password: dashboardPassword } = resolveDefaultDashboardPassword(customer?.phone)
       const dashboardPasswordHash = await hashDashboardPassword(dashboardPassword)
       const dashboardSlug = `dash-${publicSlug}`
 
+      // 예식일이 아직 없으면(주문 접수 직후) 오늘을 기준으로 잡아둔다. invitations.expires_at
+      // 은 NOT NULL 이라 비워둘 수 없는데, 실제 파기 판정은 이 컬럼이 아니라 크론이 매번
+      // customers.wedding_date 로 다시 계산하므로(§app/api/cron/purge-expired-invitations,
+      // 예식일이 없으면 아예 만료 판정을 건너뛴다) 이 값 때문에 조기 파기되지는 않는다.
       const weddingDate = customer?.wedding_date
         ? new Date(customer.wedding_date)
         : new Date()
@@ -154,9 +162,11 @@ export function useCreateInvitationMutation() {
       const { daysAfterWedding } = parseRetentionSettings(retentionRow?.value)
       const expiresAt = computeExpiryDate(weddingDate, daysAfterWedding)
 
-      const blockOrder = latestVersion?.default_block_order || [
-        "cover", "greeting", "couple-info", "event-info", "gallery", "map", "account", "rsvp", "guestbook"
-      ]
+      // 테마 버전에 기본 순서가 없으면 null로 둔다 — 렌더러가 테마 template.html의 DOM
+      // 순서를 그대로 쓴다(§extractBlockOrder). 예전엔 여기서 실제 BLOCK_KEYS와 다른
+      // 키("cover"/"couple-info" 등)로 채워 넣어, 렌더링 시 전부 걸러지고 결국 테마
+      // 기본 순서로 대체되긴 했지만 DB엔 무의미한 값이 영구히 쌓이는 상태였다.
+      const blockOrder = latestVersion?.default_block_order || null
 
       // '미지정'/빈값 정리 헬퍼
       const clean = (v?: string | null) => (v && v !== '미지정' ? v : '')
@@ -254,6 +264,9 @@ export function useCreateInvitationMutation() {
         og_meta: ogMeta || {},
         bgm_url: resolvedBgmUrl,
         status: 'draft',
+        // 샘플/테스트 고객의 청첩장은 처음부터 SAMPLE로 만든다 — 자동 파기 대상에서
+        // 빠지고(§app/api/cron/purge-expired-invitations) 목록에서도 구분된다.
+        is_sample: customer?.is_sample === true,
         expires_at: expiresAt.toISOString(),
       }
 
@@ -263,7 +276,18 @@ export function useCreateInvitationMutation() {
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {
+        // public_slug / dashboard_slug 둘 다 UNIQUE 라 이미 쓰는 주소면 23505 로 떨어진다
+        // (dashboard_slug 는 `dash-${publicSlug}` 라 결국 같은 원인이다). 이 메시지를
+        // 그대로 토스트에 띄우면 담당자에게 'duplicate key value violates unique
+        // constraint "invitations_public_slug_key"' 라는 DB 원문이 보인다 —
+        // "wedding-june" 같은 흔한 주소는 실제로 충돌하기 쉬우므로 안내 문구로 바꾼다.
+        // (§useUpdateInvitationSlugMutation 의 주소 수정 경로와 같은 처방)
+        if (error.code === '23505') {
+          throw new Error(`이미 사용 중인 링크 주소입니다: ${publicSlug} — 다른 주소를 입력해주세요.`)
+        }
+        throw error
+      }
 
       // Update customer status to 'draft' (making the mobile invitation in draft)
       const { error: customerError } = await supabase

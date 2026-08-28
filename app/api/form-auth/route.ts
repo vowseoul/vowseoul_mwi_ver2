@@ -1,14 +1,26 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { passwordMatches } from "@/lib/dashboard-session"
+import { verifyPassword, isHashedDashboardPassword } from "@/lib/dashboard-password"
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit"
+import { createFormToken, formCookieName } from "@/lib/form-session"
 
 /**
  * 정보 수집 폼(/form/[slug]) 비밀번호 검증.
  *
  * 이전에는 useFormInstanceBySlugQuery가 access_password를 select('*')로 그대로
  * 브라우저에 내려보내 클라이언트에서 문자열 비교했다 — 네트워크 탭에 실제 비밀번호가
- * 노출됐다. 이제 비교는 여기서만 일어나고, 값 자체는 클라이언트로 전달되지 않는다
- * (§lib/dashboard-session.ts의 passwordMatches를 재사용 — 상수시간 비교).
+ * 노출됐다. 이제 비교는 여기서만 일어나고, 값 자체는 클라이언트로 전달되지 않는다.
+ *
+ * 통과하면 서명된 httpOnly 쿠키를 발급한다 — 폼 내용과 이미 제출한 답변은 그 쿠키를
+ * 가진 요청에만 내려간다(§app/api/form-instance/route.ts). 이전에는 통과 여부가
+ * 클라이언트 상태일 뿐이라 답변이 비밀번호 확인 전에 이미 브라우저에 도착해 있었다.
+ *
+ * access_password는 이제 새로 발행되는 폼부터 PBKDF2 해시로 저장된다
+ * (§app/admin/(dashboard)/forms/publish/page.tsx, lib/dashboard-password.ts —
+ * invitations.dashboard_password 와 동일한 해시). 마이그레이션 이전에 발행된
+ * 평문 값도 여전히 남아있을 수 있어 isHashedDashboardPassword로 형식을 가려
+ * 레거시 평문은 passwordMatches(상수시간 문자열 비교)로 폴백한다.
  */
 export async function POST(request: Request) {
   let body: { slug?: string; password?: string }
@@ -23,10 +35,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 })
   }
 
+  const allowed = await checkRateLimit("form-auth", getClientIp(request))
+  if (!allowed) {
+    return NextResponse.json({ error: "너무 많은 시도가 있었습니다. 잠시 후 다시 시도해주세요." }, { status: 429 })
+  }
+
   const supabase = createSupabaseAdminClient()
   const { data: instance } = await supabase
     .from("form_instances")
-    .select("access_password")
+    .select("id, access_password")
     .eq("unique_url_slug", slug)
     .maybeSingle()
 
@@ -34,11 +51,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "양식을 찾을 수 없습니다." }, { status: 404 })
   }
   if (!instance.access_password) {
-    return NextResponse.json({ ok: true })
+    return unlockedResponse(instance.id)
   }
-  if (!passwordMatches(password, instance.access_password)) {
+  const stored = instance.access_password
+  const matches = isHashedDashboardPassword(stored)
+    ? await verifyPassword(password, stored)
+    : passwordMatches(password, stored)
+  if (!matches) {
     return NextResponse.json({ error: "비밀번호가 올바르지 않습니다." }, { status: 401 })
   }
 
-  return NextResponse.json({ ok: true })
+  return unlockedResponse(instance.id)
+}
+
+function unlockedResponse(instanceId: string) {
+  const { token, maxAge } = createFormToken(instanceId)
+  const res = NextResponse.json({ ok: true })
+  res.cookies.set(formCookieName(instanceId), token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge,
+  })
+  return res
 }

@@ -8,5 +8,6 @@
   { "key": "account", "label": "마음 전하실 곳", "title": true, "padding": true },
   { "key": "contact", "label": "연락처", "title": true, "padding": true },
   { "key": "rsvp", "label": "참석 여부 알리기", "title": true, "padding": true },
+  { "key": "guestbook", "label": "방명록", "title": true, "padding": true },
   { "key": "share", "label": "청첩장 공유", "title": false, "padding": false }
 ]

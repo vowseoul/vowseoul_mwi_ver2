@@ -1,6 +1,9 @@
 "use client"
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import { useEffect, useMemo, useState } from "react"
+import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes-warning"
 import { useParams } from "next/navigation"
 import JSZip from "jszip"
 import { supabase, logSupabaseError } from "@/lib/supabase"
@@ -19,7 +22,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { ExternalLink, Loader2, Save, Sparkles, Upload, X } from "lucide-react"
+import { SaveButton } from "@/components/ui/save-button"
+import { ExternalLink, Loader2, Sparkles, Upload, X } from "lucide-react"
 import { toast } from "sonner"
 
 /**
@@ -43,11 +47,11 @@ function extractMarkers(html: string): { fields: string[]; slots: string[] } {
 }
 
 export default function TemplateThemeEditor() {
+  useDocumentTitle("템플릿 편집기")
   const params = useParams()
   const id = String(params.id)
 
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
 
   const [name, setName] = useState("")
   const [renderEngine, setRenderEngine] = useState<"legacy" | "template">("template")
@@ -66,6 +70,12 @@ export default function TemplateThemeEditor() {
 
   // 미리보기에 반영된 값 (적용 버튼으로 갱신 → 키입력마다 iframe 재작성 방지)
   const [applied, setApplied] = useState<{ html: string; css: string; slots: string[] }>({ html: "", css: "", slots: [] })
+
+  // 이탈 경고 — 로드 직후(§아래 useEffect)와 저장 성공 직후 스냅샷을 다시 찍어 비교한다.
+  const [initialFingerprint, setInitialFingerprint] = useState<string | null>(null)
+  const dirtyFingerprint = JSON.stringify({ name, renderEngine, html, css, slotManifest, fieldManifest, blockManifest, tokenValues, otherStyles })
+  const isDirty = initialFingerprint !== null && dirtyFingerprint !== initialFingerprint
+  useUnsavedChangesWarning(isDirty)
 
   useEffect(() => {
     let active = true
@@ -96,6 +106,17 @@ export default function TemplateThemeEditor() {
           css: data.template_css || "",
           slots: Array.isArray(data.slot_manifest) ? data.slot_manifest : [],
         })
+        setInitialFingerprint(JSON.stringify({
+          name: data.name || "",
+          renderEngine: data.render_engine === "template" ? "template" : "legacy",
+          html: data.template_html || "",
+          css: data.template_css || "",
+          slotManifest: Array.isArray(data.slot_manifest) ? data.slot_manifest : [],
+          fieldManifest: Array.isArray(data.field_manifest) ? data.field_manifest : [],
+          blockManifest: Array.isArray(data.block_manifest) ? data.block_manifest : [],
+          tokenValues: resolved,
+          otherStyles: rest,
+        }))
       }
       setLoading(false)
     })()
@@ -188,8 +209,7 @@ export default function TemplateThemeEditor() {
     }
   }
 
-  const save = async () => {
-    setSaving(true)
+  const save = async (): Promise<boolean> => {
     // 토큰은 themes.styles 에 '--' 키로 저장 (레거시 키는 그대로 보존)
     const cleanTokens: Record<string, string> = {}
     for (const [k, v] of Object.entries(tokenValues)) {
@@ -206,12 +226,13 @@ export default function TemplateThemeEditor() {
       block_manifest: blockManifest,
       styles: { ...otherStyles, ...cleanTokens },
     }).eq("id", id)
-    setSaving(false)
     if (error) {
       toast.error(`저장 실패: ${error.message}`)
-    } else {
-      toast.success("저장되었습니다.")
+      return false
     }
+    setInitialFingerprint(dirtyFingerprint)
+    toast.success("저장되었습니다.")
+    return true
   }
 
   const previewTemplate: ThemeTemplate = useMemo(
@@ -460,10 +481,7 @@ export default function TemplateThemeEditor() {
             고질적인 문제) sticky가 기준을 잃으므로 fixed로 뷰포트 하단에 고정하고(사이드바 폭만큼
             lg:left-64 로 비켜준다), xl 이상에서는 원래의(검증된) 컬럼 내부 sticky로 되돌린다. */}
         <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t bg-background px-4 py-4 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] lg:left-64 lg:px-6 xl:sticky xl:inset-x-auto xl:left-auto xl:z-auto xl:mt-6 xl:px-0 xl:shadow-none">
-          <Button onClick={save} disabled={saving} className="gap-2">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {saving ? "저장 중…" : "저장"}
-          </Button>
+          <SaveButton onSave={save} className="gap-2" />
           <Button variant="outline" asChild>
             <a href={`/preview/theme/${id}`} target="_blank" rel="noreferrer" className="gap-2">
               새 탭에서 미리보기 <ExternalLink className="h-3.5 w-3.5" />

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit"
 
 /**
  * 하객 RSVP 응답 취소(삭제) — 개인정보 보호법 제36조(정보주체의 삭제 요구권) 대응.
@@ -24,6 +25,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 })
   }
 
+  const allowed = await checkRateLimit("rsvp-cancel", getClientIp(request))
+  if (!allowed) {
+    return NextResponse.json({ error: "너무 많은 시도가 있었습니다. 잠시 후 다시 시도해주세요." }, { status: 429 })
+  }
+
   const supabase = createSupabaseAdminClient()
   const digitsOnly = phone.replace(/[^0-9]/g, "")
 
@@ -33,14 +39,14 @@ export async function POST(request: Request) {
     .eq("invitation_id", invitationId)
 
   const match = rows?.find((r) => String(r.phone ?? "").replace(/[^0-9]/g, "") === digitsOnly)
-  if (!match) {
-    return NextResponse.json({ error: "해당 연락처로 제출된 참석 응답을 찾을 수 없습니다." }, { status: 404 })
-  }
-
-  const { error: deleteError } = await supabase.from("rsvp_responses").delete().eq("id", match.id)
-  if (deleteError) {
-    console.error("rsvp-cancel failed:", deleteError.message)
-    return NextResponse.json({ error: "취소 처리에 실패했습니다." }, { status: 500 })
+  // invitationId + 전화번호 조합이 실제로 존재하는지를 응답 코드 차이(404 vs 200)로
+  // 노출하지 않는다 — 그 자체가 "이 사람이 참석 응답을 했는가"를 알려주는 오라클이 된다.
+  if (match) {
+    const { error: deleteError } = await supabase.from("rsvp_responses").delete().eq("id", match.id)
+    if (deleteError) {
+      console.error("rsvp-cancel failed:", deleteError.message)
+      return NextResponse.json({ error: "취소 처리에 실패했습니다." }, { status: 500 })
+    }
   }
 
   return NextResponse.json({ ok: true })

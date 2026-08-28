@@ -1,5 +1,7 @@
 'use client'
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import React, { useState, useEffect, use } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -16,6 +18,7 @@ import {
 } from '@/components/ui/select'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { buildContentDataFromForm, deriveOgMetaFromForm, deriveOverridesFromForm, resolveBgmUrlFromSnapshot } from '@/lib/invitation-data'
+import { useCopyFeedback } from '@/lib/use-copy-feedback'
 import {
   useCustomerQuery,
   useUpdateCustomerMutation,
@@ -34,8 +37,10 @@ import {
 import { useThemesQuery } from '@/hooks/queries/useThemes'
 import { useCreateInvitationMutation } from '@/hooks/queries/useInvitations'
 import { useFormTemplateFieldsQuery } from '@/hooks/queries/useForms'
+import { pickFormSubmission } from '@/lib/form-submission'
 import { supabase } from '@/lib/supabase'
 import { logAuditEvent } from '@/lib/audit-log'
+import { reviewStatusClass, reviewStatusLabel } from '@/lib/review-status'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Dialog,
@@ -47,10 +52,11 @@ import {
 } from '@/components/ui/dialog'
 import { ArrowLeft, Save, Copy, Check, ExternalLink, Loader2, Calendar, RefreshCw, FileCheck, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 
 export default function CustomerDetailPage({ params }: { params: Promise<{ customerId: string }> }) {
+  useDocumentTitle("고객 상세")
   const { customerId } = use(params)
-  const router = React.useRouter ? React.useRouter() : null // fallback in case useRouter isn't natively bound
 
   const { data: customer, isLoading, error } = useCustomerQuery(customerId)
   const updateMutation = useUpdateCustomerMutation()
@@ -128,7 +134,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
 
   const handleDeleteOrder = async () => {
     if (!order) return
-    if (!confirm('정말로 이 주문과 연결된 청첩장을 삭제하시겠습니까? 삭제 후에는 복구할 수 없습니다.')) return
+    if (!(await confirmDialog({ title: '주문과 청첩장을 삭제하시겠습니까?', description: '삭제 후에는 복구할 수 없습니다.', destructive: true, confirmText: '삭제' }))) return
     try {
       await deleteOrderMutation.mutateAsync({ orderId: order.id, invitationId: order.invitation_id, customerId })
       toast.success('주문과 청첩장이 삭제되었습니다.')
@@ -174,7 +180,11 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
   const handleUpdateFormVersion = async () => {
     if (!formInstance || !latestFields || latestFields.length === 0) return
     
-    const ok = confirm('선택하신 템플릿의 최신 필드 구성으로 정보 수집 폼을 업데이트하시겠습니까? 고객이 이전에 입력했던 답변들은 그대로 유지되며, 신규 필드만 추가/조정됩니다.')
+    const ok = await confirmDialog({
+      title: '정보 수집 폼을 최신 버전으로 업데이트하시겠습니까?',
+      description: '고객이 이전에 입력했던 답변들은 그대로 유지되며, 신규 필드만 추가/조정됩니다.',
+      confirmText: '업데이트',
+    })
     if (!ok) return
 
     setIsUpdatingVersion(true)
@@ -218,15 +228,76 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
   const [status, setStatus] = useState('registered')
   const [memo, setMemo] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [copiedLink, setCopiedLink] = useState<string | null>(null)
+  const { isCopied, copy: copyText } = useCopyFeedback()
 
-  const { data: themes } = useThemesQuery()
+  const { data: themes } = useThemesQuery({ activeOnly: true })
   const createInviteMutation = useCreateInvitationMutation()
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [selectedThemeId, setSelectedThemeId] = useState('')
   const [publicSlug, setPublicSlug] = useState('')
   const [isCreatingInvite, setIsCreatingInvite] = useState(false)
   const [isSyncingInvite, setIsSyncingInvite] = useState(false)
+
+  /** 대시보드 비밀번호 현황 — 해시라 값은 못 보고, "기본값인지"와 "초기화하면 무슨 값이 되는지"만 서버가 알려준다 */
+  const [passwordInfo, setPasswordInfo] = useState<
+    { isDefault: boolean; resetTo: string; phone: string | null; phoneMissing: boolean } | null
+  >(null)
+  const [isResettingPassword, setIsResettingPassword] = useState(false)
+
+  const invitationId = invitation?.id
+  useEffect(() => {
+    if (!invitationId) return
+    let active = true
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/admin/dashboard-password?invitationId=${encodeURIComponent(invitationId)}`)
+        if (!res.ok) return
+        const json = await res.json()
+        if (active) setPasswordInfo(json)
+      } catch {
+        // 조용히 실패 — 안내 문구만 "확인 중…"에 머문다
+      }
+    })()
+    return () => { active = false }
+  }, [invitationId])
+
+  const handleResetDashboardPassword = async () => {
+    if (!invitationId || !passwordInfo) return
+    const target = passwordInfo.phoneMissing
+      ? `고정값 ${passwordInfo.resetTo}`
+      : `${passwordInfo.phone} 뒷 4자리(${passwordInfo.resetTo})`
+    const ok = await confirmDialog({
+      title: '대시보드 비밀번호를 초기화하시겠습니까?',
+      description: `${target} 로 되돌립니다. 고객이 직접 바꾼 비밀번호가 있다면 더 이상 사용할 수 없게 되니, 초기화 후 이 값을 고객에게 안내해주세요.`,
+      confirmText: '초기화',
+    })
+    if (!ok) return
+
+    setIsResettingPassword(true)
+    try {
+      const res = await fetch('/api/admin/dashboard-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invitationId }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(json?.error || '초기화하지 못했습니다.')
+        return
+      }
+      setPasswordInfo({ isDefault: true, resetTo: json.resetTo, phone: json.phone, phoneMissing: json.phoneMissing })
+      toast.success(
+        json.phoneMissing
+          ? `비밀번호를 ${json.resetTo} 로 초기화했습니다. (등록된 연락처 없음)`
+          : `비밀번호를 ${json.phone} 뒷 4자리(${json.resetTo})로 초기화했습니다. 고객에게 이 번호와 함께 안내해주세요.`,
+      )
+    } catch (err) {
+      console.error(err)
+      toast.error('초기화하지 못했습니다.')
+    } finally {
+      setIsResettingPassword(false)
+    }
+  }
 
   // Populate publicSlug and selectedThemeId when modal opens.
   // 폼에 mwi_address(원하는 링크 주소)를 적어둔 고객이면 그 값을 슬러그 규칙에 맞게 다듬어
@@ -262,10 +333,8 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
 
   // Copy helper
   const handleCopy = (text: string, type: string) => {
-    navigator.clipboard.writeText(text)
-    setCopiedLink(type)
+    copyText(text, type)
     toast.success('클립보드에 복사되었습니다.')
-    setTimeout(() => setCopiedLink(null), 2000)
   }
 
   // Populate form when data loaded
@@ -274,7 +343,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
       setGroomName(customer.groom_name)
       setBrideName(customer.bride_name)
       setPhone(customer.phone || '')
-      setWeddingDate(customer.wedding_date)
+      setWeddingDate(customer.wedding_date || '')
       setVenueName(customer.venue_name)
       setVenueAddress(customer.venue_address)
       setAssignedTo(customer.assigned_to || 'none')
@@ -286,7 +355,9 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!groomName.trim() || !brideName.trim() || !weddingDate || !venueName.trim() || !venueAddress.trim()) {
+    // 예식일은 필수가 아니다 — 주문 접수 단계에선 모르는 경우가 많고, 고객이 폼에
+    // 입력하면 /api/form-submit 이 채워준다.
+    if (!groomName.trim() || !brideName.trim() || !venueName.trim() || !venueAddress.trim()) {
       toast.error('필수 항목을 모두 입력해주세요.')
       return
     }
@@ -300,7 +371,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
           groom_name: groomName,
           bride_name: brideName,
           phone: phone || null,
-          wedding_date: weddingDate,
+          wedding_date: weddingDate || null,
           venue_name: venueName,
           venue_address: venueAddress,
           assigned_to: assignedTo === 'none' ? null : assignedTo,
@@ -446,7 +517,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
       return
     }
     if (!publicSlug.trim()) {
-      toast.error('접속 숏링크 주소(slug)를 입력해주세요.')
+      toast.error('접속 링크 주소를 입력해주세요.')
       return
     }
 
@@ -483,11 +554,29 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
     )
   }
 
-  if (error || !customer) {
+  // 조회 실패와 "그런 고객이 없음"을 나눈다 — 한 문장으로 묶으면 담당자가 무엇을 해야 할지
+  // 알 수 없다. 지워진 고객이면 목록으로 돌아가는 게 맞고, 통신이 실패한 거라면 필요한 건
+  // 다시 시도다(돌아가봐야 목록도 같은 이유로 비어 있다).
+  if (error) {
     return (
-      <div className="w-full h-[60vh] flex flex-col items-center justify-center">
-        <p className="text-destructive font-semibold">고객을 찾을 수 없거나 에러가 발생했습니다.</p>
-        <Button className="mt-4" asChild>
+      <div className="w-full h-[60vh] flex flex-col items-center justify-center gap-4">
+        <p className="text-destructive font-semibold">고객 정보를 불러오지 못했습니다.</p>
+        <div className="flex gap-2">
+          <Button onClick={() => window.location.reload()}>다시 시도</Button>
+          <Button variant="outline" asChild>
+            <Link href="/admin/customers">목록으로</Link>
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!customer) {
+    return (
+      <div className="w-full h-[60vh] flex flex-col items-center justify-center gap-4">
+        <p className="font-semibold">이 고객을 찾을 수 없습니다.</p>
+        <p className="text-sm text-muted-foreground">삭제되었거나 주소가 잘못되었을 수 있습니다.</p>
+        <Button asChild>
           <Link href="/admin/customers">목록으로 돌아가기</Link>
         </Button>
       </div>
@@ -524,12 +613,14 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
     }
   }
 
-  const formSubmissionTime = formInstance?.form_submissions?.[0]?.updated_at
+  // form_submissions 임베드는 UNIQUE 제약 때문에 배열이 아니라 객체로 온다 (§pickFormSubmission)
+  const formSubmission = pickFormSubmission<any>(formInstance?.form_submissions)
+  const formSubmissionTime = formSubmission?.updated_at
 
   return (
     <div className="space-y-6 font-sans max-w-5xl mx-auto">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" asChild>
+        <Button variant="ghost" size="icon" asChild aria-label="뒤로가기">
           <Link href="/admin/customers">
             <ArrowLeft className="w-5 h-5" />
           </Link>
@@ -584,6 +675,14 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                       />
+                      {/* 대시보드·검수 링크의 기본 비밀번호가 이 연락처 뒷 4자리다
+                          (§lib/dashboard-password.ts). 비어 있으면 조용히 0000 으로 떨어지는데,
+                          담당자는 "뒷 4자리" 라고 안내하게 되므로 고객이 못 들어간다. */}
+                      {!phone.trim() && (
+                        <p className="text-xs text-amber-600">
+                          연락처가 없으면 대시보드·검수 링크 비밀번호가 0000 으로 설정됩니다.
+                        </p>
+                      )}
                     </Field>
 
                     <Field>
@@ -609,13 +708,12 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Field>
-                      <FieldLabel htmlFor="weddingDate">예식 일자 *</FieldLabel>
+                      <FieldLabel htmlFor="weddingDate">예식 일자</FieldLabel>
                       <Input
                         id="weddingDate"
                         type="date"
                         value={weddingDate}
                         onChange={(e) => setWeddingDate(e.target.value)}
-                        required
                       />
                     </Field>
                     <Field>
@@ -720,8 +818,15 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                             <SelectItem value="design_review">디자인 피드백중</SelectItem>
                             <SelectItem value="published">발행완료</SelectItem>
                             <SelectItem value="delivered">전달완료</SelectItem>
+                            <SelectItem value="sample">샘플/테스트</SelectItem>
                           </SelectContent>
                         </Select>
+                        {orderStatus === 'sample' && (
+                          <p className="text-xs text-muted-foreground">
+                            이 고객은 고객 목록 기본 뷰·통계·고객 수 집계에서 제외되고, 이후 만드는
+                            청첩장은 자동으로 SAMPLE로 생성됩니다.
+                          </p>
+                        )}
                       </Field>
                     </div>
                     <Field>
@@ -842,6 +947,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                       <Input
                         value={`${baseUrl}/form/${formInstance.unique_url_slug}`}
                         readOnly
+                        title={`${baseUrl}/form/${formInstance.unique_url_slug}`}
                         className="text-xs h-9 bg-muted"
                       />
                       <Button
@@ -849,9 +955,10 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                         variant="outline"
                         size="icon"
                         className="h-9 w-9 shrink-0"
+                        aria-label="주소 복사"
                         onClick={() => handleCopy(`${baseUrl}/form/${formInstance.unique_url_slug}`, 'form')}
                       >
-                        {copiedLink === 'form' ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                        {isCopied('form') ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
                       </Button>
                     </div>
                   </div>
@@ -862,7 +969,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                     </a>
                   </Button>
 
-                  {formInstance.status === 'completed' || formInstance.form_submissions?.[0] ? (
+                  {formInstance.status === 'completed' || formSubmission ? (
                     <Button variant="default" className="w-full text-xs h-9 gap-1.5" asChild>
                       <Link href={`/admin/forms/responses/${formInstance.id}`}>
                         <FileCheck className="w-3.5 h-3.5" /> 고객 제출 내용 보기 / 수정
@@ -926,12 +1033,23 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                     </Badge>
                   </div>
 
+                  {/* 검수 상태는 편집기 안에서만 볼 수 있어서, 담당 건이 여러 개면 "고객이
+                      승인했는지 / 수정 요청을 남겼는지" 확인하려고 편집기를 열어봐야 했다 */}
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">시안 검수:</span>
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${reviewStatusClass(invitation.review_status)}`}>
+                      {reviewStatusLabel(invitation.review_status)}
+                      {Number(invitation.review_round) > 0 && ` ${invitation.review_round}차`}
+                    </span>
+                  </div>
+
                   <div className="space-y-1.5 pt-1">
                     <span className="text-xs font-medium text-muted-foreground">하객용 모바일 청첩장 URL</span>
                     <div className="flex gap-2">
                       <Input
                         value={`${baseUrl}/w/${invitation.public_slug}`}
                         readOnly
+                        title={`${baseUrl}/w/${invitation.public_slug}`}
                         className="text-xs h-9 bg-muted"
                       />
                       <Button
@@ -939,9 +1057,10 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                         variant="outline"
                         size="icon"
                         className="h-9 w-9 shrink-0"
+                        aria-label="주소 복사"
                         onClick={() => handleCopy(`${baseUrl}/w/${invitation.public_slug}`, 'public')}
                       >
-                        {copiedLink === 'public' ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                        {isCopied('public') ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
                       </Button>
                     </div>
                   </div>
@@ -952,6 +1071,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                       <Input
                         value={`${baseUrl}/dashboard/${invitation.public_slug}`}
                         readOnly
+                        title={`${baseUrl}/dashboard/${invitation.public_slug}`}
                         className="text-xs h-9 bg-muted"
                       />
                       <Button
@@ -959,16 +1079,60 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                         variant="outline"
                         size="icon"
                         className="h-9 w-9 shrink-0"
+                        aria-label="주소 복사"
                         onClick={() => handleCopy(`${baseUrl}/dashboard/${invitation.public_slug}`, 'dashboard')}
                       >
-                        {copiedLink === 'dashboard' ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                        {isCopied('dashboard') ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
                       </Button>
                     </div>
                   </div>
 
-                  <div className="flex justify-between items-center text-xs bg-muted/50 p-2.5 rounded-lg">
-                    <span className="text-muted-foreground">대시보드 패스워드:</span>
-                    <span className="font-medium text-right">등록된 고객 연락처 뒷 4자리</span>
+                  {/* 예전엔 "등록된 고객 연락처 뒷 4자리"라는 고정 문구만 있었다. 고객이 직접
+                      비밀번호를 바꿀 수 있게 되면서 이 안내가 틀릴 수 있고, 신랑/신부 번호가
+                      다르거나 등록 시 오타가 있으면 "뒷 4자리"만으로는 고객이 어느 번호인지
+                      몰라 못 들어간다 — 실제 사용된 번호와 값을 그대로 보여준다. */}
+                  <div className="space-y-2 text-xs bg-muted/50 p-2.5 rounded-lg">
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="text-muted-foreground shrink-0">대시보드 패스워드:</span>
+                      {passwordInfo === null ? (
+                        <span className="text-muted-foreground">확인 중…</span>
+                      ) : passwordInfo.isDefault ? (
+                        <span className="font-medium text-right">기본값 (아래 번호 뒷 4자리)</span>
+                      ) : (
+                        <span className="font-medium text-right text-amber-700 dark:text-amber-400">
+                          고객이 변경함
+                        </span>
+                      )}
+                    </div>
+
+                    {passwordInfo && (
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        {passwordInfo.phoneMissing ? (
+                          <>
+                            등록된 연락처가 없어 초기화 시 <strong className="text-foreground">{passwordInfo.resetTo}</strong> 이(가) 됩니다.
+                            고객 연락처를 먼저 입력하시면 그 번호 기준으로 바뀝니다.
+                          </>
+                        ) : (
+                          <>
+                            초기화하면 <strong className="text-foreground">{passwordInfo.phone}</strong> 의 뒷 4자리
+                            (<strong className="text-foreground">{passwordInfo.resetTo}</strong>)가 됩니다.
+                            고객에게 안내할 때 이 번호를 함께 알려주세요.
+                          </>
+                        )}
+                      </p>
+                    )}
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full h-8 text-xs gap-1.5"
+                      onClick={handleResetDashboardPassword}
+                      disabled={isResettingPassword || passwordInfo === null}
+                    >
+                      {isResettingPassword ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                      비밀번호 초기화
+                    </Button>
                   </div>
 
                   <Button
@@ -1019,7 +1183,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                         </Field>
 
                         <Field>
-                          <FieldLabel>접속 숏링크 주소 (slug) *</FieldLabel>
+                          <FieldLabel>접속 링크 주소 *</FieldLabel>
                           <Input
                             value={publicSlug}
                             onChange={(e) => setPublicSlug(e.target.value)}

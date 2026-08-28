@@ -443,6 +443,52 @@ export interface Database {
         }
         Update: Partial<Database['public']['Tables']['audit_logs']['Insert']>
       }
+      rate_limit_attempts: {
+        Row: {
+          id: string
+          scope: string
+          identifier: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          scope: string
+          identifier: string
+          created_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['rate_limit_attempts']['Insert']>
+      }
+      rsvp_responses_history: {
+        Row: {
+          id: string
+          rsvp_response_id: string
+          invitation_id: string
+          guest_name: string | null
+          phone: string | null
+          side: string | null
+          is_attending: boolean | null
+          party_size: number | null
+          meal_required: boolean | null
+          meal_choice: string | null
+          shuttle_required: boolean | null
+          replaced_at: string
+        }
+        Insert: {
+          id?: string
+          rsvp_response_id: string
+          invitation_id: string
+          guest_name?: string | null
+          phone?: string | null
+          side?: string | null
+          is_attending?: boolean | null
+          party_size?: number | null
+          meal_required?: boolean | null
+          meal_choice?: string | null
+          shuttle_required?: boolean | null
+          replaced_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['rsvp_responses_history']['Insert']>
+      }
       invitation_blocks: {
         Row: {
           id: string

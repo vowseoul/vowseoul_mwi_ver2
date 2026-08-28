@@ -7,7 +7,8 @@ import { dashboardCookieName, verifyDashboardToken } from '@/lib/dashboard-sessi
 import { mergeInvitationRaw } from '@/lib/invitation-data'
 import { SELF_EDIT_SETTINGS_KEY, parseSelfEditSettings } from '@/lib/self-edit'
 import { GUEST_DATA_PURGE_DAYS } from '@/lib/data-retention'
-import { purgeGuestData } from '@/lib/guest-data-purge'
+import { purgeGuestData, describePurgeCounts } from '@/lib/guest-data-purge'
+import { logAuditEvent } from '@/lib/audit-log'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Calendar, ShieldAlert } from 'lucide-react'
@@ -37,6 +38,7 @@ export default async function CustomerDashboardPage({ params }: { params: Promis
     .from('invitations')
     .select('id, public_slug, customer_id, content_data')
     .eq('id', id)
+    .is('deleted_at', null)
     .maybeSingle()
 
   if (error) console.error('dashboard: invitation lookup failed:', error.message)
@@ -168,7 +170,17 @@ function daysSince(weddingDate: unknown): number | null {
  */
 async function purgeCollectedData(invitationId: string) {
   try {
-    await purgeGuestData(createSupabaseAdminClient(), invitationId)
+    const admin = createSupabaseAdminClient()
+    const counts = await purgeGuestData(admin, invitationId)
+    // 되돌릴 수 없는 삭제라 무엇을 지웠는지 흔적을 남긴다 — 이게 없으면 나중에
+    // "하객 명단이 왜 없어졌는지" 확인할 방법이 없다. 신랑신부가 대시보드에 들어온
+    // 것이 계기이긴 하지만 판단·실행은 정책에 따라 자동으로 이뤄지므로 system 으로 남긴다.
+    await logAuditEvent(admin, {
+      invitationId,
+      actorType: 'system',
+      action: 'guest_data.purged',
+      summary: `예식일로부터 ${DATA_PURGE_DAYS}일이 지나 하객 수집 정보를 파기했습니다 (대시보드 접속 시점 실행): ${describePurgeCounts(counts)}`,
+    })
   } catch (err) {
     console.error('purgeCollectedData failed:', err)
   }

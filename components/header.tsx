@@ -13,7 +13,7 @@ import { usePathname, useRouter } from 'next/navigation'
 
 import { Logo } from '@/components/logo'
 
-export function Header({ minimal = false }: { minimal?: boolean }) {
+export function Header({ minimal = false, hideTemplates = false }: { minimal?: boolean; hideTemplates?: boolean }) {
   const pathname = usePathname()
   const router = useRouter()
   const isHome = pathname === '/'
@@ -46,14 +46,16 @@ export function Header({ minimal = false }: { minimal?: boolean }) {
 
         {/* Desktop Navigation */}
         <nav className="hidden items-center gap-8 md:flex">
-          <Link 
-            href="/templates" 
-            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            템플릿 갤러리
-          </Link>
+          {!hideTemplates && (
+            <Link
+              href="/templates"
+              className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              템플릿 갤러리
+            </Link>
+          )}
 
-          <a 
+          <a
             href="https://mkt.shopping.naver.com/link/6a20207aa4d80c5688e963db" 
             target="_blank"
             rel="noopener noreferrer"
@@ -73,9 +75,11 @@ export function Header({ minimal = false }: { minimal?: boolean }) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem asChild>
-                <Link href="/templates">템플릿 갤러리</Link>
-              </DropdownMenuItem>
+              {!hideTemplates && (
+                <DropdownMenuItem asChild>
+                  <Link href="/templates">템플릿 갤러리</Link>
+                </DropdownMenuItem>
+              )}
 
               <DropdownMenuItem asChild>
                 <a 

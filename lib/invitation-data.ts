@@ -49,6 +49,54 @@ const MONTHS_EN = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP"
 const WEEKDAYS_KR = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"]
 
 /** 'YYYY-MM-DD' (+선택적 시간) 문자열을 로컬 자정 기준 Date 로 파싱 */
+/**
+ * 예식 시간 문자열을 "12PM" 형태로 정규화한다.
+ *
+ * 입력이 한 가지가 아니다. 폼의 시간 선택기를 쓰면 "12:00"/"13:00" 이 들어오지만,
+ * 예전 데이터와 직접 입력분에는 "낮 12시" 같은 한국어 표현이 그대로 남아 있다
+ * (실제 DB 에 둘 다 있다). 해석되면 영문 표기로 바꾸고, 아니면 원문을 그대로 둔다 —
+ * 못 읽었다고 시간을 지워버리면 고객이 적어 넣은 정보가 화면에서 사라진다.
+ *
+ * "00:00" 은 시간 없음으로 본다. 예식이 자정에 열리는 일은 없고, 시간을 고르지 않은
+ * 채 저장된 값이 이 형태로 남아 있다 — 그대로 두면 "12AM" 이라고 표시된다.
+ */
+export function formatWeddingTimeLabel(value: unknown): string {
+  const raw = typeof value === "string" ? value.trim() : ""
+  if (!raw) return ""
+
+  const hhmm = raw.match(/^(\d{1,2}):(\d{2})$/)
+  if (hhmm) {
+    const h = Number(hhmm[1])
+    const min = Number(hhmm[2])
+    if (h === 0 && min === 0) return ""
+    if (h > 23 || min > 59) return raw
+    return toAmPm(h, min)
+  }
+
+  // "낮 12시 30분", "오후 1시" 처럼 쓰는 경우. 오전/아침 만 AM 으로 보고 나머지 시간대
+  // 표현(낮·오후·저녁·밤)은 PM 으로 본다.
+  const kr = raw.match(/(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분)?/)
+  if (kr) {
+    let h = Number(kr[1])
+    const min = Number(kr[2] ?? 0)
+    if (h > 12 || min > 59) return raw
+    const isAm = /오전|아침/.test(raw)
+    const isPm = /오후|낮|저녁|밤/.test(raw)
+    if (!isAm && !isPm) return raw // 오전/오후가 없으면 12시간제인지 알 수 없다
+    if (isAm && h === 12) h = 0
+    else if (isPm && h !== 12) h += 12
+    return toAmPm(h, min)
+  }
+
+  return raw
+}
+
+function toAmPm(hour24: number, minute: number): string {
+  const suffix = hour24 < 12 ? "AM" : "PM"
+  const h12 = hour24 % 12 === 0 ? 12 : hour24 % 12
+  return minute === 0 ? `${h12}${suffix}` : `${h12}:${String(minute).padStart(2, "0")}${suffix}`
+}
+
 function parseWeddingDate(value: unknown): Date | null {
   if (typeof value !== "string" || !value) return null
   const datePart = value.slice(0, 10)
@@ -119,8 +167,35 @@ const PARENTS_DECEASED_OPTION_TO_KEY: Record<string, string> = {
   "신부측 어머니": "bride_mother_deceased",
 }
 
+/**
+ * 값이 base64 data URI 인가.
+ *
+ * 폼의 이미지 업로드는 이제 Storage 를 거쳐 URL 만 저장하지만(§app/form/[slug]/page.tsx),
+ * 그 수정 이전에 제출된 form_submissions 행에는 base64 원본이 그대로 남아 있다. 실제로
+ * 한 행이 20MB 짜리 kakao_share_img 를 들고 있었다. 초안 생성·폼 동기화는 폼 값을 그대로
+ * content_data 로 복사하고 og_meta 에도 같은 값을 넣으므로, 그 행 하나 때문에 40MB 짜리
+ * PATCH 가 만들어져 요청이 끝나지 않고 "Failed to fetch" 로 죽었다.
+ *
+ * 그래서 이 길목에서 걸러낸다. 두 함수가 초안 생성(useCreateInvitationMutation)과 폼
+ * 동기화(handleSyncFormToInvitation) 양쪽의 공통 경로라, 여기 한 곳만 막으면 둘 다 낫는다.
+ * 이미 쌓인 데이터는 scripts/migrate-base64-images.mjs 가 Storage 로 옮긴다.
+ */
+export function isDataUri(value: unknown): boolean {
+  return typeof value === "string" && value.startsWith("data:")
+}
+
 export function buildContentDataFromForm(rawFormData: RawInvitationData): RawInvitationData {
-  const out: RawInvitationData = { ...rawFormData }
+  const out: RawInvitationData = {}
+  for (const [k, v] of Object.entries(rawFormData)) {
+    // base64 원본은 content_data 로 옮기지 않는다 — 렌더링도 저장도 감당하지 못한다
+    if (isDataUri(v)) continue
+    if (Array.isArray(v)) {
+      const cleaned = v.filter((item) => !isDataUri(item))
+      out[k] = cleaned as RawInvitationData[string]
+      continue
+    }
+    out[k] = v
+  }
   for (const [contentKey, formKeys] of FORM_TO_CONTENT_KEY_ALIASES) {
     if (out[contentKey] != null && out[contentKey] !== "") continue
     for (const formKey of formKeys) {
@@ -154,7 +229,8 @@ export function deriveOgMetaFromForm(rawFormData: RawInvitationData): { title?: 
   const out: { title?: string; description?: string; image?: string } = {}
   if (typeof title === "string" && title) out.title = title
   if (typeof description === "string" && description) out.description = description
-  if (typeof image === "string" && image) out.image = image
+  // base64 원본은 og_meta 에도 넣지 않는다 — 카카오 공유 미리보기는 URL 만 읽는다
+  if (typeof image === "string" && image && !isDataUri(image)) out.image = image
   return Object.keys(out).length > 0 ? out : null
 }
 
@@ -263,6 +339,13 @@ export function buildFieldData(rawInput: RawInvitationData, now = new Date()): F
     data.wedding_date_en = `${MONTHS_EN[m]} ${day}, ${y}`
     data.wedding_date_display = `${y}. ${String(m + 1).padStart(2, "0")}. ${String(day).padStart(2, "0")}`
     data.wedding_weekday = WEEKDAYS_KR[d.getDay()]
+    // 날짜+시간을 한 줄로 쓰는 테마용(§scripts/themes/color-atelier). wedding_date_display 를
+    // 그대로 두는 이유: 이미 네 테마가 전부 그 키를 쓰고 있어, 거기에 시간을 붙이면
+    // 시간을 원치 않는 테마까지 한꺼번에 바뀐다.
+    const timeLabel = formatWeddingTimeLabel(raw.wedding_time)
+    data.wedding_datetime_display = timeLabel
+      ? `${data.wedding_date_display}. ${timeLabel}`
+      : data.wedding_date_display
     data.wedding_dday = computeDday(d, now)
   }
 
@@ -283,4 +366,54 @@ export function buildFieldData(rawInput: RawInvitationData, now = new Date()): F
   }
 
   return data
+}
+
+/* ===================================================================== *
+ * 식순(wedding_programs) 정규화 — 발행 렌더러(slot-registry.tsx)와 편집기
+ * (customize-client.tsx)가 각자 다른 규칙으로 이 값을 정규화하고 있었다.
+ * 편집기 쪽은 레거시 "12:00 | 입장" 문자열 형식을 아예 걸러내 편집기에 빈
+ * 목록으로 보였고, 그 상태로 저장하면 원본 데이터가 통째로 사라졌다 —
+ * 두 화면이 반드시 같은 함수를 써야 이 드리프트가 다시 생기지 않는다.
+ * ===================================================================== */
+export type SequenceEvent = { time: string; title: string }
+
+/** 다양한 입력 형태를 {time,title}[] 로 정규화 ("12:00 | 입장" 문자열, {title}/{desc}/{text} 객체 모두 지원) */
+export function normalizeSequence(value: unknown): SequenceEvent[] {
+  if (!Array.isArray(value)) return []
+  const out: SequenceEvent[] = []
+  for (const item of value) {
+    if (typeof item === "string") {
+      const [time, ...rest] = item.split("|")
+      if (rest.length) out.push({ time: time.trim(), title: rest.join("|").trim() })
+    } else if (item && typeof item === "object") {
+      const o = item as Record<string, unknown>
+      const time = typeof o.time === "string" ? o.time : ""
+      const title = typeof o.title === "string" ? o.title
+        : typeof o.desc === "string" ? o.desc
+        : typeof o.text === "string" ? o.text : ""
+      if (time || title) out.push({ time, title })
+    }
+  }
+  return out
+}
+
+/**
+ * 토글 필드 값 판정 ('예'/'아니오' 문자열 또는 boolean). 미설정(null/undefined)은
+ * '표시'로 간주한다. 폼 필드 카탈로그의 토글 선택지가 "아니오"/"아니요"로
+ * 통일돼 있지 않아 둘 다 받는다(예: show_direction 필드는 "아니요"로 등록돼 있음).
+ */
+export function isToggledOff(value: unknown): boolean {
+  if (value == null) return false
+  return value === false || value === "false" || value === "아니오" || value === "아니요" || value === "off"
+}
+
+/**
+ * 토글 필드가 "명시적으로 켜져 있는가" 판정 — isToggledOff 와 정반대로 미설정(null/undefined)을
+ * **꺼짐**으로 본다. 기존 필드들(연락처 표시, 식순 안내 등)은 "미설정이면 보여준다"가 맞지만,
+ * 나중에 추가된 옵트인 설정(BGM 자동재생, 갤러리 확대방지, 계좌 접기)은 기존 청첩장이 조용히
+ * 새 동작으로 바뀌면 안 되므로 미설정을 꺼짐으로 취급해야 한다.
+ */
+export function isToggledOn(value: unknown): boolean {
+  if (value == null) return false
+  return value === true || value === "true" || value === "예" || value === "on"
 }

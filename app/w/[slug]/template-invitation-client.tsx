@@ -5,6 +5,8 @@ import { InvitationFrame, type BlockOverrideMap, type FontFace, type SectionImag
 import { buildSlots } from "@/components/invitation/slot-registry"
 import { buildFieldData, normalizeLegacyKeys, type RawInvitationData } from "@/lib/invitation-data"
 import { toThemeTemplate, type ThemeRow } from "@/lib/theme-template"
+import type { ScrollMotionSettings } from "@/lib/scroll-motion"
+import type { IntroSettings } from "@/lib/intro-settings"
 
 /**
  * 발행용 템플릿 렌더러 (render_engine === 'template').
@@ -21,8 +23,13 @@ export default function TemplateInvitationClient({
   fontFaces = [],
   disabledSlots = [],
   blockOverrides = {},
+  blockTint = "none",
+  blockTintOpacity,
+  blockOrder,
   hiddenBlocks = [],
   sectionImages = [],
+  scrollMotion,
+  intro,
 }: {
   themeRow: ThemeRow
   raw: RawInvitationData
@@ -33,10 +40,19 @@ export default function TemplateInvitationClient({
   disabledSlots?: string[]
   /** 블럭별 여백/타이틀 오버라이드 (customization_overrides.blocks) */
   blockOverrides?: BlockOverrideMap
+  /** 블럭별 배경 농담 패턴 (customization_overrides.blockTint) */
+  blockTint?: string
+  blockTintOpacity?: Record<string, number>
+  /** 블럭 노출 순서 (invitations.block_order). 없으면 테마 기본 순서 */
+  blockOrder?: string[]
   /** disabledSlots 중 섹션 전체를 감춰야 하는 블럭 키 (getHiddenBlocks) */
   hiddenBlocks?: string[]
   /** 섹션 사이 삽입 이미지 (customization_overrides.sectionImages) */
   sectionImages?: SectionImage[]
+  /** 스크롤 시 섹션 진입 연출 (customization_overrides.scrollMotion) */
+  scrollMotion?: ScrollMotionSettings
+  /** 진입 시 오프닝 연출 설정 (customization_overrides.intro) */
+  intro?: IntroSettings
 }) {
   const template = toThemeTemplate(themeRow)
   // 실제 청첩장은 화면 전체를 채운다 (뷰포트 기준)
@@ -67,11 +83,17 @@ export default function TemplateInvitationClient({
         slots={slots}
         fontFaces={fontFaces}
         blockOverrides={blockOverrides}
+        blockOrder={blockOrder}
         hiddenBlocks={hiddenBlocks}
         sectionImages={sectionImages}
+        scrollMotion={scrollMotion}
+        intro={intro}
         width={size.w}
         height={size.h}
         preventZoom
+        fullBleed
+        blockTint={blockTint}
+        blockTintOpacity={blockTintOpacity as never}
       />
     </div>
   )

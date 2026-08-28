@@ -4,15 +4,18 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { BUCKET_NAME } from '@/lib/storage'
 import { Logo } from '@/components/logo'
 import { cn } from '@/lib/utils'
+
+const DEFAULT_BG_URL = `https://buswlceztsbxoivymvhw.supabase.co/storage/v1/object/public/${BUCKET_NAME}/main-images/main1.png`
 
 export function HeroSection() {
   const [bgImageUrl, setBgImageUrl] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('vow_seoul_hero_bg') || 'https://buswlceztsbxoivymvhw.supabase.co/storage/v1/object/public/vow-seoul-storage/main-images/main1.png'
+      return localStorage.getItem('vow_seoul_hero_bg') || DEFAULT_BG_URL
     }
-    return 'https://buswlceztsbxoivymvhw.supabase.co/storage/v1/object/public/vow-seoul-storage/main-images/main1.png'
+    return DEFAULT_BG_URL
   })
   
   const [heroContent, setHeroContent] = useState(() => {

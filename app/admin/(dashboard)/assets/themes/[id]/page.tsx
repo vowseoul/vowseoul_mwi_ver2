@@ -1,8 +1,11 @@
 'use client'
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import { SaveButton } from '@/components/ui/save-button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -10,7 +13,7 @@ import { Separator } from '@/components/ui/separator'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
-import { ChevronLeft, Save, Upload, Download, Loader2, Link as LinkIcon, Music, Heart, Copy, Phone, Calendar as CalendarIcon, Share2, Pencil } from 'lucide-react'
+import { ChevronLeft, Upload, Download, Loader2, Link as LinkIcon, Music, Heart, Copy, Phone, Calendar as CalendarIcon, Share2, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase, logSupabaseError } from '@/lib/supabase'
 import { resolveThemeSwatch, buildThemeTokens } from '@/lib/theme-template'
@@ -27,13 +30,13 @@ import { buildFieldData } from '@/lib/invitation-data'
 import { SAMPLE_RAW } from '@/lib/sample-invitation'
 
 export default function ThemeEditorPage() {
+  useDocumentTitle("테마 상세")
   const params = useParams()
   const router = useRouter()
   const themeId = params.id as string
   const isNew = themeId === 'new'
 
   const [isLoading, setIsLoading] = useState(!isNew)
-  const [isSaving, setIsSaving] = useState(false)
   const [isUploadingTheme, setIsUploadingTheme] = useState(false)
   const [bgms, setBgms] = useState<any[]>([])
   const themeImageInputRef = useRef<HTMLInputElement>(null)
@@ -245,10 +248,8 @@ export default function ThemeEditorPage() {
     setIsLoading(false)
   }
 
-  const handleSave = async () => {
-    if (!theme.name) return toast.error('테마명을 입력해주세요.')
-
-    setIsSaving(true)
+  const handleSave = async (): Promise<boolean> => {
+    if (!theme.name) { toast.error('테마명을 입력해주세요.'); return false }
 
     // Sync default color set with the current editor inputs
     const updatedColorSets = colorSets.map(set => {
@@ -325,17 +326,17 @@ export default function ThemeEditorPage() {
     }
 
     const { error } = await supabase.from('themes').upsert(payload)
-    setIsSaving(false)
 
     if (error) {
       toast.error('테마 저장에 실패했습니다.')
       console.error(error)
-    } else {
-      toast.success(isNew ? '테마가 생성되었습니다.' : '테마가 수정되었습니다.')
-      if (isNew) {
-        router.push(`/admin/assets/themes/${payload.id}`)
-      }
+      return false
     }
+    toast.success(isNew ? '테마가 생성되었습니다.' : '테마가 수정되었습니다.')
+    if (isNew) {
+      router.push(`/admin/assets/themes/${payload.id}`)
+    }
+    return true
   }
 
   const handleThemeImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -602,7 +603,7 @@ export default function ThemeEditorPage() {
       <div className="flex-1 flex flex-col overflow-hidden bg-background border rounded-lg shadow-sm">
         <div className="flex items-center justify-between p-4 border-b">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={() => router.push('/admin/assets')}>
+            <Button variant="ghost" size="icon" onClick={() => router.push('/admin/assets')} aria-label="뒤로가기">
               <ChevronLeft className="w-5 h-5" />
             </Button>
             <h2 className="text-lg font-semibold">{isNew ? '새 테마 등록' : '테마 상세 설정'}</h2>
@@ -617,10 +618,7 @@ export default function ThemeEditorPage() {
               <Download className="w-3.5 h-3.5 mr-1" />
               토큰 다운로드
             </Button>
-            <Button onClick={handleSave} disabled={isSaving}>
-              {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-              저장
-            </Button>
+            <SaveButton onSave={handleSave} />
           </div>
         </div>
         
@@ -1077,10 +1075,10 @@ export default function ThemeEditorPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-[10px]" onClick={() => handleMoveUp(index)} disabled={index === 0}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-[10px]" onClick={() => handleMoveUp(index)} disabled={index === 0} aria-label="위로 이동">
                             ▲
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-[10px]" onClick={() => handleMoveDown(index)} disabled={index === theme.sectionOrder.length - 1}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-[10px]" onClick={() => handleMoveDown(index)} disabled={index === theme.sectionOrder.length - 1} aria-label="아래로 이동">
                             ▼
                           </Button>
                         </div>

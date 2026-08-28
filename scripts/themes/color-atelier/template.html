@@ -19,7 +19,7 @@
     <!-- Hero Info Details -->
     <div class="ca-hero__info">
       <p class="ca-hero__venue" data-field="venue_name">VOW SEOUL GRAND HALL</p>
-      <p class="ca-hero__datetime" data-field="wedding_date_display">2026. 05. 07 11:00 AM</p>
+      <p class="ca-hero__datetime" data-field="wedding_datetime_display">2026. 05. 07. 11AM</p>
     </div>
 
     <!-- Scroll Arrow icon -->
@@ -32,11 +32,12 @@
 
   <!-- 2. GREETING SECTION -->
   <section class="ca-section ca-greeting" data-block="greeting" data-alt="1">
-    <!-- Heart Icon Decoration -->
-    <div class="ca-greeting__icon-wrap">
-      <svg class="ca-greeting__icon" viewBox="0 0 24 24" fill="currentColor">
+    <!-- Greeting Icon (하트 기본, 관리자 설정으로 직접 업로드 이미지로 교체 가능) -->
+    <div class="ca-greeting__icon-wrap" data-greeting-icon>
+      <svg class="ca-greeting__icon" viewBox="0 0 24 24" fill="currentColor" data-greeting-icon-heart>
         <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
       </svg>
+      <div class="ca-greeting__icon-custom" data-greeting-icon-custom style="display:none"></div>
     </div>
 
     <div class="ca-greeting__message" data-field="greeting_message">
@@ -80,23 +81,24 @@
     <h4 class="ca-section__header-sub" data-block-label>LOCATION</h4>
     <h3 class="ca-section__header-title" data-block-title>식장 위치</h3>
 
-    <div class="ca-location-card">
+    <div class="ca-location-card" data-copy-field="venue_address">
       <h3 class="ca-location-card__name" data-field="venue_name">VOW SEOUL GRAND HALL</h3>
       <p class="ca-location-card__address" data-field="venue_address">서울 강남구 학동로 1212</p>
+      <p class="ca-location-card__hint" data-copy-feedback>터치하여 주소 복사</p>
     </div>
 
     <div data-slot="map"></div>
 
-    <div class="ca-location__guides">
-      <div class="ca-location__guide">
+    <div class="ca-location__guides" data-field-when-any="traffic_info,parking_info,shuttle_info">
+      <div class="ca-location__guide" data-field-when="traffic_info">
         <h4 class="ca-location__guide-title">교통 안내</h4>
         <p class="ca-location__guide-desc" data-field="traffic_info">지하철 7호선 학동역 1번 출구 도보 5분</p>
       </div>
-      <div class="ca-location__guide">
+      <div class="ca-location__guide" data-field-when="parking_info">
         <h4 class="ca-location__guide-title">주차 안내</h4>
         <p class="ca-location__guide-desc" data-field="parking_info">식장 내부 주차장 2시간 무료 주차 가능</p>
       </div>
-      <div class="ca-location__guide">
+      <div class="ca-location__guide" data-field-when="shuttle_info">
         <h4 class="ca-location__guide-title">셔틀버스 안내</h4>
         <p class="ca-location__guide-desc" data-field="shuttle_info">운행 정보가 등록되면 이곳에 표시됩니다</p>
       </div>
@@ -124,7 +126,14 @@
     <div data-slot="rsvp"></div>
   </section>
 
-  <!-- 8-1. SHARE (여백은 이 섹션 전용 클래스로 고정 — 인라인 style 금지, PLAN_DESIGN_CONTROLS.md §3.3) -->
+  <!-- 8-1. GUESTBOOK SECTION -->
+  <section class="ca-section ca-guestbook-section" data-block="guestbook" data-alt="1">
+    <h4 class="ca-section__header-sub" data-block-label>GUESTBOOK</h4>
+    <h3 class="ca-section__header-title" data-block-title>방명록</h3>
+    <div data-slot="guestbook"></div>
+  </section>
+
+  <!-- 8-2. SHARE — 항상 청첩장 맨 아래에 위치한다(고정 블럭, 순서 변경 대상 아님) -->
   <section class="ca-section ca-share-section" data-block="share" data-alt="1">
     <div data-slot="share"></div>
   </section>

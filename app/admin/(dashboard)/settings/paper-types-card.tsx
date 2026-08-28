@@ -4,7 +4,8 @@ import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { GripVertical, Loader2, Plus, Save, Trash2, FileText } from "lucide-react"
+import { GripVertical, Loader2, Plus, Trash2, FileText } from "lucide-react"
+import { SaveButton } from "@/components/ui/save-button"
 import { toast } from "sonner"
 import {
   usePaperTypesQuery,
@@ -46,24 +47,26 @@ export default function PaperTypesCard() {
     setTypes(next)
   }
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<boolean> => {
     const cleaned = types.map((t) => t.trim()).filter(Boolean)
     if (cleaned.length === 0) {
       toast.error("지류 청첩장은 최소 1개 이상이어야 합니다.")
-      return
+      return false
     }
     if (new Set(cleaned).size !== cleaned.length) {
       toast.error("같은 이름이 중복됩니다.")
-      return
+      return false
     }
 
     try {
       await updateMutation.mutateAsync(cleaned)
       setDraft(null)
       toast.success("지류 청첩장 목록을 저장했습니다.")
+      return true
     } catch (err) {
       console.error(err)
       toast.error(err instanceof Error ? err.message : "저장에 실패했습니다.")
+      return false
     }
   }
 
@@ -147,14 +150,7 @@ export default function PaperTypesCard() {
         </p>
 
         <div className="flex justify-end">
-          <Button onClick={handleSave} disabled={!isDirty || updateMutation.isPending}>
-            {updateMutation.isPending ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <Save className="w-4 h-4 mr-2" />
-            )}
-            {updateMutation.isPending ? "저장 중..." : "저장"}
-          </Button>
+          <SaveButton onSave={handleSave} disabled={!isDirty} />
         </div>
       </CardContent>
     </Card>

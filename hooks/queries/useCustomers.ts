@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { FORM_INSTANCE_COLUMNS } from '@/hooks/queries/useForms'
 
 export interface Customer {
   id: string
@@ -8,12 +9,19 @@ export interface Customer {
   groom_name: string
   bride_name: string
   phone: string | null
-  wedding_date: string
+  /** 주문 접수 시점엔 모르는 경우가 많아 비어 있을 수 있다 — 고객이 폼에 입력하면 채워진다 */
+  wedding_date: string | null
   venue_name: string
   venue_address: string
   venue_coordinates: any
   transportation_info: string | null
   status: 'registered' | 'form_sent' | 'form_completed' | 'draft' | 'published' | 'expired'
+  /**
+   * 내부 테스트용 고객 표시. 직접 켜는 값이 아니라 주문의 제작 진행 상태를 '샘플/테스트'로
+   * 두면 DB 트리거가 채워준다(§supabase/migrations/20260816000000_sample_customer_flag.sql).
+   * 고객 목록·통계가 orders 를 조인하지 않아서 여기에 비정규화해 둔 사본이다.
+   */
+  is_sample: boolean
   memo: string | null
   deleted_at: string | null
   created_at: string
@@ -26,6 +34,8 @@ export interface CustomerFilters {
   assignedTo?: string
   startDate?: string
   endDate?: string
+  /** 샘플/테스트 고객 취급. 기본은 'exclude' — 목록·집계 어디서도 섞이면 안 된다 */
+  sampleMode?: 'exclude' | 'only'
 }
 
 // 1. Fetch all customers (excluding soft-deleted ones)
@@ -37,6 +47,10 @@ export function useCustomersQuery(filters: CustomerFilters = {}, page = 1, pageS
         .from('customers')
         .select('*', { count: 'exact' })
         .is('deleted_at', null)
+
+      // 샘플/테스트 고객은 기본 뷰에서 뺀다. count 도 같은 쿼리에서 나오므로
+      // 상단 "총 고객 수" 카드가 자동으로 함께 보정된다.
+      query = query.eq('is_sample', filters.sampleMode === 'only')
 
       // Apply search (on groom_name, bride_name, or phone)
       if (filters.search) {
@@ -103,7 +117,8 @@ export function useCreateCustomerMutation() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (newCustomer: Omit<Customer, 'id' | 'created_at' | 'updated_at' | 'deleted_at'>) => {
+    // is_sample 은 주문 상태에서 트리거가 채우는 값이라 생성 시 받지 않는다
+    mutationFn: async (newCustomer: Omit<Customer, 'id' | 'created_at' | 'updated_at' | 'deleted_at' | 'created_by' | 'is_sample'>) => {
       // Get current logged-in user to map created_by
       const { data: { user } } = await supabase.auth.getUser()
       const created_by = user?.id || null
@@ -149,6 +164,49 @@ export function useUpdateCustomerMutation() {
 }
 
 // 5. Delete customer mutation (soft delete)
+/**
+ * 삭제 대기(소프트 삭제) 고객 목록.
+ *
+ * 기본 목록은 deleted_at 이 없는 것만 보여주므로, 지운 고객은 화면 어디에도 나타나지
+ * 않는다 — 되돌릴 수도, 완전히 지울 수도 없는 상태로 계속 쌓였다. 고객 관리 화면
+ * 아래에서 이 목록을 열어 골라 지운다.
+ */
+export function useDeletedCustomersQuery(enabled: boolean) {
+  return useQuery({
+    queryKey: ['customers', 'deleted'],
+    enabled,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .not('deleted_at', 'is', null)
+        .order('deleted_at', { ascending: true })
+      if (error) throw error
+      return data as Customer[]
+    },
+  })
+}
+
+/** 완전 삭제 — 되돌릴 수 없다. 여러 표를 가로지르므로 서버 라우트가 처리한다 */
+export function usePurgeCustomersMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (customerIds: string[]) => {
+      const res = await fetch('/api/admin/purge-customer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerIds }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || '완전 삭제에 실패했습니다.')
+      return json as { purged: number }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customers'] })
+    },
+  })
+}
+
 export function useDeleteCustomerMutation() {
   const queryClient = useQueryClient()
 
@@ -195,7 +253,7 @@ export function useCustomerFormInstanceQuery(customerId: string) {
       const { data, error } = await supabase
         .from('form_instances')
         .select(`
-          *,
+          ${FORM_INSTANCE_COLUMNS},
           form_submissions(updated_at, is_complete)
         `)
         .eq('customer_id', customerId)

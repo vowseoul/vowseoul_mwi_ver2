@@ -6,10 +6,37 @@ import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
+/**
+ * value 를 서버에서 받아온 뒤(useEffect 등) 뒤늦게 넣는 제어형 Select 가 스스로 값을
+ * 지워버리는 문제를 막는다.
+ *
+ * Radix 는 폼 호환용으로 화면에 안 보이는 native <select>(BubbleSelect)를 함께 그리는데,
+ * <option> 들은 SelectContent 안에 있고 그건 Portal 이라 한 번도 열지 않으면 마운트되지
+ * 않는다. 이 상태에서 value 가 'registered' → 'published' 처럼 바뀌면 native select 는
+ * 그 값을 가진 option 이 없어 빈 값으로 떨어지며 change 를 발화하고, Radix 가 그걸
+ * onValueChange('') 로 되돌려보내 부모 state 를 빈 문자열로 덮어쓴다.
+ *
+ * 실제 증상: 고객 상세의 "진행 단계"가 빈칸으로 보이고, 저장 시 status:"" 가 전송돼
+ * customers_status_check 제약에 걸려 저장이 항상 실패했다.
+ *
+ * Radix 는 SelectItem 의 value 로 빈 문자열을 금지하므로("must have a value prop that is
+ * not an empty string"), 사용자가 고른 값이 '' 인 경우는 존재하지 않는다 — 따라서 ''는
+ * 무조건 이 유령 이벤트로 보고 무시해도 안전하다.
+ */
 function Select({
+  onValueChange,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Root>) {
-  return <SelectPrimitive.Root data-slot="select" {...props} />
+  return (
+    <SelectPrimitive.Root
+      data-slot="select"
+      onValueChange={(value) => {
+        if (value === '') return
+        onValueChange?.(value)
+      }}
+      {...props}
+    />
+  )
 }
 
 function SelectGroup({

@@ -9,8 +9,9 @@ import { readFileSync } from 'fs'
 
 const env = readFileSync('.env.local', 'utf8')
 const url = env.match(/NEXT_PUBLIC_SUPABASE_URL=(.+)/)[1].trim()
-const anon = env.match(/NEXT_PUBLIC_SUPABASE_ANON_KEY=(.+)/)[1].trim()
-const sb = createClient(url, anon)
+// themes 쓰기는 Phase 1 RLS 강화 이후 is_admin() 전용이라 anon 키로는 막힌다.
+const serviceKey = env.match(/SUPABASE_SERVICE_ROLE_KEY=(.+)/)[1].trim()
+const sb = createClient(url, serviceKey)
 
 const THEME_ID = 'a0000000-0000-4000-8000-000000000001'
 const mode = process.argv[2] || 'green'

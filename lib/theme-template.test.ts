@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import {
   buildInvitationTokens,
   buildThemeTokens,
+  extractBlockOrder,
+  extractBlockOverrides,
   extractOverrideTokens,
   isTemplateTheme,
   resolveThemeSwatch,
@@ -136,5 +138,62 @@ describe('resolveThemeSwatch', () => {
   it('아무 값도 없으면 하드코딩된 기본값을 반환한다', () => {
     expect(resolveThemeSwatch(null)).toEqual({ bg: '#FFF8F0', text: '#3A3A3A', primary: '#E8A87C' })
     expect(resolveThemeSwatch(undefined)).toEqual({ bg: '#FFF8F0', text: '#3A3A3A', primary: '#E8A87C' })
+  })
+})
+
+describe('extractBlockOrder', () => {
+  it('배열이 아니면 undefined를 반환한다', () => {
+    expect(extractBlockOrder(null)).toBeUndefined()
+    expect(extractBlockOrder('hero,greeting')).toBeUndefined()
+  })
+
+  it('알려진 블럭 키만 순서대로 남긴다', () => {
+    expect(extractBlockOrder(['hero', 'greeting', 'gallery'])).toEqual(['hero', 'greeting', 'gallery'])
+  })
+
+  it('알려지지 않은 키(옛 스키마 잔재 등)는 걸러낸다', () => {
+    expect(extractBlockOrder(['hero', 'legacy_block', 'greeting'])).toEqual(['hero', 'greeting'])
+  })
+
+  it('문자열이 아닌 항목은 걸러낸다', () => {
+    expect(extractBlockOrder(['hero', 42, null, 'greeting'])).toEqual(['hero', 'greeting'])
+  })
+
+  it('중복된 키는 처음 등장한 위치만 남긴다', () => {
+    expect(extractBlockOrder(['hero', 'greeting', 'hero'])).toEqual(['hero', 'greeting'])
+  })
+
+  it('걸러내고 남는 게 없으면 undefined를 반환한다', () => {
+    expect(extractBlockOrder(['legacy_block', 123])).toBeUndefined()
+    expect(extractBlockOrder([])).toBeUndefined()
+  })
+})
+
+describe('extractBlockOverrides', () => {
+  it('overrides가 객체가 아니거나 blocks가 없으면 빈 객체를 반환한다', () => {
+    expect(extractBlockOverrides(null)).toEqual({})
+    expect(extractBlockOverrides('not an object')).toEqual({})
+    expect(extractBlockOverrides({})).toEqual({})
+    expect(extractBlockOverrides({ blocks: 'not an object' })).toEqual({})
+  })
+
+  it('알려진 필드를 타입 검증 후 통과시킨다', () => {
+    const out = extractBlockOverrides({ blocks: { rsvp: { py: 40, title: '참석 여부', mealEnabled: false } } })
+    expect(out).toEqual({ rsvp: { py: 40, title: '참석 여부', mealEnabled: false } })
+  })
+
+  it('타입이 스키마와 맞지 않는 필드는 조용히 버린다 (해당 블럭 자체는 유지)', () => {
+    const out = extractBlockOverrides({ blocks: { calendar: { py: 'not a number', ddayEnabled: true } } })
+    expect(out).toEqual({ calendar: { ddayEnabled: true } })
+  })
+
+  it('모든 필드가 유효하지 않은 블럭 항목은 결과에서 제외한다', () => {
+    const out = extractBlockOverrides({ blocks: { rsvp: { py: 'invalid' } } })
+    expect(out).toEqual({})
+  })
+
+  it('스키마에 없는 임의 필드는 무시한다', () => {
+    const out = extractBlockOverrides({ blocks: { rsvp: { py: 20, unknownField: 'x' } } })
+    expect(out).toEqual({ rsvp: { py: 20 } })
   })
 })

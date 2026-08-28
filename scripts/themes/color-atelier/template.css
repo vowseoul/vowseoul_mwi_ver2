@@ -50,14 +50,18 @@
 .ca-section__header-sub {
   font-family: var(--font-en, 'Playfair Display', serif);
   font-size: var(--text-label, 16px);
-  font-weight: 300;
+  font-weight: var(--font-en-weight, 300);
+
+  font-style: var(--font-en-style, normal);
   letter-spacing: 0.2em;
   opacity: 0.7;
 }
 
 .ca-section__header-title {
   font-size: var(--text-title, 18px);
-  font-weight: 500;
+  font-weight: var(--font-kr-weight, 500);
+
+  font-style: var(--font-kr-style, normal);
   margin-top: 4px;
   margin-bottom: 32px;
   letter-spacing: 0.05em;
@@ -78,7 +82,9 @@
   font-size: var(--text-display, 24px);
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  font-weight: 300;
+  font-weight: var(--font-en-weight, 300);
+
+  font-style: var(--font-en-style, normal);
 }
 
 .ca-hero__img-wrap {
@@ -98,7 +104,9 @@
 
 .ca-hero__names {
   font-size: var(--text-display, 22px);
-  font-weight: 300;
+  font-weight: var(--font-kr-weight, 300);
+
+  font-style: var(--font-kr-style, normal);
   letter-spacing: 0.1em;
   display: flex;
   align-items: center;
@@ -107,7 +115,7 @@
 }
 
 .ca-hero__amp {
-  font-size: 16px;
+  font-size: var(--text-card-title, 16px);
   opacity: 0.6;
   font-style: italic;
   font-family: serif;
@@ -127,7 +135,9 @@
 
 .ca-hero__venue {
   text-transform: uppercase;
-  font-weight: 500;
+  font-weight: var(--font-kr-weight, 500);
+
+  font-style: var(--font-kr-style, normal);
   margin-bottom: 2px;
 }
 
@@ -154,12 +164,22 @@
 
 .ca-greeting__icon-wrap {
   margin-bottom: 24px;
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .ca-greeting__icon {
-  width: 24px;
-  height: 24px;
+  width: 100%;
+  height: 100%;
   color: var(--accent, #C4A574);
+  opacity: 0.7;
+}
+
+.ca-greeting__icon-custom {
+  width: 100%;
+  height: 100%;
   opacity: 0.7;
 }
 
@@ -167,7 +187,9 @@
   font-size: var(--text-body, 15px);
   line-height: 2.0;
   letter-spacing: 0.05em;
-  font-weight: 300;
+  font-weight: var(--font-kr-weight, 300);
+
+  font-style: var(--font-kr-style, normal);
   max-width: 320px;
   margin: 0 auto;
   white-space: pre-line;
@@ -185,11 +207,15 @@
   border-radius: var(--radius, 4px);
 }
 
-/* share 섹션은 위 여백을 없애 RSVP 섹션과 바로 이어지도록 한다.
-   원래 template.html의 인라인 style="padding-top:0"이었던 것을 클래스로 옮김
-   (인라인 스타일은 블럭 여백 오버라이드 주입 CSS를 항상 이겨버리기 때문 — data-block 계약 문서 §2.3) */
-.ca-share-section {
-  padding-top: 0;
+/* 좌우로 꽉 채우기 — 섹션 좌우 패딩만큼 음수 마진으로 밀어내 화면 끝까지 채운다 */
+.ca-greeting__image.is-fill {
+  max-width: none;
+  margin-left: calc(-1 * var(--section-px, 24px));
+  margin-right: calc(-1 * var(--section-px, 24px));
+  width: calc(100% + var(--section-px, 24px) * 2);
+}
+.ca-greeting__image.is-fill img {
+  border-radius: 0;
 }
 
 /* 4. ORDER TABLE */
@@ -214,16 +240,20 @@
 .ca-order-table__time {
   width: 64px;
   text-align: left;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--text-body, 14px);
+  font-weight: var(--font-kr-weight, 600);
+
+  font-style: var(--font-kr-style, normal);
   opacity: 0.85;
 }
 
 .ca-order-table__desc {
   flex: 1;
   text-align: left;
-  font-size: 14px;
-  font-weight: 300;
+  font-size: var(--text-body, 14px);
+  font-weight: var(--font-kr-weight, 300);
+
+  font-style: var(--font-kr-style, normal);
   opacity: 0.95;
   padding-left: 16px;
   border-left: 1px solid color-mix(in srgb, currentColor 15%, transparent);
@@ -248,14 +278,16 @@
 }
 
 .ca-calendar-card__month {
-  font-size: 24px;
-  font-weight: 600;
+  font-size: var(--text-number, 24px);
+  font-weight: var(--font-en-weight, 600);
+
+  font-style: var(--font-en-style, normal);
   font-family: var(--font-en, 'Playfair Display', serif);
   letter-spacing: 0.1em;
 }
 
 .ca-calendar-card__year {
-  font-size: 12px;
+  font-size: var(--text-caption, 12px);
   opacity: 0.4;
   font-family: monospace;
 }
@@ -265,13 +297,15 @@
   grid-template-columns: repeat(7, 1fr);
   row-gap: 12px;
   text-align: center;
-  font-size: 12px;
+  font-size: var(--text-caption, 12px);
 }
 
 .ca-calendar-grid__day-name {
   padding: 4px 0;
   opacity: 0.45;
-  font-weight: 600;
+  font-weight: var(--font-kr-weight, 600);
+
+  font-style: var(--font-kr-style, normal);
 }
 
 .ca-calendar-grid__active {
@@ -284,7 +318,9 @@
   height: 28px;
   margin: 0 auto;
   border-radius: 50%;
-  font-weight: 700;
+  font-weight: var(--font-kr-weight, 700);
+
+  font-style: var(--font-kr-style, normal);
   color: var(--accent, #C4A574);
   background-color: var(--bg, #FAF9F7);
 }
@@ -296,7 +332,7 @@
 }
 
 .ca-dday-title {
-  font-size: 11px;
+  font-size: var(--text-micro, 11px);
   text-transform: uppercase;
   letter-spacing: 0.15em;
   opacity: 0.5;
@@ -316,15 +352,17 @@
 }
 
 .ca-dday-label {
-  font-size: 9px;
+  font-size: var(--text-micro, 9px);
   text-transform: uppercase;
   letter-spacing: 0.1em;
   opacity: 0.5;
 }
 
 .ca-dday-value {
-  font-size: 28px;
-  font-weight: 300;
+  font-size: var(--text-number, 28px);
+  font-weight: var(--font-en-weight, 300);
+
+  font-style: var(--font-en-style, normal);
   margin-top: 2px;
   font-family: monospace;
 }
@@ -337,17 +375,27 @@
   border: 1px solid color-mix(in srgb, currentColor 10%, transparent);
   margin-bottom: 24px;
   border-radius: var(--radius, 4px);
+  cursor: pointer;
 }
 
 .ca-location-card__name {
-  font-weight: 600;
-  font-size: 18px;
+  font-weight: var(--font-kr-weight, 600);
+
+  font-style: var(--font-kr-style, normal);
+  font-size: var(--text-card-title, 18px);
   letter-spacing: 0.05em;
   color: currentColor;
 }
 
+.ca-location-card__hint {
+  font-size: var(--text-micro, 9px);
+  margin-top: 6px;
+  text-align: center;
+  opacity: 0.55;
+}
+
 .ca-location-card__address {
-  font-size: 14px;
+  font-size: var(--text-body, 14px);
   margin-top: 8px;
   white-space: pre-line;
   /* --accent 를 직접 참조하면 vs-alt-a(배경이 --accent)일 때 글자색과 배경색이 같아진다 —
@@ -367,8 +415,10 @@
 }
 
 .ca-location__guide-title {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--text-card-title, 13px);
+  font-weight: var(--font-kr-weight, 600);
+
+  font-style: var(--font-kr-style, normal);
   color: currentColor;
   margin-bottom: 4px;
 }

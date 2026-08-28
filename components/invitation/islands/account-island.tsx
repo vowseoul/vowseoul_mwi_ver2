@@ -1,0 +1,281 @@
+"use client"
+
+import { useEffect, useRef, useState } from "react"
+import { Copy, Check, MessageCircle, Send, ChevronDown } from "lucide-react"
+import { useCopyFeedback } from "@/lib/use-copy-feedback"
+import { isToggledOn } from "@/lib/invitation-data"
+import { soft, iconBtnStyle, type SlotProps } from "./shared"
+import { composeAccountText, isAccountFilled, parseAccountList } from "@/lib/account-fields"
+import { ACCOUNT_CARD_BG_DEFAULT } from "@/lib/theme-template"
+
+/* ----------------------------- Account ----------------------------- */
+function composeAccount(bank?: string, number?: string, holder?: string): string {
+  return [bank, number, holder].filter(Boolean).join(" ")
+}
+/* 계좌번호만 복사해두고 카카오페이/토스 앱을 열어준다 — 은행마다 다른 공식 송금 API 없이도
+  // 이 딥링크들로 앱이 열리므로, 사용자가 그 안에서 붙여넣기만 하면 된다. 계좌번호+금액을
+  // 앱에 바로 채워 넣는 방식(예: supertoss://send?bank=..&accountNo=..)은 은행명을 각 앱의
+  // 비공식 은행 코드로 정확히 매핑해야 해서 은행별로 조용히 틀린 화면이 열릴 위험이 있다 —
+  // "복사 + 앱 열기"가 덜 매끄럽지만 모든 은행에서 항상 정확하게 동작한다.
+   데스크톱처럼 해당 앱이 없는 환경에서는 딥링크가 그냥 무시되고 복사만 남는다(항상 안전한 폴백). */
+function openPayApp(app: "kakao" | "toss", accountNumber: string) {
+  navigator.clipboard?.writeText(accountNumber)
+  window.location.href = app === "kakao" ? "kakaotalk://kakaopay/home" : "supertoss://send"
+}
+
+const digitsOnly = (value: string) => value.replace(/[^0-9]/g, "")
+
+function AccountRow({ label, value }: { label: string; value: string }) {
+  const { isCopied, copy: copyText } = useCopyFeedback()
+  const copied = isCopied()
+  const numericValue = digitsOnly(value)
+  const copy = () => copyText(numericValue)
+  const sendViaKakaoPay = () => openPayApp("kakao", numericValue)
+  const sendViaToss = () => openPayApp("toss", numericValue)
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${soft(25)}`, gap: 8 }}>
+      <div style={{ textAlign: "left", minWidth: 0 }}>
+        <div style={{ fontSize: 11, opacity: 0.6 }}>{label}</div>
+        <div style={{ fontSize: 13.5 }}>{value}</div>
+      </div>
+      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+        <button onClick={sendViaKakaoPay} aria-label="카카오페이로 보내기" title="카카오페이" style={iconBtnStyle(
+          "color-mix(in srgb, #FFE300 50%, transparent)", "color-mix(in srgb, #FFE300 16%, transparent)", "#3C1E1E"
+        )}>
+          <MessageCircle size={16} />
+        </button>
+        <button onClick={sendViaToss} aria-label="토스로 보내기" title="토스" style={iconBtnStyle(
+          "color-mix(in srgb, #0064FF 45%, transparent)", "color-mix(in srgb, #0064FF 14%, transparent)", "#0064FF"
+        )}>
+          <Send size={16} />
+        </button>
+        {/* accent(테마 포인트색)를 직접 쓰면 color-atelier 처럼 섹션 배경이 --accent 로 교대되는
+            테마(vs-alt-a)에서 버튼과 배경이 같은 색이 되어 아예 보이지 않는다 — 조상 섹션이
+            그 순간 실제로 쓰는 글자색(currentColor)을 따라가면 어떤 교대 상태에서도 대비가
+            보장된다(§share-island 의 btnStyle, §color-atelier template.css 의 주소 텍스트와 동일 처방). */}
+        <button onClick={copy} aria-label={copied ? "복사됨" : "계좌번호 복사"} title={copied ? "복사됨" : "계좌번호 복사"} style={{
+          ...iconBtnStyle("currentColor", copied ? soft(18) : "transparent", "currentColor"),
+          transition: "background 200ms ease-out, transform 200ms ease-out",
+          transform: copied ? "scale(1.04)" : "scale(1)",
+        }}>
+          {copied ? <Check size={16} /> : <Copy size={16} />}
+        </button>
+      </div>
+    </div>
+  )
+}
+/** 혼주(부모) 계좌 — 은행/번호/예금주를 나눠 받는 본인 계좌와 달리, 부모 쪽은 계좌 수가
+ * 정해져 있지 않아(아버지·어머니 각각 또는 한쪽만) 관리자가 자유 형식 텍스트로 입력한다.
+ * 숫자만 추출하는 기존 복사 방식은 여러 줄/여러 계좌가 섞인 텍스트에 맞지 않아 원문 그대로 복사한다.
+ */
+function ExtraAccountRow({ label, value }: { label: string; value: string }) {
+  const { isCopied, copy: copyText } = useCopyFeedback()
+  const copied = isCopied()
+  const copy = () => copyText(value)
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${soft(25)}`, gap: 8 }}>
+      <div style={{ textAlign: "left", minWidth: 0 }}>
+        <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 2 }}>{label}</div>
+        <div style={{ fontSize: 13.5, whiteSpace: "pre-line" }}>{value}</div>
+      </div>
+      <button onClick={copy} aria-label={copied ? "복사됨" : "계좌번호 복사"} title={copied ? "복사됨" : "계좌번호 복사"} style={{
+        ...iconBtnStyle("currentColor", copied ? soft(18) : "transparent", "currentColor"),
+        transition: "background 200ms ease-out, transform 200ms ease-out",
+        transform: copied ? "scale(1.04)" : "scale(1)",
+      }}>
+        {copied ? <Check size={16} /> : <Copy size={16} />}
+      </button>
+    </div>
+  )
+}
+/* ------------------------- 카드형 레이아웃 ------------------------- *
+ * 목록형과 같은 데이터를 2열 카드로 보여준다. 목록형이 한 줄에 "은행 번호 예금주"를
+ * 붙여 쓰는 반면, 카드형은 관계·이름·계좌번호·은행을 자리마다 나눠 놓아 여러 계좌가
+ * 있을 때 눈으로 훑기 쉽다.
+ *
+ * 카드 전체가 복사 버튼이다 — 목록형은 작은 아이콘을 정확히 눌러야 했다.
+ * 안쪽 송금 버튼은 클릭이 카드까지 올라가지 않게 막는다(누르면 복사까지 같이 일어나
+ * "복사됨" 표시가 떠서 무엇이 눌렸는지 헷갈린다).
+ * ------------------------------------------------------------------ */
+
+interface CardEntry { relation: string; holder: string; bank: string; number: string }
+
+/**
+ * 카드 배경색 문자열.
+ *
+ * accent/bg 는 테마 토큰을 그대로 참조한다 — 고정 hex 로 굳혀두면 테마를 바꿨을 때
+ * 카드만 옛 테마 색으로 남는다. 네 경우 모두 color-mix 로 투명도를 입혀 한 경로로 다룬다
+ * (배경에만 알파를 먹여야 카드 안 글자가 함께 흐려지지 않는다).
+ */
+function cardBackground(source: string, customColor: string, opacityPct: number): string {
+  const base =
+    source === "accent" ? "var(--accent, #D76C6C)" :
+    source === "bg" ? "var(--bg, #ffffff)" :
+    source === "custom" ? customColor :
+    // auto — 섹션이 그 순간 실제로 쓰는 글자색을 따라간다. 배경이 밝든 어둡든 항상 대비가
+    // 생긴다. color-atelier 처럼 섹션 배경이 --accent 로 교대되는 테마에서 accent 를 고르면
+    // 카드와 배경이 같은 색이 되어 아예 보이지 않는데, 이 기본값은 그 함정을 피한다.
+    "currentColor"
+  const pct = Math.min(100, Math.max(0, opacityPct))
+  return `color-mix(in srgb, ${base} ${pct}%, transparent)`
+}
+
+function AccountCard({ entry, background }: { entry: CardEntry; background: string }) {
+  const { isCopied, copy } = useCopyFeedback()
+  const copied = isCopied()
+  const numericValue = digitsOnly(entry.number)
+
+  // 목록형과 같은 아이콘을 쓴다 — 글자 버튼은 카드에서 가장 눈에 띄는 요소가 돼
+  // 정작 읽어야 할 예금주·계좌번호를 덮었다. 라벨은 aria-label/title 로 남긴다.
+  const payBtn = (label: string, onClick: () => void, style: React.CSSProperties, icon: React.ReactNode) => (
+    <button
+      onClick={(e) => { e.stopPropagation(); onClick() }}
+      aria-label={`${label}로 보내기`}
+      title={label}
+      style={style}
+    >
+      {icon}
+    </button>
+  )
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => copy(numericValue)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); copy(numericValue) } }}
+      aria-label={`${entry.relation} ${entry.holder} 계좌번호 복사`}
+      style={{
+        background, padding: "12px 12px 10px", borderRadius: 4, cursor: "pointer",
+        display: "flex", flexDirection: "column", gap: 8,
+        outline: copied ? "1px solid currentColor" : "none",
+        transition: "outline-color 200ms ease-out",
+      }}
+    >
+      <div>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 6 }}>
+          <span style={{ fontSize: 11, opacity: 0.55 }}>{entry.relation}</span>
+          <span style={{ fontSize: 13, fontWeight: 600 }}>{entry.holder}</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 6, marginTop: 4 }}>
+          <span style={{ fontSize: 11.5, letterSpacing: "-0.01em", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {copied ? "복사되었습니다" : entry.number}
+          </span>
+          <span style={{ fontSize: 11, opacity: 0.55, flexShrink: 0 }}>{entry.bank}</span>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 5, justifyContent: "flex-end" }}>
+        {payBtn("카카오페이", () => openPayApp("kakao", numericValue), iconBtnStyle(
+          "color-mix(in srgb, #FFE300 50%, transparent)", "color-mix(in srgb, #FFE300 16%, transparent)", "#3C1E1E"
+        ), <MessageCircle size={14} />)}
+        {payBtn("토스", () => openPayApp("toss", numericValue), iconBtnStyle(
+          "color-mix(in srgb, #0064FF 45%, transparent)", "color-mix(in srgb, #0064FF 14%, transparent)", "#0064FF"
+        ), <Send size={14} />)}
+      </div>
+    </div>
+  )
+}
+
+function AccountCardColumn({ title, entries, background }: { title: string; entries: CardEntry[]; background: string }) {
+  if (entries.length === 0) return null
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+      <div style={{ fontSize: 12, textAlign: "center", paddingBottom: 6, borderBottom: `1px solid ${soft(25)}` }}>{title}</div>
+      {entries.map((e, i) => <AccountCard key={i} entry={e} background={background} />)}
+    </div>
+  )
+}
+
+function AccountIsland({ data, raw, blockOverrides }: SlotProps) {
+  const rootRef = useRef<HTMLDivElement>(null)
+  const groom = composeAccount(data.account_groom_bank, data.account_groom_number, data.account_groom_holder)
+  const bride = composeAccount(data.account_bride_bank, data.account_bride_number, data.account_bride_holder)
+
+  // 혼주 계좌는 값이 배열이라 data 가 아니라 raw 에서 읽어야 한다 — buildFieldData 는
+  // 문자열/숫자만 통과시키고 배열·객체는 슬롯이 raw 로 직접 쓰라고 빼둔다(§lib/invitation-data.ts).
+  const extraGroomList = parseAccountList(raw?.extra_account_groom)
+  const extraBrideList = parseAccountList(raw?.extra_account_bride)
+  // 예전 자유 입력(문자열)으로 발행된 청첩장은 원문 그대로 계속 보여준다
+  const extraGroomText = extraGroomList === null ? data.extra_account_groom : ""
+  const extraBrideText = extraBrideList === null ? data.extra_account_bride : ""
+
+  const groomRows = (extraGroomList ?? []).filter(isAccountFilled)
+  const brideRows = (extraBrideList ?? []).filter(isAccountFilled)
+  const hasAny =
+    groom || bride || extraGroomText || extraBrideText || groomRows.length > 0 || brideRows.length > 0
+
+  // 계좌가 하나도 없으면 이 슬롯은 빈 줄만 남지만, "ACCOUNT / 마음 전하실 곳" 섹션 제목은
+  // 테마 template.html에 정적으로 박혀 있어(§components/invitation/invitation-frame.tsx의
+  // [data-slot] 계약 — 슬롯은 내용만, 제목은 테마 몫) React가 못 건드린다. 관리자용
+  // "등록된 계좌 정보가 없습니다" 문구를 하객에게 그대로 보여주던 대신, 슬롯이 이미 그
+  // 테마 문서 안에 마운트되어 있다는 점을 이용해 조상 [data-block] 섹션 자체를 숨긴다.
+  useEffect(() => {
+    const section = rootRef.current?.closest<HTMLElement>("[data-block]")
+    if (section) section.style.display = hasAny ? "" : "none"
+  }, [hasAny])
+
+  // 계좌 정보가 첫 화면에 바로 보이는 게 부담스러운 고객을 위해 접어둘 수 있다.
+  // 미설정은 펼침이라 기존 청첩장 동작은 그대로다(§isToggledOn).
+  const collapsible = isToggledOn(raw?.account_collapsed)
+  const [open, setOpen] = useState(false)
+  const showRows = !collapsible || open
+
+  // 카드형은 관계·이름·계좌번호·은행을 자리마다 나눠 놓아야 해서, 한 줄로 합쳐 쓰는
+  // 목록형과 달리 원본 필드를 그대로 받는다.
+  const isCard = blockOverrides?.account?.accountLayout === "card"
+  const cardBg = cardBackground(
+    blockOverrides?.account?.accountCardBg || ACCOUNT_CARD_BG_DEFAULT.source,
+    blockOverrides?.account?.accountCardBgColor || ACCOUNT_CARD_BG_DEFAULT.color,
+    blockOverrides?.account?.accountCardBgOpacity ?? ACCOUNT_CARD_BG_DEFAULT.opacity,
+  )
+  const cardEntry = (relation: string, holder?: string, bank?: string, number?: string): CardEntry | null =>
+    number ? { relation, holder: holder || "", bank: bank || "", number } : null
+  const groomCards = [
+    cardEntry("신랑", data.account_groom_holder, data.account_groom_bank, data.account_groom_number),
+    ...groomRows.map((a) => cardEntry("신랑 혼주", a.holder, a.bank, a.number)),
+  ].filter((e): e is CardEntry => e !== null)
+  const brideCards = [
+    cardEntry("신부", data.account_bride_holder, data.account_bride_bank, data.account_bride_number),
+    ...brideRows.map((a) => cardEntry("신부 혼주", a.holder, a.bank, a.number)),
+  ].filter((e): e is CardEntry => e !== null)
+
+  return (
+    <div ref={rootRef} style={{ textAlign: "left", maxWidth: isCard ? 400 : 320, margin: "0 auto" }}>
+      {collapsible && hasAny && (
+        <button
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          style={{
+            width: "100%", padding: "12px 0", borderRadius: 6, cursor: "pointer",
+            border: "1px solid currentColor", background: "transparent", color: "inherit",
+            fontSize: 13.5, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+          }}
+        >
+          마음 전하실 곳 {open ? "닫기" : "보기"}
+          <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 200ms ease-out" }} />
+        </button>
+      )}
+      {showRows && isCard && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, alignItems: "start" }}>
+          <AccountCardColumn title="신랑측" entries={groomCards} background={cardBg} />
+          <AccountCardColumn title="신부측" entries={brideCards} background={cardBg} />
+        </div>
+      )}
+      {showRows && !isCard && groom && <AccountRow label="신랑측" value={groom} />}
+      {showRows && !isCard && bride && <AccountRow label="신부측" value={bride} />}
+      {/* 혼주 계좌도 계좌마다 한 줄씩 — 본인 계좌와 똑같이 계좌번호만 복사되고
+          카카오페이·토스 버튼도 함께 붙는다 */}
+      {showRows && !isCard && groomRows.map((a, i) => (
+        <AccountRow key={`g${i}`} label="신랑측 혼주" value={composeAccountText(a)} />
+      ))}
+      {showRows && !isCard && brideRows.map((a, i) => (
+        <AccountRow key={`b${i}`} label="신부측 혼주" value={composeAccountText(a)} />
+      ))}
+      {/* 예전 자유 입력(문자열)으로 발행된 혼주 계좌는 은행·번호가 나뉘어 있지 않아 카드로
+          만들 수 없다 — 카드형에서도 이 항목만 기존 줄 형태로 남긴다 */}
+      {showRows && extraGroomText && <ExtraAccountRow label="신랑측 혼주" value={extraGroomText} />}
+      {showRows && extraBrideText && <ExtraAccountRow label="신부측 혼주" value={extraBrideText} />}
+    </div>
+  )
+}
+export { AccountIsland }

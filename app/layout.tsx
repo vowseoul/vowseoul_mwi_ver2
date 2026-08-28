@@ -52,6 +52,7 @@ export const viewport: Viewport = {
 import { FontLoader } from '@/components/font-loader'
 import { FeatureToggleProvider } from '@/components/feature-toggle-provider'
 import QueryProvider from '@/components/query-provider'
+import { ConfirmDialogHost } from '@/components/ui/confirm-dialog'
 
 export default function RootLayout({
   children,
@@ -68,6 +69,7 @@ export default function RootLayout({
           </FeatureToggleProvider>
         </QueryProvider>
         <Toaster position="top-center" richColors />
+        <ConfirmDialogHost />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

@@ -1,9 +1,11 @@
 import { create } from 'zustand'
 import { supabase, logSupabaseError } from './supabase'
 
-export interface Theme {
+export interface MockTheme {
   id: string
   name: string
+  /** themes.is_active — 에셋 관리의 켜기/끄기. 없으면(샘플 데이터) 켜진 것으로 본다 */
+  is_active?: boolean
   thumbnail: string
   tags: string[]
   colorSets: { id: string; name: string; colors: string[] }[]
@@ -39,7 +41,7 @@ export interface BGM {
   hashtags?: string
 }
 
-export interface Order {
+export interface MockOrder {
   id: string
   invitationId: string
   customerName: string
@@ -58,17 +60,17 @@ interface AppState {
   fetchData: () => Promise<void>
 
   // Themes
-  themes: Theme[]
-  setThemes: (themes: Theme[]) => void
+  themes: MockTheme[]
+  setThemes: (themes: MockTheme[]) => void
   
   // BGM
   bgmList: BGM[]
   setBgmList: (bgm: BGM[]) => void
   
   // Admin state
-  orders: Order[]
-  setOrders: (orders: Order[]) => void
-  updateOrder: (id: string, updates: Partial<Order>) => Promise<void>
+  orders: MockOrder[]
+  setOrders: (orders: MockOrder[]) => void
+  updateOrder: (id: string, updates: Partial<MockOrder>) => Promise<void>
 
   // UI state
   editorStep: number
@@ -118,7 +120,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const customerMap: Record<string, any> = {}
       customers.forEach((c: any) => { customerMap[c.id] = c })
 
-      let mappedOrders: Order[] = []
+      let mappedOrders: MockOrder[] = []
       try {
         const { data: ordersData, error } = await supabase.from('orders').select('*')
         logSupabaseError('fetchData: orders', error)
@@ -222,7 +224,7 @@ if (typeof window !== 'undefined') {
 }
 
 // Sample data
-export const sampleThemes: Theme[] = [
+export const sampleThemes: MockTheme[] = [
   {
     id: 'classic-white',
     name: 'Classic White',

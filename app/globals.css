@@ -38,6 +38,35 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.92 0 0);
   --sidebar-ring: oklch(0.45 0 0);
+
+  /* 모션 토큰 — 인터랙션 애니메이션(관리자 UI + 청첩장 스크롤 모션)이 공유하는 값.
+     화면마다 속도·곡선이 제각각이면 Consistency가 깨지므로 여기 한 곳에서만 정의한다. */
+  --motion-fast: 150ms;    /* 버튼 press, hover */
+  --motion-base: 250ms;    /* 패널 열림/닫힘, 탭 전환 */
+  --motion-slow: 600ms;    /* 스크롤 진입 연출 */
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-soft: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* SaveButton 에러 상태 — 저장 실패를 알리는 짧은 흔들림. Error Recovery 원칙:
+   실패가 조용히 사라지지 않고 명확히 눈에 띄어야 한다. */
+@keyframes vs-shake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-4px); }
+  40%, 60% { transform: translateX(4px); }
+}
+.animate-vs-shake {
+  animation: vs-shake var(--motion-slow) var(--ease-in-out-soft);
 }
 
 .dark {

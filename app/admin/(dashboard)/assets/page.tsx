@@ -1,8 +1,11 @@
 'use client'
 
+import { useDocumentTitle } from "@/lib/use-document-title"
+
 import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { SaveButton } from '@/components/ui/save-button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -11,28 +14,28 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
-import { sampleThemes, sampleBGMs, Theme, samplePhrases } from '@/lib/store'
+import { sampleThemes, sampleBGMs, MockTheme, samplePhrases } from '@/lib/store'
 import { supabase, logSupabaseError } from '@/lib/supabase'
 import { resolveThemeSwatch } from '@/lib/theme-template'
 import { fontPreviewStyle, fontFileFormatLabel, extractGoogleFontFamily, type RegisteredFont } from '@/lib/fonts'
 import { useInjectFontFaces } from '@/lib/use-font-faces'
 import { Plus, Play, Pause, Trash2, Upload, Loader2, CheckCircle2 } from 'lucide-react'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
+import { toast } from 'sonner'
+import { useToggleThemeActiveMutation } from '@/hooks/queries/useThemes'
 import { uploadFile, deleteFile } from '@/lib/storage'
 import { uploadImage } from '@/lib/image-upload'
 import Link from 'next/link'
 
 export default function AssetsPage() {
+  useDocumentTitle("에셋 관리")
   const [activeTab, setActiveTab] = useState('themes')
   const [playingBgm, setPlayingBgm] = useState<string | null>(null)
-  const [themeEnabled, setThemeEnabled] = useState<Record<string, boolean>>({
-    'classic-white': true,
-    'romantic-rose': true,
-    'modern-minimal': true,
-    'garden-greenery': true,
-    'elegant-navy': false,
-    'sunset-warmth': true,
-  })
-  const [themes, setThemes] = useState<Theme[]>([])
+  // 테마 켜기/끄기는 themes.is_active 에 저장한다. 예전에는 로컬 state 였고, 심지어
+  // 실제 테마 id 와 무관한 목업 키('classic-white' 등)로 채워져 있었다 — 껐다가
+  // 새로고침하면 다시 켜지고, 그 값을 읽는 곳도 없었다.
+  const toggleThemeActive = useToggleThemeActiveMutation()
+  const [themes, setThemes] = useState<MockTheme[]>([])
   const [isLoadingThemes, setIsLoadingThemes] = useState(true)
   const [bgms, setBgms] = useState<any[]>([])
   const [isLoadingBgms, setIsLoadingBgms] = useState(true)
@@ -41,7 +44,6 @@ export default function AssetsPage() {
   const [newBgmGenre, setNewBgmGenre] = useState('')
   const [newBgmHashtags, setNewBgmHashtags] = useState('')
   const [editingBgmId, setEditingBgmId] = useState<string | null>(null)
-  const [isSavingBgm, setIsSavingBgm] = useState(false)
   const [isBgmDialogOpen, setIsBgmDialogOpen] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
@@ -53,7 +55,6 @@ export default function AssetsPage() {
   const [embedCode, setEmbedCode] = useState('')
   const [fontFileUrl, setFontFileUrl] = useState<string | null>(null)
   const [isUploadingFont, setIsUploadingFont] = useState(false)
-  const [isSavingFont, setIsSavingFont] = useState(false)
   const [isFontDialogOpen, setIsFontDialogOpen] = useState(false)
   const fontFileInputRef = useRef<HTMLInputElement>(null)
 
@@ -97,7 +98,7 @@ export default function AssetsPage() {
     if (!e.target.files || e.target.files.length === 0) return
     const file = e.target.files[0]
     if (!/\.(ttf|otf|woff2?|eot)$/i.test(file.name)) {
-      alert('TTF/OTF/WOFF/WOFF2 형식의 폰트 파일만 업로드할 수 있습니다.')
+      toast.error('TTF/OTF/WOFF/WOFF2 형식의 폰트 파일만 업로드할 수 있습니다.')
       if (e.target) e.target.value = ''
       return
     }
@@ -106,19 +107,18 @@ export default function AssetsPage() {
       const url = await uploadFile(file, 'fonts')
       setFontFileUrl(url)
     } catch (err) {
-      alert('폰트 파일 업로드에 실패했습니다.')
+      toast.error('폰트 파일 업로드에 실패했습니다.')
     } finally {
       setIsUploadingFont(false)
       if (e.target) e.target.value = ''
     }
   }
 
-  const handleSaveFont = async () => {
-    if (!newFontName || !newFontFamily) return alert('폰트명과 폰트 패밀리명을 입력해주세요.')
-    if (fontType === 'embed' && !embedCode) return alert('웹 폰트 임베드 코드를 입력해주세요.')
-    if (fontType === 'file' && !fontFileUrl) return alert('폰트 파일을 업로드해주세요.')
+  const handleSaveFont = async (): Promise<boolean> => {
+    if (!newFontName || !newFontFamily) { toast.error('폰트명과 폰트 패밀리명을 입력해주세요.'); return false }
+    if (fontType === 'embed' && !embedCode) { toast.error('웹 폰트 임베드 코드를 입력해주세요.'); return false }
+    if (fontType === 'file' && !fontFileUrl) { toast.error('폰트 파일을 업로드해주세요.'); return false }
 
-    setIsSavingFont(true)
     try {
       // 구글 폰트 임베드는 @import가 실제로 등록하는 family 이름이 정해져 있다 — 직접 입력한
       // family가 이와 다르면 --font-kr 등에 넣어도 로드된 폰트를 못 찾아 조용히 기본 글꼴로
@@ -145,16 +145,16 @@ export default function AssetsPage() {
       setIsFontDialogOpen(false)
       resetFontForm()
       await fetchFonts()
+      return true
     } catch (err) {
       console.error('Save font error:', err)
-      alert('폰트 저장에 실패했습니다.')
-    } finally {
-      setIsSavingFont(false)
+      toast.error('폰트 저장에 실패했습니다.')
+      return false
     }
   }
 
   const handleDeleteFont = async (id: string) => {
-    if (!confirm('정말로 이 폰트를 삭제하시겠습니까?')) return
+    if (!(await confirmDialog({ title: '이 폰트를 삭제하시겠습니까?', destructive: true, confirmText: '삭제' }))) return
     try {
       const fontToDelete = fonts.find(f => f.id === id)
       if (fontToDelete && fontToDelete.type === 'file' && fontToDelete.fileUrl) {
@@ -174,7 +174,7 @@ export default function AssetsPage() {
       await fetchFonts()
     } catch (err) {
       console.error('Delete font error:', err)
-      alert('폰트 삭제에 실패했습니다.')
+      toast.error('폰트 삭제에 실패했습니다.')
     }
   }
 
@@ -237,7 +237,7 @@ export default function AssetsPage() {
       const url = await uploadImage(e.target.files[0], 'theme-thumbnails')
       setThemeImageUrl(url)
     } catch (err) {
-      alert('테마 이미지 업로드에 실패했습니다.')
+      toast.error('테마 이미지 업로드에 실패했습니다.')
     } finally {
       setIsUploadingTheme(false)
       if (e.target) e.target.value = ''
@@ -255,16 +255,15 @@ export default function AssetsPage() {
       const url = await uploadFile(e.target.files[0], 'bgm')
       setBgmUrl(url)
     } catch (err) {
-      alert('BGM 파일 업로드에 실패했습니다.')
+      toast.error('BGM 파일 업로드에 실패했습니다.')
     } finally {
       setIsUploadingBgm(false)
       if (e.target) e.target.value = ''
     }
   }
 
-  const handleSaveBgm = async () => {
-    if (!bgmUrl || !newBgmName) return alert('음원 파일과 곡명을 입력해주세요.')
-    setIsSavingBgm(true)
+  const handleSaveBgm = async (): Promise<boolean> => {
+    if (!bgmUrl || !newBgmName) { toast.error('음원 파일과 곡명을 입력해주세요.'); return false }
     // bgms.id 는 uuid 컬럼이라 유효한 UUID 형식이어야 한다 ('bgm_'+타임스탬프는 삽입이 실패함).
     const newBgm = {
       id: editingBgmId || crypto.randomUUID(),
@@ -276,22 +275,22 @@ export default function AssetsPage() {
       url: bgmUrl,
     }
     const { error } = await supabase.from('bgms').upsert(newBgm)
-    setIsSavingBgm(false)
     if (error) {
-      alert('BGM 저장에 실패했습니다.')
+      toast.error('BGM 저장에 실패했습니다.')
       console.error(error)
-    } else {
-      setIsBgmDialogOpen(false)
-      resetBgmForm()
-      fetchBgms() // 목록 새로고침
+      return false
     }
+    setIsBgmDialogOpen(false)
+    resetBgmForm()
+    fetchBgms() // 목록 새로고침
+    return true
   }
 
   const handleDeleteBgm = async (id: string) => {
-    if (!confirm('정말로 이 BGM을 삭제하시겠습니까?')) return
+    if (!(await confirmDialog({ title: '이 BGM을 삭제하시겠습니까?', destructive: true, confirmText: '삭제' }))) return
     const { error } = await supabase.from('bgms').delete().eq('id', id)
     if (error) {
-      alert('BGM 삭제에 실패했습니다.')
+      toast.error('BGM 삭제에 실패했습니다.')
     } else {
       fetchBgms()
     }
@@ -319,7 +318,7 @@ export default function AssetsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">에셋 및 템플릿 관리</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">에셋 관리</h1>
         <p className="text-muted-foreground">테마, 문구, BGM을 관리합니다.</p>
       </div>
 
@@ -401,10 +400,18 @@ export default function AssetsPage() {
                               </div>
                             </Link>
                           <Switch
-                            checked={themeEnabled[theme.id] ?? true}
-                            onCheckedChange={(checked) => 
-                              setThemeEnabled({ ...themeEnabled, [theme.id]: checked })
-                            }
+                            aria-label={`${theme.name} 테마 사용`}
+                            checked={theme.is_active !== false}
+                            disabled={toggleThemeActive.isPending}
+                            onCheckedChange={(checked) => {
+                              toggleThemeActive.mutate(
+                                { themeId: theme.id, isActive: checked },
+                                {
+                                  onSuccess: () => { fetchThemes(); toast.success(checked ? `${theme.name} 테마를 사용합니다.` : `${theme.name} 테마를 숨겼습니다.`) },
+                                  onError: () => toast.error('테마 상태를 바꾸지 못했습니다.'),
+                                },
+                              )
+                            }}
                           />
                         </div>
                       </div>
@@ -475,7 +482,7 @@ export default function AssetsPage() {
                       </Badge>
                       <p className="whitespace-pre-line text-sm">{phrase.text}</p>
                     </div>
-                    <Button variant="ghost" size="icon" className="text-destructive">
+                    <Button variant="ghost" size="icon" className="text-destructive" aria-label="삭제">
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -557,10 +564,12 @@ export default function AssetsPage() {
                       <Input placeholder="#잔잔한 #로맨틱 (공백으로 구분)" value={newBgmHashtags} onChange={e => setNewBgmHashtags(e.target.value)} />
                     </Field>
                   </FieldGroup>
-                  <Button className="mt-4 w-full" onClick={handleSaveBgm} disabled={isSavingBgm || isUploadingBgm}>
-                    {isSavingBgm ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    {editingBgmId ? '수정하기' : '업로드'}
-                  </Button>
+                  <SaveButton
+                    className="mt-4 w-full"
+                    onSave={handleSaveBgm}
+                    disabled={isUploadingBgm}
+                    idleLabel={editingBgmId ? '수정하기' : '업로드'}
+                  />
                 </DialogContent>
               </Dialog>
             </CardHeader>
@@ -601,7 +610,7 @@ export default function AssetsPage() {
                     <Button variant="ghost" size="sm" onClick={() => openBgmEditDialog(bgm)}>
                       수정
                     </Button>
-                    <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDeleteBgm(bgm.id)}>
+                    <Button variant="ghost" size="icon" className="text-destructive" aria-label="삭제" onClick={() => handleDeleteBgm(bgm.id)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -702,10 +711,7 @@ export default function AssetsPage() {
                       </Field>
                     )}
                   </FieldGroup>
-                  <Button className="mt-4 w-full" onClick={handleSaveFont} disabled={isSavingFont || isUploadingFont}>
-                    {isSavingFont ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    등록하기
-                  </Button>
+                  <SaveButton className="mt-4 w-full" onSave={handleSaveFont} disabled={isUploadingFont} idleLabel="등록하기" />
                 </DialogContent>
               </Dialog>
             </CardHeader>
@@ -734,7 +740,7 @@ export default function AssetsPage() {
                           </Badge>
                         </div>
                       </div>
-                      <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDeleteFont(font.id)}>
+                      <Button variant="ghost" size="icon" className="text-destructive" aria-label="삭제" onClick={() => handleDeleteFont(font.id)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
