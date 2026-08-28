@@ -1753,6 +1753,19 @@ function PublicFormContent({ slug }: { slug: string }) {
                     )
                   }
 
+                  /** 필드 안내 — 안내 문구와 안내 이미지. help_text 는 입력하는 순간 사라지는
+                   *  placeholder 라 안내로 쓸 수 없어서, 남아 있는 설명은 여기로 그린다. */
+                  const renderGuide = (opts: any) => (
+                    <>
+                      {opts?.attached_note?.trim() && (
+                        <p className="my-2 whitespace-pre-wrap rounded-lg border border-border bg-muted/60 px-3 py-2.5 text-[13px] leading-relaxed text-muted-foreground">
+                          {opts.attached_note}
+                        </p>
+                      )}
+                      {renderAttachedImages(opts?.attached_images)}
+                    </>
+                  )
+
                   // 2. Render grouped sections and fields
                   return sections.map((sec, secIdx) => (
                     <div key={`section-${secIdx}`} className="space-y-4">
@@ -1797,7 +1810,7 @@ function PublicFormContent({ slug }: { slug: string }) {
                                 )}
                               </FieldLabel>
 
-                              {renderAttachedImages(parseOptions(field).attached_images)}
+                              {renderGuide(parseOptions(field))}
                               {renderInputField(field)}
                               {isMissing && (
                                 <p role="alert" className="text-xs font-medium text-destructive">
@@ -1844,7 +1857,7 @@ function PublicFormContent({ slug }: { slug: string }) {
                                           <span className="text-rose-500 font-bold text-sm ml-0.5">*</span>
                                         )}
                                       </FieldLabel>
-                                      {renderAttachedImages(childOpts.attached_images)}
+                                      {renderGuide(childOpts)}
                                       {renderInputField(childField)}
                                     </Field>
                                   </div>
@@ -1889,6 +1902,21 @@ function PublicFormContent({ slug }: { slug: string }) {
           </a>
         </div>
       </main>
+
+      {/* 안내 이미지 원본 보기 — 안내 이미지는 작게 줄여 보여주므로, 확대해야 읽히는 것들이 있다 */}
+      <Dialog open={!!zoomImage} onOpenChange={() => setZoomImage(null)}>
+        <DialogContent className="max-w-4xl border-slate-800 bg-slate-950/95 p-3 text-white">
+          <DialogHeader className="px-2 py-1.5">
+            <DialogTitle className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
+              <ZoomIn className="h-4 w-4" /> 안내 이미지 원본
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex max-h-[82vh] items-center justify-center overflow-auto p-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={zoomImage ?? ''} alt="안내 이미지 원본" className="max-h-[78vh] max-w-full rounded-lg object-contain" />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

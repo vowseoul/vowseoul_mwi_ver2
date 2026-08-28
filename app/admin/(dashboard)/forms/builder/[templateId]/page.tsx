@@ -1577,10 +1577,26 @@ export default function FormBuilderPage({ params }: { params: Promise<{ template
                                         </div>
                                       </div>
 
-                                      {/* Reference Images */}
+                                      {/* Reference Guide (문구 + 이미지) */}
+                                      <div className="pt-2 border-t border-border/40 flex flex-col gap-1.5">
+                                        <span className="text-[10px] font-medium text-muted-foreground">
+                                          안내 문구 (고객 노출용) — 도움말은 입력하면 사라지는 자리 표시라, 남겨둘 설명은 여기에 씁니다
+                                        </span>
+                                        <Textarea
+                                          value={field.options?.attached_note || ''}
+                                          onChange={(e) => {
+                                            const currentOpts = typeof field.options === 'string' ? JSON.parse(field.options || '{}') : (field.options || {})
+                                            handleUpdateFieldProperty(field.field_library_id, 'options', { ...currentOpts, attached_note: e.target.value })
+                                          }}
+                                          placeholder="예: 사진은 가로형으로 준비해주세요. 인물이 화면 중앙에 오면 가장 예쁘게 나옵니다."
+                                          rows={2}
+                                          className="text-xs bg-background border border-border"
+                                        />
+                                      </div>
+
                                       <div className="pt-2 border-t border-border/40 flex flex-col gap-1.5">
                                         <div className="flex items-center justify-between">
-                                          <span className="text-[10px] font-medium text-muted-foreground">안내용 첨부 이미지 (고객 노출용, 여러 장 가능)</span>
+                                          <span className="text-[10px] font-medium text-muted-foreground">안내 이미지 (고객 노출용, 여러 장 가능)</span>
                                           <label className="cursor-pointer bg-primary/10 hover:bg-primary/20 text-primary text-[9px] font-semibold px-2 py-0.5 rounded transition-colors shrink-0">
                                             이미지 추가
                                             <input

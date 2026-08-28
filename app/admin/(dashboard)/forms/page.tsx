@@ -1373,6 +1373,17 @@ export default function FormTemplatesPage() {
                       )
                     }
 
+                    const renderPreviewGuide = (o: any) => (
+                      <>
+                        {o?.attached_note?.trim() && (
+                          <p className="my-2 whitespace-pre-wrap rounded-lg border border-border bg-muted/60 px-2.5 py-2 text-[12px] leading-relaxed text-muted-foreground">
+                            {o.attached_note}
+                          </p>
+                        )}
+                        {renderPreviewAttachedImages(o?.attached_images)}
+                      </>
+                    )
+
                     return (
                       <React.Fragment key={field.field_key}>
                         {showSectionHeader && (
@@ -1390,7 +1401,7 @@ export default function FormTemplatesPage() {
                               <span>{field.label}</span>
                               {field.is_required && <span className="text-rose-500 font-bold ml-0.5">*</span>}
                             </FieldLabel>
-                            {renderPreviewAttachedImages(opts.attached_images)}
+                            {renderPreviewGuide(opts)}
                             {renderPreviewInputField(field)}
                           </Field>
 
@@ -1420,7 +1431,7 @@ export default function FormTemplatesPage() {
                                     {childField.label}
                                     {childField.is_required && <span className="text-rose-500 font-bold ml-0.5">*</span>}
                                   </FieldLabel>
-                                  {renderPreviewAttachedImages(childOpts.attached_images)}
+                                  {renderPreviewGuide(childOpts)}
                                   {renderPreviewInputField(childField)}
                                 </Field>
                               </div>
