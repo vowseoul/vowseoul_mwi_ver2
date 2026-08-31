@@ -205,12 +205,16 @@ export default function AdminLayout({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem asChild>
-                  <Link href="/admin/notifications">
-                    <Bell className="mr-2 h-4 w-4" />
-                    내 알림 설정
-                  </Link>
-                </DropdownMenuItem>
+                {/* 운영자는 시스템 설정 > 알림에서 같은 화면을 본다 — 두 군데에
+                    똑같은 메뉴가 보이면 어느 쪽이 진짜인지 헷갈린다. */}
+                {role !== 'ADMIN' && (
+                  <DropdownMenuItem asChild>
+                    <Link href="/admin/notifications">
+                      <Bell className="mr-2 h-4 w-4" />
+                      내 알림 설정
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" />
                   로그아웃
