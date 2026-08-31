@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { MyNotificationSettings } from "@/components/my-notification-settings"
 import { Separator } from "@/components/ui/separator"
 import {
   Select,
@@ -965,6 +966,20 @@ export default function AdminSettingsPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* 위는 "어떤 알림을 보낼지"(전체 공통), 아래는 "내가 어디로 받을지"(개인).
+              같은 화면이 /admin/notifications 에도 있다 — 이 탭은 운영자 전용이라
+              디자이너는 그쪽으로 들어온다(§components/my-notification-settings.tsx). */}
+          <div className="mt-6 space-y-2">
+            <div className="border-t border-border pt-6">
+              <h3 className="text-base font-semibold text-foreground">내 알림</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                내가 담당하는 고객의 알림을 어디로 받을지 정합니다. 직원마다 따로 설정하며,
+                담당자가 지정되지 않은 고객의 알림은 전 직원에게 갑니다.
+              </p>
+            </div>
+            <MyNotificationSettings />
+          </div>
         </TabsContent>
 
         {/* Security Settings */}
