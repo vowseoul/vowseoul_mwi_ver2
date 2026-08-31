@@ -58,6 +58,9 @@ const EXPECTED_ANON_SELECT: Record<string, AnonAccess> = {
   notifications: "blocked",
   orders: "blocked",
   profiles: "blocked",
+  // 직원 알림 구독. 등록·해제·조회 전부 서버 라우트를 거친다(§app/api/push-subscribe) —
+  // endpoint 가 새어 나가면 남의 기기로 알림을 밀어 넣을 여지가 생긴다.
+  push_subscriptions: "blocked",
   rate_limit_attempts: "blocked",
   rsvp_responses: "blocked",
   rsvp_responses_history: "blocked",
