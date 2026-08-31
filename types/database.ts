@@ -29,6 +29,8 @@ export interface Database {
           email: string
           role: 'ADMIN' | 'DESIGNER'
           name: string | null
+          /** 직원 개인 텔레그램 채팅 ID — 비어 있으면 텔레그램으로 받지 않는다 */
+          telegram_chat_id: string | null
           created_at: string
         }
         Insert: {
@@ -36,9 +38,32 @@ export interface Database {
           email: string
           role: 'ADMIN' | 'DESIGNER'
           name?: string | null
+          telegram_chat_id?: string | null
           created_at?: string
         }
         Update: Partial<Database['public']['Tables']['profiles']['Insert']>
+      }
+      /** 웹 푸시 구독 — 기기마다 한 행. 서버 라우트(service_role)로만 읽고 쓴다. */
+      push_subscriptions: {
+        Row: {
+          id: string
+          user_id: string
+          endpoint: string
+          p256dh: string
+          auth: string
+          user_agent: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          endpoint: string
+          p256dh: string
+          auth: string
+          user_agent?: string | null
+          created_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['push_subscriptions']['Insert']>
       }
       customers: {
         Row: {

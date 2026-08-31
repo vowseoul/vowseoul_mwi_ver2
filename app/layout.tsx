@@ -18,6 +18,8 @@ export const metadata: Metadata = {
   title: 'VOW SEOUL | 모바일 청첩장',
   description: '소중한 서약을 담아드립니다. 손 쉽게 완성하는 당신만의 특별한 웨딩 초대장',
   generator: 'v0.app',
+  // 관리자 화면을 홈 화면에 설치할 수 있게 한다 — 아이폰은 설치해야만 웹 푸시가 온다
+  manifest: '/manifest.json',
   keywords: ['청첩장', '모바일 청첩장', '웨딩', '결혼식', 'VOW SEOUL'],
   icons: {
     icon: [

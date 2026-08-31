@@ -3,7 +3,8 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { dashboardCookieName, verifyDashboardToken } from "@/lib/dashboard-session"
 import { logAuditEvent } from "@/lib/audit-log"
-import { sendTelegram, coupleLabel } from "@/lib/telegram"
+import { coupleLabel } from "@/lib/telegram"
+import { notifyStaff } from "@/lib/notify-staff"
 
 /**
  * 시안 검수 화면(/invitation/[id]/review)의 수정 요청 제출 · 확정.
@@ -23,13 +24,18 @@ async function assertAuthorized(invitationId: string): Promise<boolean> {
 }
 
 /**
- * 알림에 쓸 신랑·신부 표시명 — 고객이 폼에서 입력한 content_data 를 우선하고,
- * 비어 있으면 customers 행(관리자가 등록한 값)으로 폴백한다.
+ * 알림에 쓸 신랑·신부 표시명과, 담당자를 가릴 customerId.
+ *
+ * 표시명은 고객이 폼에서 입력한 content_data 를 우선하고, 비어 있으면
+ * customers 행(관리자가 등록한 값)으로 폴백한다.
+ *
+ * customerId 를 함께 돌려주는 이유는 여기서 이미 invitations 를 읽기 때문이다 —
+ * 담당자를 찾겠다고 같은 행을 한 번 더 조회할 이유가 없다.
  */
-async function resolveCoupleLabel(
+async function resolveCouple(
   supabase: ReturnType<typeof createSupabaseAdminClient>,
   invitationId: string
-): Promise<string> {
+): Promise<{ label: string; customerId: string | null }> {
   const { data: inv } = await supabase
     .from("invitations")
     .select("content_data, customer_id")
@@ -51,7 +57,7 @@ async function resolveCoupleLabel(
     groom = groom || customer?.groom_name || ""
     bride = bride || customer?.bride_name || ""
   }
-  return coupleLabel(groom, bride)
+  return { label: coupleLabel(groom, bride), customerId: inv?.customer_id ?? null }
 }
 
 export async function POST(request: Request) {
@@ -116,12 +122,15 @@ export async function POST(request: Request) {
 
     // 텔레그램 알림 — 수정 요청은 관리자가 바로 반영해야 하는 작업이라 즉시 통보한다.
     // 링크는 요청 URL 의 origin 을 그대로 써서 배포 도메인을 따로 설정하지 않아도 동작한다.
-    await sendTelegram(
-      `✏️ ${await resolveCoupleLabel(supabase, invitationId)}님이 청첩장 검수 피드백을 남기셨습니다.\n` +
-      `"${note.slice(0, 100)}${note.length > 100 ? "…" : ""}"\n` +
-      `${new URL(request.url).origin}/admin/invitations/editor/${invitationId}`,
-      "review_revision"
-    )
+    const revised = await resolveCouple(supabase, invitationId)
+    const revisedUrl = `${new URL(request.url).origin}/admin/invitations/editor/${invitationId}`
+    const excerpt = `${note.slice(0, 100)}${note.length > 100 ? "…" : ""}`
+    await notifyStaff(supabase, {
+      kind: "review_revision",
+      customerId: revised.customerId,
+      telegramText: `✏️ ${revised.label}님이 청첩장 검수 피드백을 남기셨습니다.\n"${excerpt}"\n${revisedUrl}`,
+      push: { title: "수정 요청 도착", body: `${revised.label}님: ${excerpt}`, url: revisedUrl },
+    })
 
     return NextResponse.json({ ok: true, revision })
   }
@@ -143,11 +152,14 @@ export async function POST(request: Request) {
       summary: "신랑신부가 시안을 확정했습니다.",
     })
 
-    await sendTelegram(
-      `✅ ${await resolveCoupleLabel(supabase, invitationId)}님이 청첩장 검수를 완료(확정)하셨습니다.\n` +
-      `${new URL(request.url).origin}/admin/invitations/editor/${invitationId}`,
-      "review_approved"
-    )
+    const approved = await resolveCouple(supabase, invitationId)
+    const approvedUrl = `${new URL(request.url).origin}/admin/invitations/editor/${invitationId}`
+    await notifyStaff(supabase, {
+      kind: "review_approved",
+      customerId: approved.customerId,
+      telegramText: `✅ ${approved.label}님이 청첩장 검수를 완료(확정)하셨습니다.\n${approvedUrl}`,
+      push: { title: "시안 확정", body: `${approved.label}님이 청첩장을 확정했습니다.`, url: approvedUrl },
+    })
 
     return NextResponse.json({ ok: true })
   }

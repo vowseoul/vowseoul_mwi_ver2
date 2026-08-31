@@ -1,21 +1,34 @@
 /**
- * 텔레그램 봇 알림 공용 전송기.
+ * 공용 채팅으로 보낸다 — 크론 실패 경보(§lib/cron-alert.ts)와, 담당자 중 아무도
+ * 받을 곳이 없을 때의 최후 수단(§lib/notify-staff.ts)이 쓴다.
  *
- * 크론 실패(§lib/cron-alert.ts)와 고객 제출 알림(폼 제출 §app/api/form-submit,
- * 시안 검수 §app/api/review-submit)이 같은 봇/채팅을 쓴다. 추가 SDK 없이 Bot API 만 호출한다.
+ * 고객 제출 알림은 이제 담당자별로 갈린다(§lib/notify-staff.ts).
  *
  * TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID 가 설정되지 않았으면 조용히 넘어간다 —
  * 알림이 설정되지 않았다는 이유로 본래 작업(크론 실행, 고객의 폼 제출)이 실패하면 안 된다.
  * 전송 실패도 마찬가지로 삼키고 로그만 남긴다(호출부는 await 해도 절대 throw 되지 않는다).
  */
 export async function sendTelegram(text: string, kind?: TelegramKind): Promise<void> {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN
   const chatId = process.env.TELEGRAM_CHAT_ID
-  if (!botToken || !chatId) return
+  if (!chatId) return
 
   // 관리자가 끈 종류는 여기서 걸러낸다 — 호출부 네 곳이 각자 판단하면 한 곳을 빠뜨리는
   // 순간 "껐는데 계속 온다"가 된다. kind 를 넘기지 않은 호출(크론 실패)은 항상 보낸다.
   if (kind && !(await telegramKindEnabled(kind))) return
+
+  await sendTelegramTo(chatId, text)
+}
+
+/**
+ * 지정한 채팅으로 그냥 보낸다 — 종류별 on/off 를 보지 않는다.
+ *
+ * 담당자별 발송(§lib/notify-staff.ts)이 쓴다. 거기서는 받는 사람이 여럿이라
+ * 사람마다 설정을 다시 읽으면 같은 질문을 N 번 하게 되므로, 한 번만 확인하고
+ * 이 함수로 뿌린다.
+ */
+export async function sendTelegramTo(chatId: string, text: string): Promise<void> {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN
+  if (!botToken || !chatId) return
 
   try {
     const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
@@ -70,7 +83,7 @@ export function parseTelegramSettings(value: unknown): TelegramNotificationSetti
   return { form_submit: on("form_submit"), review_revision: on("review_revision"), review_approved: on("review_approved") }
 }
 
-async function telegramKindEnabled(kind: TelegramKind): Promise<boolean> {
+export async function telegramKindEnabled(kind: TelegramKind): Promise<boolean> {
   try {
     const { createSupabaseAdminClient } = await import("./supabase-admin")
     const { data } = await createSupabaseAdminClient()

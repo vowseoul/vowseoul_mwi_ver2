@@ -26,6 +26,7 @@ import {
   Sparkles,
   LogOut,
   HelpCircle,
+  Bell,
   Loader2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -204,6 +205,12 @@ export default function AdminLayout({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem asChild>
+                  <Link href="/admin/notifications">
+                    <Bell className="mr-2 h-4 w-4" />
+                    내 알림 설정
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" />
                   로그아웃
