@@ -43,6 +43,25 @@ export interface Database {
         }
         Update: Partial<Database['public']['Tables']['profiles']['Insert']>
       }
+      /** QR 리디렉션 — 인쇄된 코드가 지금 어느 청첩장을 가리키는지(§app/q/[code]) */
+      qr_links: {
+        Row: {
+          code: string
+          invitation_id: string | null
+          /** 청첩장이 아닌 곳으로 보낼 때. 값이 있으면 invitation_id 보다 우선한다 */
+          target_url: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          invitation_id?: string | null
+          target_url?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['qr_links']['Insert']>
+      }
       /** 웹 푸시 구독 — 기기마다 한 행. 서버 라우트(service_role)로만 읽고 쓴다. */
       push_subscriptions: {
         Row: {

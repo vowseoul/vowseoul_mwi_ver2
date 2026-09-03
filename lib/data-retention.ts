@@ -43,3 +43,25 @@ export function computeExpiryDate(weddingDate: string | Date, days: number): Dat
   const wedding = typeof weddingDate === "string" ? new Date(weddingDate) : weddingDate
   return new Date(wedding.getTime() + days * 24 * 60 * 60 * 1000)
 }
+
+/**
+ * QR·인쇄물 안내용 만료일 문구. 예식일이 없으면 null 을 준다 — 계산할 수 없는데
+ * 그럴듯한 날짜를 지어내면, 그 종이가 언제까지 유효한지 잘못 약속하게 된다.
+ *
+ * 크론과 같은 계산(computeExpiryDate)을 써야 화면의 약속과 실제 파기 시점이
+ * 어긋나지 않는다(§app/api/cron/purge-expired-invitations).
+ */
+export function formatExpiryNotice(
+  weddingDate: string | null | undefined,
+  days: number,
+): { date: Date; label: string } | null {
+  if (!weddingDate) return null
+  const wedding = new Date(weddingDate)
+  if (Number.isNaN(wedding.getTime())) return null
+
+  const date = computeExpiryDate(wedding, days)
+  return {
+    date,
+    label: `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일`,
+  }
+}
