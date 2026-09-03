@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { coupleLabel } from "@/lib/telegram"
-import { notifyStaff } from "@/lib/notify-staff"
+import { notifyStaffQuietly } from "@/lib/notify-staff"
 
 /**
  * 공개 폼(/form/[slug]) 제출 완료 시 customers 테이블 갱신.
@@ -91,7 +91,7 @@ export async function POST(request: Request) {
   // 제출 즉시 알 수 있게(벨 알림 보완). 링크는 배포 도메인을 따로 설정하지 않아도
   // 되도록 요청 URL 에서 origin 을 그대로 딴다.
   const detailUrl = `${new URL(request.url).origin}${detailPath}`
-  await notifyStaff(supabase, {
+  await notifyStaffQuietly(supabase, {
     kind: "form_submit",
     customerId,
     telegramText: `📝 ${coupleName}님이 고객 폼을 완료하셨습니다.\n${detailUrl}`,

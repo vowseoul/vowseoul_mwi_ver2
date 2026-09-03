@@ -23,6 +23,8 @@ export function MyNotificationSettings() {
   const [loading, setLoading] = useState(true)
   const [push, setPush] = useState<PushState>({ supported: false, permission: 'default', subscribed: false })
   const [busy, setBusy] = useState(false)
+  /** 테스트 발송이 남긴 실패 사유 — 무엇을 고쳐야 하는지 화면에 붙여둔다 */
+  const [problems, setProblems] = useState<string[]>([])
 
   useEffect(() => {
     void (async () => {
@@ -67,16 +69,27 @@ export function MyNotificationSettings() {
 
   const sendTest = async () => {
     setBusy(true)
+    setProblems([])
     try {
       const res = await fetch('/api/my-notifications', { method: 'POST' })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) {
-        toast.error(body.error || '보내지 못했습니다.')
+        toast.error(body.error || `보내지 못했습니다. (서버 응답 ${res.status})`)
         return
       }
-      toast.success(
-        `보냈습니다 — 텔레그램 ${body.telegram ? '1건' : '없음'} · 브라우저 알림 ${body.push}건`,
-      )
+
+      const parts = [
+        body.telegram === null ? null : `텔레그램 ${body.telegram ? '성공' : '실패'}`,
+        `브라우저 알림 ${body.push.sent}건 성공${body.push.failed ? ` · ${body.push.failed}건 실패` : ''}`,
+      ].filter(Boolean)
+
+      // 실패 사유는 토스트가 아니라 화면에 남긴다 — 사라지는 알림에 적어두면
+      // 정작 고쳐야 할 사람이 다시 읽을 수 없다.
+      setProblems(body.problems ?? [])
+      if (body.ok) toast.success(`보냈습니다 — ${parts.join(' · ')}`)
+      else toast.error(`일부 실패했습니다 — ${parts.join(' · ')}`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '보내지 못했습니다.')
     } finally {
       setBusy(false)
     }
@@ -167,6 +180,13 @@ export function MyNotificationSettings() {
           <Button variant="outline" onClick={sendTest} disabled={busy}>
             테스트 알림 보내기
           </Button>
+          {problems.length > 0 && (
+            <ul className="mt-3 space-y-1.5 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-[13px] leading-relaxed text-destructive">
+              {problems.map((p, i) => (
+                <li key={i}>{p}</li>
+              ))}
+            </ul>
+          )}
         </CardContent>
       </Card>
     </div>

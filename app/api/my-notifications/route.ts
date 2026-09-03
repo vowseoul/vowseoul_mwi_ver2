@@ -61,8 +61,12 @@ export async function PUT(request: Request) {
  * 테스트 발송 — 설정한 경로로 실제로 한 통 보내본다.
  *
  * 이 기능의 실패는 전부 조용하다. 채팅 ID 오타, 봇과 대화를 시작하지 않은 상태,
- * 홈 화면에 추가하지 않은 아이폰 — 어느 쪽이든 화면에는 아무 표시가 없고 알림만
- * 안 온다. 눌러서 확인할 수단이 없으면 "설정했다고 생각한 채로" 놓치게 된다.
+ * 홈 화면에 추가하지 않은 아이폰, 서버 환경변수 오타 — 어느 쪽이든 화면에는
+ * 아무 표시가 없고 알림만 안 온다.
+ *
+ * 그래서 결과를 경로별로 돌려준다. 예전에는 실패를 통째로 삼키고 "보내지
+ * 못했습니다" 한 줄만 띄웠는데, 그러면 무엇을 고쳐야 하는지 알 수가 없어서
+ * 확인 버튼을 만든 의미가 없었다.
  */
 export async function POST() {
   const userId = await me()
@@ -75,19 +79,28 @@ export async function POST() {
     .from("push_subscriptions").select("id, endpoint, p256dh, auth").eq("user_id", userId)
 
   const chatId = profile?.telegram_chat_id?.trim()
-  const pushCount = (subs ?? []).length
-  if (!chatId && pushCount === 0) {
-    return NextResponse.json({ error: "설정된 알림 경로가 없습니다." }, { status: 400 })
+  const subscriptions = subs ?? []
+  if (!chatId && subscriptions.length === 0) {
+    return NextResponse.json(
+      { error: "설정된 알림 경로가 없습니다. 텔레그램 채팅 ID를 넣거나 이 기기에서 알림을 켜주세요." },
+      { status: 400 },
+    )
   }
 
-  await Promise.all([
+  const [telegram, push] = await Promise.all([
     chatId ? sendTelegramTo(chatId, "🔔 VOW SEOUL 테스트 알림입니다. 이 메시지가 보이면 설정이 끝났습니다.") : null,
-    sendWebPush(admin, subs ?? [], {
+    sendWebPush(admin, subscriptions, {
       title: "테스트 알림",
       body: "이 알림이 보이면 설정이 끝났습니다.",
       url: "/admin/notifications",
     }),
   ])
 
-  return NextResponse.json({ ok: true, telegram: !!chatId, push: pushCount })
+  const problems = [telegram?.reason, push.reason].filter(Boolean) as string[]
+  return NextResponse.json({
+    ok: problems.length === 0,
+    telegram: telegram ? telegram.sent : null,
+    push: { sent: push.sent, failed: push.failed },
+    problems,
+  })
 }

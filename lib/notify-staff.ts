@@ -62,3 +62,21 @@ export async function notifyStaff(
     sendWebPush(supabase, (subs ?? []) as PushSubscriptionRow[], opts.push),
   ])
 }
+
+/**
+ * 알림 때문에 본래 작업이 실패하지는 않게 감싼 호출.
+ *
+ * 고객이 폼을 제출하는 라우트가 이걸 부른다. 알림 경로에서 예외가 하나 새면
+ * 라우트가 500 이 되고, 고객 화면에는 "제출하지 못했습니다"가 뜬다 — 데이터는
+ * 이미 저장됐는데도. 알림을 못 보내는 것과 제출을 못 받는 것은 심각도가 다르다.
+ */
+export async function notifyStaffQuietly(
+  supabase: SupabaseClient<any, any, any>,
+  opts: Parameters<typeof notifyStaff>[1],
+): Promise<void> {
+  try {
+    await notifyStaff(supabase, opts)
+  } catch (err) {
+    console.error("[notify] 알림 발송 실패(본래 작업은 계속):", err)
+  }
+}
