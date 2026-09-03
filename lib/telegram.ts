@@ -19,6 +19,12 @@ export async function sendTelegram(text: string, kind?: TelegramKind): Promise<v
   await sendTelegramTo(chatId, text)
 }
 
+/** 보냈는지와, 못 보냈다면 사람이 읽을 수 있는 이유 */
+export interface TelegramSendResult {
+  sent: boolean
+  reason?: string
+}
+
 /**
  * 지정한 채팅으로 그냥 보낸다 — 종류별 on/off 를 보지 않는다.
  *
@@ -26,9 +32,10 @@ export async function sendTelegram(text: string, kind?: TelegramKind): Promise<v
  * 사람마다 설정을 다시 읽으면 같은 질문을 N 번 하게 되므로, 한 번만 확인하고
  * 이 함수로 뿌린다.
  */
-export async function sendTelegramTo(chatId: string, text: string): Promise<void> {
+export async function sendTelegramTo(chatId: string, text: string): Promise<TelegramSendResult> {
   const botToken = process.env.TELEGRAM_BOT_TOKEN
-  if (!botToken || !chatId) return
+  if (!botToken) return { sent: false, reason: "서버에 TELEGRAM_BOT_TOKEN 이 설정되지 않았습니다." }
+  if (!chatId) return { sent: false, reason: "채팅 ID가 비어 있습니다." }
 
   try {
     const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
@@ -37,11 +44,17 @@ export async function sendTelegramTo(chatId: string, text: string): Promise<void
       // disable_web_page_preview: 링크 미리보기 카드가 붙으면 알림이 길어져 목록에서 읽기 나쁘다
       body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
     })
-    if (!res.ok) {
-      console.error("[telegram] 전송 실패:", res.status, await res.text().catch(() => ""))
-    }
+    if (res.ok) return { sent: true }
+
+    // 텔레그램은 실패 사유를 본문에 담아준다. 가장 흔한 두 가지가
+    // "chat not found"(채팅 ID 오타)와 "bot can't initiate conversation"(봇과 대화를
+    // 시작하지 않음)인데, 로그로만 삼키면 둘 다 "그냥 안 온다"로만 보인다.
+    const body = await res.text().catch(() => "")
+    console.error("[telegram] 전송 실패:", res.status, body)
+    return { sent: false, reason: `텔레그램이 거부했습니다 (${res.status}) — ${body.slice(0, 200)}` }
   } catch (err) {
     console.error("[telegram] 전송 중 오류:", err)
+    return { sent: false, reason: `텔레그램에 연결하지 못했습니다 — ${err instanceof Error ? err.message : String(err)}` }
   }
 }
 

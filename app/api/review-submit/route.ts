@@ -4,7 +4,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { dashboardCookieName, verifyDashboardToken } from "@/lib/dashboard-session"
 import { logAuditEvent } from "@/lib/audit-log"
 import { coupleLabel } from "@/lib/telegram"
-import { notifyStaff } from "@/lib/notify-staff"
+import { notifyStaffQuietly } from "@/lib/notify-staff"
 
 /**
  * 시안 검수 화면(/invitation/[id]/review)의 수정 요청 제출 · 확정.
@@ -125,7 +125,7 @@ export async function POST(request: Request) {
     const revised = await resolveCouple(supabase, invitationId)
     const revisedUrl = `${new URL(request.url).origin}/admin/invitations/editor/${invitationId}`
     const excerpt = `${note.slice(0, 100)}${note.length > 100 ? "…" : ""}`
-    await notifyStaff(supabase, {
+    await notifyStaffQuietly(supabase, {
       kind: "review_revision",
       customerId: revised.customerId,
       telegramText: `✏️ ${revised.label}님이 청첩장 검수 피드백을 남기셨습니다.\n"${excerpt}"\n${revisedUrl}`,
@@ -154,7 +154,7 @@ export async function POST(request: Request) {
 
     const approved = await resolveCouple(supabase, invitationId)
     const approvedUrl = `${new URL(request.url).origin}/admin/invitations/editor/${invitationId}`
-    await notifyStaff(supabase, {
+    await notifyStaffQuietly(supabase, {
       kind: "review_approved",
       customerId: approved.customerId,
       telegramText: `✅ ${approved.label}님이 청첩장 검수를 완료(확정)하셨습니다.\n${approvedUrl}`,

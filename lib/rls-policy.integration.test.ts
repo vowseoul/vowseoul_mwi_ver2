@@ -61,6 +61,9 @@ const EXPECTED_ANON_SELECT: Record<string, AnonAccess> = {
   // 직원 알림 구독. 등록·해제·조회 전부 서버 라우트를 거친다(§app/api/push-subscribe) —
   // endpoint 가 새어 나가면 남의 기기로 알림을 밀어 넣을 여지가 생긴다.
   push_subscriptions: "blocked",
+  // 인쇄된 QR 이 어디로 가는지. 발급·연결변경은 관리자 라우트, 조회는 /q/[code] 가 한다 —
+  // 브라우저가 쓸 수 있으면 남의 인쇄물을 아무 데로나 돌려버릴 수 있다.
+  qr_links: "blocked",
   rate_limit_attempts: "blocked",
   rsvp_responses: "blocked",
   rsvp_responses_history: "blocked",

@@ -2221,7 +2221,7 @@ export default function CustomizeClient({
               <Copy className="h-3.5 w-3.5" /> 청첩장 주소 복사하기
             </Button>
           )}
-          {publicSlug && <QrCodeDialog path={`/w/${publicSlug}`} fileBaseName={publicSlug} />}
+          {publicSlug && <QrCodeDialog invitationId={invitationId} path={`/w/${publicSlug}`} fileBaseName={publicSlug} weddingDate={weddingDate} />}
           {publicSlug && (
             <Button variant="outline" className="gap-2" onClick={copyDashboardLink}>
               <Copy className="h-3.5 w-3.5" /> 고객용 대시보드 복사하기

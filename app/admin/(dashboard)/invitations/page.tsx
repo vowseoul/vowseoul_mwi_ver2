@@ -57,7 +57,8 @@ import {
   Link2,
   Trash2,
   ClipboardList,
-  Pencil
+  Pencil,
+  QrCode
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -198,6 +199,15 @@ export default function InvitationsListPage() {
           <p className="text-sm text-muted-foreground mt-1">고객 정보 수집 완료 후, 청첩장 초안을 제작하고 발행 상태를 모니터링합니다</p>
         </div>
 
+        <div className="flex shrink-0 items-center gap-2">
+          {/* 인쇄된 QR 은 청첩장이 파기돼도 남는다 — 편집기 안에만 두면 그때 열어볼
+              화면이 사라지므로 목록 옆에 별도 입구를 둔다. */}
+          <Button variant="outline" className="gap-2" asChild>
+            <Link href="/admin/invitations/qr">
+              <QrCode className="h-4 w-4" /> QR코드 관리
+            </Link>
+          </Button>
+
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2">
@@ -272,6 +282,7 @@ export default function InvitationsListPage() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Filter and Search */}
