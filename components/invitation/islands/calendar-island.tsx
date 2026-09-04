@@ -156,6 +156,18 @@ function CalendarIsland({ accent, data, raw, blockOverrides }: SlotProps) {
   const boxOpacity = blockOverrides?.calendar?.calendarBoxOpacity ?? CALENDAR_BOX_DEFAULT.opacity
   // 배경에만 알파를 먹인다 — 박스에 CSS opacity 를 주면 날짜 숫자와 강조 표시까지 흐려진다
   const boxBackground = hexToRgba(boxColor, boxOpacity)
+  /**
+   * 달력 글자색을 테마가 가로챌 수 있게 하는 두 토큰.
+   *
+   * 이 아일랜드는 모든 테마가 함께 쓰므로 색을 여기서 못 박으면 어느 한 테마에는
+   * 반드시 안 맞는다. 예전에는 박스 안이 #000 으로 고정돼 있어, 섹션 배경을 두 색으로
+   * 번갈아 칠하는 테마에서 배치별 글자색을 지정해도 달력만 검정으로 남았다.
+   *
+   * 값이 없으면 예전 그대로다 — 토큰을 선언하지 않은 테마는 아무것도 변하지 않는다.
+   * color-atelier 는 두 토큰을 currentColor 로 선언해 섹션 글자색을 따라가게 한다.
+   */
+  const INK = "var(--calendar-ink, #000)"
+  const accentInk = `var(--calendar-accent-ink, ${accent})`
   const [now, setNow] = useState(() => new Date())
   // 폼 입력값(wedding_date/wedding_time) 기준 기본값 — 관리자가 편집기 "블럭" 카드에서 직접 문구로
   // 덮어쓸 수 있다(§customize-client.tsx calendarDateText/calendarTimeText).
@@ -180,13 +192,17 @@ function CalendarIsland({ accent, data, raw, blockOverrides }: SlotProps) {
 
   return (
     <div>
-      <div style={{ maxWidth: 320, margin: "0 auto", background: boxBackground, padding: 16, color: "#000", borderRadius: 2, boxShadow: "0 4px 10px rgba(0,0,0,.05)" }}>
+      {/* 글자색을 테마가 가로챌 수 있게 토큰으로 연다(§calendar-island 상단 주석).
+          값이 없으면 예전 그대로 검정이라 다른 테마는 변하지 않는다. */}
+      <div style={{ maxWidth: 320, margin: "0 auto", background: boxBackground, padding: 16, color: INK, borderRadius: 2, boxShadow: "0 4px 10px rgba(0,0,0,.05)" }}>
         <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <p style={{ fontSize: 20, fontWeight: 500, letterSpacing: ".15em", textTransform: "uppercase", color: accent, fontFamily: "var(--font-en, inherit)" }}>
+          <p style={{ fontSize: 20, fontWeight: 500, letterSpacing: ".15em", textTransform: "uppercase", color: accentInk, fontFamily: "var(--font-en, inherit)" }}>
             {MONTHS_FULL[cal.month]}
           </p>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", rowGap: 12, textAlign: "center", fontSize: 12, fontWeight: 500, color: `color-mix(in srgb, ${accent} 55%, #ffffff)` }}>
+        {/* 격자에 색을 주지 않는다 — 날짜 숫자는 박스 글자색을 그대로 쓰고,
+            흐리게 할 것은 아래 요일 라벨뿐이다(자체 opacity 0.55). */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", rowGap: 12, textAlign: "center", fontSize: 12, fontWeight: 500 }}>
           {["일", "월", "화", "수", "목", "금", "토"].map((d) => (
             <div key={d} style={{ padding: "4px 0", opacity: 0.55, fontWeight: 600 }}>{d}</div>
           ))}
@@ -240,11 +256,11 @@ function CalendarIsland({ accent, data, raw, blockOverrides }: SlotProps) {
 
       {/* D-day 카운트다운 */}
       {ddayEnabled && (
-        <div style={{ marginTop: 48, paddingTop: 32, textAlign: "center", borderTop: `1px solid ${accent}` }}>
-          <p style={{ fontSize: 14, textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600, color: accent, marginBottom: 20, fontFamily: "var(--font-en, inherit)" }}>
+        <div style={{ marginTop: 48, paddingTop: 32, textAlign: "center", borderTop: `1px solid ${accentInk}` }}>
+          <p style={{ fontSize: 14, textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600, color: accentInk, marginBottom: 20, fontFamily: "var(--font-en, inherit)" }}>
             Days left
           </p>
-          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 40, maxWidth: 280, margin: "0 auto", color: accent, fontFamily: "var(--font-en, inherit)" }}>
+          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 40, maxWidth: 280, margin: "0 auto", color: accentInk, fontFamily: "var(--font-en, inherit)" }}>
             {[["DAYS", daysLeft], ["HOURS", hoursLeft], ["MINUTES", minutesLeft]].map(([label, value]) => (
               <div key={String(label)} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                 <p style={{ fontSize: 14, letterSpacing: ".05em", opacity: 0.6 }}>{label}</p>
