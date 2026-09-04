@@ -48,9 +48,22 @@ function GalleryIsland({ raw }: SlotProps) {
 
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
+  const overlayRef = useRef<HTMLDivElement>(null)
+  /** 사진들을 가로로 늘어놓은 띠. 이 띠를 옮겨서 넘긴다 */
+  const trackRef = useRef<HTMLDivElement>(null)
+  /** 이번 이동은 애니메이션 없이 — 처음 열 때와, 끝에서 처음으로 순환할 때 */
+  const jumpRef = useRef(true)
   const lightboxOpen = lightboxIndex !== null
-  const prev = () => setLightboxIndex((i) => (i === null ? null : (i - 1 + images.length) % images.length))
-  const next = () => setLightboxIndex((i) => (i === null ? null : (i + 1) % images.length))
+
+  /** 한 장 옮긴다. 끝↔처음으로 감길 때는 중간 사진들을 훑고 지나가지 않도록 즉시 옮긴다 */
+  const step = (dir: 1 | -1) => {
+    if (lightboxIndex === null || images.length < 2) return
+    const target = (lightboxIndex + dir + images.length) % images.length
+    jumpRef.current = Math.abs(target - lightboxIndex) !== 1
+    setLightboxIndex(target)
+  }
+  const prev = () => step(-1)
+  const next = () => step(1)
 
   /**
    * 라이트박스가 열려 있는 동안 뒤에 깔린 청첩장이 따라 스크롤되지 않게 잠근다.
@@ -69,47 +82,112 @@ function GalleryIsland({ raw }: SlotProps) {
     if (!doc || !win) return
 
     const body = doc.body
+    const root = doc.documentElement
     const scrollY = win.scrollY
-    const saved = { position: body.style.position, top: body.style.top, width: body.style.width, overflow: body.style.overflow }
+    const saved = {
+      position: body.style.position, top: body.style.top, width: body.style.width,
+      overflow: body.style.overflow, overscroll: root.style.overscrollBehavior,
+    }
 
     body.style.position = "fixed"
     body.style.top = `-${scrollY}px`
     body.style.width = "100%"
     body.style.overflow = "hidden"
+    root.style.overscrollBehavior = "none"
 
     return () => {
       body.style.position = saved.position
       body.style.top = saved.top
       body.style.width = saved.width
       body.style.overflow = saved.overflow
+      root.style.overscrollBehavior = saved.overscroll
       win.scrollTo(0, scrollY)
     }
   }, [lightboxOpen])
 
-  // 좌우로 밀어 사진 넘기기. 배경을 누르면 닫히는데 스와이프도 click 을 일으키므로,
-  // 밀어서 넘긴 직후의 click 한 번은 삼킨다 — 안 그러면 넘기려다 라이트박스가 닫힌다.
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null)
-  const swipedRef = useRef(false)
+  /** 띠를 지금 사진 자리로 옮긴다. transform 을 JSX 에 두지 않는 이유는 손가락을 따라
+   *  움직이는 동안 같은 값을 React 와 서로 덮어쓰게 되기 때문이다 — 여기 한 곳에서만 쓴다. */
+  useEffect(() => {
+    const track = trackRef.current
+    if (!track || lightboxIndex === null) return
+    track.style.transition = jumpRef.current ? "none" : "transform .3s cubic-bezier(.22,.61,.36,1)"
+    track.style.transform = `translate3d(${-lightboxIndex * 100}%, 0, 0)`
+    jumpRef.current = false
+  }, [lightboxIndex])
 
-  const onLightboxTouchStart = (e: React.TouchEvent) => {
-    const t = e.touches[0]
-    touchStartRef.current = { x: t.clientX, y: t.clientY }
-    swipedRef.current = false
-  }
-  const onLightboxTouchEnd = (e: React.TouchEvent) => {
-    const start = touchStartRef.current
-    touchStartRef.current = null
-    if (!start || images.length < 2) return
-    const t = e.changedTouches[0]
-    const dx = t.clientX - start.x
-    const dy = t.clientY - start.y
-    // 세로로 더 많이 움직였으면 넘기지 않는다 — 사진을 살펴보려 훑는 동작까지
-    // 넘김으로 처리하면 원하는 사진에 머무를 수가 없다.
-    if (Math.abs(dx) < 40 || Math.abs(dx) <= Math.abs(dy)) return
-    swipedRef.current = true
-    if (dx > 0) prev()
-    else next()
-  }
+  /**
+   * 손가락을 따라 사진이 밀리고, 놓으면 넘어가거나 제자리로 돌아온다.
+   *
+   * touchmove 를 passive:false 로 직접 걸어야 preventDefault 가 먹는다. 이게 없으면
+   * 카카오톡 인앱 브라우저에서 세로로 밀 때 화면 전체가 고무줄처럼 튕긴다 —
+   * body 를 fixed 로 잠가도 브라우저의 오버스크롤 바운스까지는 막지 못한다.
+   * 손가락 두 개(확대)는 그대로 둔다.
+   */
+  const swipedRef = useRef(false)
+  useEffect(() => {
+    const overlay = overlayRef.current
+    if (!overlay || lightboxIndex === null) return
+
+    let startX = 0
+    let startY = 0
+    let tracking = false
+
+    const onStart = (e: TouchEvent) => {
+      swipedRef.current = false
+      tracking = e.touches.length === 1
+      if (!tracking) return
+      startX = e.touches[0].clientX
+      startY = e.touches[0].clientY
+    }
+
+    const onMove = (e: TouchEvent) => {
+      if (e.touches.length === 1) e.preventDefault()
+      if (!tracking || images.length < 2) return
+      const dx = e.touches[0].clientX - startX
+      const track = trackRef.current
+      if (!track) return
+      track.style.transition = "none"
+      track.style.transform = `translate3d(calc(${-lightboxIndex * 100}% + ${dx}px), 0, 0)`
+    }
+
+    const settle = () => {
+      const track = trackRef.current
+      if (!track) return
+      track.style.transition = "transform .3s cubic-bezier(.22,.61,.36,1)"
+      track.style.transform = `translate3d(${-lightboxIndex * 100}%, 0, 0)`
+    }
+
+    const onEnd = (e: TouchEvent) => {
+      if (!tracking) return
+      tracking = false
+      const t = e.changedTouches[0]
+      const dx = t.clientX - startX
+      const dy = t.clientY - startY
+      // 세로로 더 많이 움직였으면 넘기지 않는다 — 사진을 살펴보려 훑는 동작까지
+      // 넘김으로 처리하면 원하는 사진에 머무를 수가 없다.
+      if (images.length < 2 || Math.abs(dx) < 40 || Math.abs(dx) <= Math.abs(dy)) {
+        settle()
+        return
+      }
+      swipedRef.current = true
+      // prev()/next() 를 부르지 않고 여기서 계산한다 — 그 함수들은 렌더마다 새로 생겨
+      // 의존성에 넣으면 이 리스너가 매 렌더 다시 붙는다.
+      const target = (lightboxIndex + (dx > 0 ? -1 : 1) + images.length) % images.length
+      jumpRef.current = Math.abs(target - lightboxIndex) !== 1
+      setLightboxIndex(target)
+    }
+
+    overlay.addEventListener("touchstart", onStart, { passive: false })
+    overlay.addEventListener("touchmove", onMove, { passive: false })
+    overlay.addEventListener("touchend", onEnd)
+    overlay.addEventListener("touchcancel", onEnd)
+    return () => {
+      overlay.removeEventListener("touchstart", onStart)
+      overlay.removeEventListener("touchmove", onMove)
+      overlay.removeEventListener("touchend", onEnd)
+      overlay.removeEventListener("touchcancel", onEnd)
+    }
+  }, [lightboxIndex, images.length])
 
   // 라이트박스가 열려있을 때 ESC/방향키 조작 — iframe(별도 realm)에 포탈되므로
   // BgmIsland 와 동일하게 이 아일랜드가 속한 문서에 직접 리스너를 건다.
@@ -164,7 +242,11 @@ function GalleryIsland({ raw }: SlotProps) {
     }
   }, [zoomBlocked])
 
-  const openLightbox = (i: number) => { if (!zoomBlocked) setLightboxIndex(i) }
+  const openLightbox = (i: number) => {
+    if (zoomBlocked) return
+    jumpRef.current = true // 열 때는 눌러 놓은 사진이 곧바로 떠야 한다
+    setLightboxIndex(i)
+  }
   // 확대방지 시 사진 자체의 선택·길게눌러 저장·드래그를 CSS 레벨에서도 막는다
   // (위 이벤트 리스너와 이중으로 — iOS 사파리는 -webkit-touch-callout 없이는 길게 눌렀을 때
   //  이미지 저장 시트가 그대로 뜬다).
@@ -207,17 +289,17 @@ function GalleryIsland({ raw }: SlotProps) {
       {thumbnails}
       {lightboxIndex !== null && (
         <div
+          ref={overlayRef}
           onClick={() => {
             if (swipedRef.current) { swipedRef.current = false; return }
             setLightboxIndex(null)
           }}
-          onTouchStart={onLightboxTouchStart}
-          onTouchEnd={onLightboxTouchEnd}
           style={{
             position: "fixed", inset: 0, zIndex: 70, background: "rgba(0,0,0,.92)",
-            display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            overflow: "hidden",
             // 잠금을 뚫고 스크롤이 조상으로 흘러가는 것까지 막는다
-            overscrollBehavior: "contain",
+            overscrollBehavior: "none",
           }}
         >
           <button
@@ -230,12 +312,30 @@ function GalleryIsland({ raw }: SlotProps) {
           {images.length > 1 && (
             <button onClick={(e) => { e.stopPropagation(); prev() }} style={{ ...navBtnStyle, left: 12 }} aria-label="이전 사진">‹</button>
           )}
-          <img
-            src={images[lightboxIndex]}
-            alt=""
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: "100%", maxHeight: "85vh", objectFit: "contain" }}
-          />
+          {/* 사진을 가로로 늘어놓은 띠. 한 칸이 화면 하나이고, 띠를 옮겨서 넘긴다 —
+              보이는 것만 갈아끼우면 손가락을 따라오는 느낌이 나지 않는다. */}
+          <div
+            ref={trackRef}
+            style={{ display: "flex", width: "100%", height: "100%", willChange: "transform" }}
+          >
+            {images.map((src, i) => (
+              <div
+                key={i}
+                style={{
+                  flex: "0 0 100%", height: "100%", padding: 24, boxSizing: "border-box",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                <img
+                  src={src}
+                  alt=""
+                  onClick={(e) => e.stopPropagation()}
+                  draggable={false}
+                  style={{ maxWidth: "100%", maxHeight: "85vh", objectFit: "contain" }}
+                />
+              </div>
+            ))}
+          </div>
           {images.length > 1 && (
             <button onClick={(e) => { e.stopPropagation(); next() }} style={{ ...navBtnStyle, right: 12 }} aria-label="다음 사진">›</button>
           )}
