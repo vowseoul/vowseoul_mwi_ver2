@@ -35,15 +35,20 @@
    invitation-frame.tsx가 [data-alt] 마커를 보고 "실제로 보이는 섹션 순서" 기준으로
    매번 다시 매긴다(§ InvitationFrame의 data-alt 이펙트). 블럭을 꺼서 순서가 바뀌어도
    항상 A-B-A-B가 유지된다 — 템플릿에 직접 dark/light를 쓰면 블럭 제거 시 깨진다.
-   이 테마의 핵심 2색은 배경색·포인트 색상이다. 본문 텍스트 색(--ink)은 여기서 쓰지 않는다. */
+   이 테마의 핵심 2색은 배경색·포인트 색상이다. 본문 텍스트 색(--ink)은 여기서 쓰지 않는다.
+
+   글자색은 기본적으로 서로의 배경색을 뒤집어 쓴다(A 는 --bg, B 는 --accent). 두 색이
+   모두 밝으면 B 에서 밝은 글씨가 밝은 바탕에 얹혀 읽히지 않으므로, --alt-a-text /
+   --alt-b-text 로 그 배치의 글자색만 따로 정할 수 있게 열어 둔다. 값이 없으면 예전과
+   똑같이 동작한다 — 이미 발행된 청첩장은 변하지 않는다. */
 .ca-section.vs-alt-a {
   background-color: var(--accent, #C4A574);
-  color: var(--bg, #FAF9F7);
+  color: var(--alt-a-text, var(--bg, #FAF9F7));
 }
 
 .ca-section.vs-alt-b {
   background-color: var(--bg, #FAF9F7);
-  color: var(--accent, #C4A574);
+  color: var(--alt-b-text, var(--accent, #C4A574));
 }
 
 /* Section Header Typography */

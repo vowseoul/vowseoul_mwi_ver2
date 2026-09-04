@@ -88,6 +88,12 @@ export const TOKEN_FIELDS: { name: string; label: string; type: "color" | "font"
   { name: "--ink", label: "본문 텍스트 색", type: "color" },
   { name: "--accent-2", label: "보조 색상", type: "color" },
   { name: "--ink-2", label: "보조 텍스트 색", type: "color" },
+  // 섹션 배경을 두 색으로 번갈아 칠하는 테마(color-atelier)용. 기본값은 서로의 배경색을
+  // 그대로 뒤집어 쓰는데, 배경색과 포인트 색이 둘 다 밝으면 밝은 글씨가 밝은 바탕에
+  // 얹혀 읽히지 않는다. 그때 그 배치의 글자색만 따로 정한다.
+  // 이 토큰을 참조하지 않는 테마에서는 피커가 나타나지 않는다(§visibleTokenFields).
+  { name: "--alt-a-text", label: "A 배치 글자색 (기본: 배경색)", type: "color" },
+  { name: "--alt-b-text", label: "B 배치 글자색 (기본: 포인트 색상)", type: "color" },
   { name: "--font-kr", label: "한글 폰트", type: "font" },
   { name: "--font-en", label: "영문 폰트", type: "font" },
 ]
