@@ -48,8 +48,68 @@ function GalleryIsland({ raw }: SlotProps) {
 
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
+  const lightboxOpen = lightboxIndex !== null
   const prev = () => setLightboxIndex((i) => (i === null ? null : (i - 1 + images.length) % images.length))
   const next = () => setLightboxIndex((i) => (i === null ? null : (i + 1) % images.length))
+
+  /**
+   * 라이트박스가 열려 있는 동안 뒤에 깔린 청첩장이 따라 스크롤되지 않게 잠근다.
+   *
+   * overflow:hidden 만으로는 iOS 사파리에서 손가락 스크롤이 그대로 먹는다 — 그래서
+   * body 를 fixed 로 띄우고 그만큼 top 을 당겨 화면을 붙잡아 둔다. 닫을 때 원래 위치로
+   * 되돌리지 않으면 사진을 닫는 순간 청첩장 맨 위로 튄다.
+   *
+   * 청첩장은 iframe 안이라(§invitation-frame) 잠가야 할 것은 부모 페이지가 아니라
+   * 이 아일랜드가 속한 문서다.
+   */
+  useEffect(() => {
+    if (!lightboxOpen) return
+    const doc = rootRef.current?.ownerDocument
+    const win = doc?.defaultView
+    if (!doc || !win) return
+
+    const body = doc.body
+    const scrollY = win.scrollY
+    const saved = { position: body.style.position, top: body.style.top, width: body.style.width, overflow: body.style.overflow }
+
+    body.style.position = "fixed"
+    body.style.top = `-${scrollY}px`
+    body.style.width = "100%"
+    body.style.overflow = "hidden"
+
+    return () => {
+      body.style.position = saved.position
+      body.style.top = saved.top
+      body.style.width = saved.width
+      body.style.overflow = saved.overflow
+      win.scrollTo(0, scrollY)
+    }
+  }, [lightboxOpen])
+
+  // 좌우로 밀어 사진 넘기기. 배경을 누르면 닫히는데 스와이프도 click 을 일으키므로,
+  // 밀어서 넘긴 직후의 click 한 번은 삼킨다 — 안 그러면 넘기려다 라이트박스가 닫힌다.
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null)
+  const swipedRef = useRef(false)
+
+  const onLightboxTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0]
+    touchStartRef.current = { x: t.clientX, y: t.clientY }
+    swipedRef.current = false
+  }
+  const onLightboxTouchEnd = (e: React.TouchEvent) => {
+    const start = touchStartRef.current
+    touchStartRef.current = null
+    if (!start || images.length < 2) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - start.x
+    const dy = t.clientY - start.y
+    // 세로로 더 많이 움직였으면 넘기지 않는다 — 사진을 살펴보려 훑는 동작까지
+    // 넘김으로 처리하면 원하는 사진에 머무를 수가 없다.
+    if (Math.abs(dx) < 40 || Math.abs(dx) <= Math.abs(dy)) return
+    swipedRef.current = true
+    if (dx > 0) prev()
+    else next()
+  }
 
   // 라이트박스가 열려있을 때 ESC/방향키 조작 — iframe(별도 realm)에 포탈되므로
   // BgmIsland 와 동일하게 이 아일랜드가 속한 문서에 직접 리스너를 건다.
@@ -147,10 +207,17 @@ function GalleryIsland({ raw }: SlotProps) {
       {thumbnails}
       {lightboxIndex !== null && (
         <div
-          onClick={() => setLightboxIndex(null)}
+          onClick={() => {
+            if (swipedRef.current) { swipedRef.current = false; return }
+            setLightboxIndex(null)
+          }}
+          onTouchStart={onLightboxTouchStart}
+          onTouchEnd={onLightboxTouchEnd}
           style={{
             position: "fixed", inset: 0, zIndex: 70, background: "rgba(0,0,0,.92)",
             display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+            // 잠금을 뚫고 스크롤이 조상으로 흘러가는 것까지 막는다
+            overscrollBehavior: "contain",
           }}
         >
           <button
