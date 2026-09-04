@@ -51,6 +51,16 @@
   color: var(--alt-b-text, var(--accent, #C4A574));
 }
 
+/* 달력 블럭은 아일랜드(React)가 그리고, 색은 인라인 스타일로 붙어 CSS 로는 못 이긴다.
+   그래서 아일랜드가 열어둔 토큰으로 가로챈다(§components/invitation/islands/calendar-island).
+   이 테마는 섹션 배경이 두 색으로 번갈아 칠해지므로, 달력 글자도 그 섹션이 그 순간 쓰는
+   글자색(--alt-a-text/--alt-b-text 가 반영된 값)을 따라가야 한다. 고정색을 쓰면 배치
+   하나에서는 반드시 배경과 부딪힌다. */
+.ca-calendar-section {
+  --calendar-ink: currentColor;
+  --calendar-accent-ink: currentColor;
+}
+
 /* Section Header Typography */
 .ca-section__header-sub {
   font-family: var(--font-en, 'Playfair Display', serif);
