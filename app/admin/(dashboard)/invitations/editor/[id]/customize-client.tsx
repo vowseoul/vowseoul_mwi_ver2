@@ -317,6 +317,10 @@ export default function CustomizeClient({
   const setField = (key: string, value: string) => setContent((cur) => ({ ...cur, [key]: value }))
 
   const [weddingDate, setWeddingDate] = useState(String(initialRaw.wedding_date ?? ""))
+  /** 추가 안내문구 칸을 펼쳐 두는가 — 이미 내용이 있으면 처음부터 펼친다 */
+  const [customNoticeOpen, setCustomNoticeOpen] = useState(
+    !!String(initialRaw.custom_notice_title ?? "").trim() || !!String(initialRaw.custom_notice_body ?? "").trim()
+  )
   const [weddingTime, setWeddingTime] = useState(String(initialRaw.wedding_time ?? ""))
 
   const [galleryImages, setGalleryImages] = useState<string[]>(() =>
@@ -823,6 +827,46 @@ export default function CustomizeClient({
                   {visibleContentFields.filter((f) => ["traffic_info", "parking_info", "shuttle_info"].includes(f.key)).map((f) => (
                     <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
                   ))}
+
+                  {/* 교통·주차·셔틀 말고 더 적을 것이 있을 때. 내용이 비어 있으면 하객 화면에
+                      아무것도 나타나지 않으므로(§template.html data-field-when), 접어두고
+                      필요할 때만 펼친다 — 늘 펼쳐 두면 안 쓰는 칸이 화면만 차지한다. */}
+                  {visibleContentFields.some((f) => f.key === "custom_notice_body") && (
+                    customNoticeOpen ? (
+                      <div className="space-y-3 rounded-lg border border-border p-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-foreground">추가 안내문구</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs text-muted-foreground"
+                            onClick={() => {
+                              setField("custom_notice_title", "")
+                              setField("custom_notice_body", "")
+                              setCustomNoticeOpen(false)
+                            }}
+                          >
+                            지우기
+                          </Button>
+                        </div>
+                        {visibleContentFields
+                          .filter((f) => ["custom_notice_title", "custom_notice_body"].includes(f.key))
+                          .map((f) => (
+                            <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
+                          ))}
+                      </div>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full gap-2"
+                        onClick={() => setCustomNoticeOpen(true)}
+                      >
+                        <Plus className="h-4 w-4" /> 안내문구 추가하기
+                      </Button>
+                    )
+                  )}
                 </FieldGroup>
               </CardContent>
             </Card>
@@ -834,7 +878,7 @@ export default function CustomizeClient({
               <CardContent>
                 <FieldGroup className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   {visibleContentFields
-                    .filter((f) => !["venue_name", "venue_hall", "venue_address", "traffic_info", "parking_info", "shuttle_info", "greeting_message", "main_image", "groom_photo", "bride_photo", "greeting_image", ...CONTACT_FIELD_DEFS.map((c) => c.key)].includes(f.key))
+                    .filter((f) => !["venue_name", "venue_hall", "venue_address", "traffic_info", "parking_info", "shuttle_info", "custom_notice_title", "custom_notice_body", "greeting_message", "main_image", "groom_photo", "bride_photo", "greeting_image", ...CONTACT_FIELD_DEFS.map((c) => c.key)].includes(f.key))
                     .map((f) => {
                       const deceasedKey = DECEASED_KEY_BY_NAME_FIELD[f.key]
                       return (

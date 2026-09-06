@@ -61,6 +61,8 @@ import {
   QrCode
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { formatDday } from '@/lib/dday'
+import { cn } from '@/lib/utils'
 
 export default function InvitationsListPage() {
   useDocumentTitle("청첩장 관리")
@@ -184,10 +186,14 @@ export default function InvitationsListPage() {
     toast.success('하객용 청첩장 주소가 클립보드에 복사되었습니다.')
   }
 
-  const filteredInvitations = invitations?.filter((inv) => {
-    const names = `${inv.customer?.groom_name} ${inv.customer?.bride_name}`.toLowerCase()
-    return names.includes(search.toLowerCase()) || inv.public_slug.toLowerCase().includes(search.toLowerCase())
-  })
+  const filteredInvitations = invitations
+    ?.filter((inv) => {
+      const names = `${inv.customer?.groom_name} ${inv.customer?.bride_name}`.toLowerCase()
+      return names.includes(search.toLowerCase()) || inv.public_slug.toLowerCase().includes(search.toLowerCase())
+    })
+    // 샘플은 맨 아래로. 실제 진행 중인 청첩장 사이에 데모가 섞여 있으면 목록을 훑을 때마다
+    // 걸러 읽어야 한다. sort 는 안정적이라 나머지 순서는 그대로다.
+    .sort((a, b) => Number(a.is_sample === true) - Number(b.is_sample === true))
 
   const availableThemes = themes || []
 
@@ -359,6 +365,7 @@ export default function InvitationsListPage() {
                       <span className="flex items-center gap-1.5">
                         <Calendar className="w-3.5 h-3.5" />
                         {inv.customer?.wedding_date || '-'}
+                        <DdayBadge date={inv.customer?.wedding_date} />
                       </span>
                       <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${reviewStatusClass(inv.review_status)}`}>
                         {reviewStatusLabel(inv.review_status)}
@@ -520,6 +527,7 @@ export default function InvitationsListPage() {
                       <div className="flex items-center gap-1.5 text-muted-foreground">
                         <Calendar className="w-3.5 h-3.5" />
                         {inv.customer?.wedding_date || '-'}
+                        <DdayBadge date={inv.customer?.wedding_date} />
                       </div>
                     </TableCell>
                     <TableCell className="text-center">
@@ -664,5 +672,30 @@ export default function InvitationsListPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+/**
+ * 예식일 옆 D-day. 지난 예식은 회색으로 물러나고, 임박한 것만 눈에 띈다 —
+ * 전부 같은 색이면 목록에서 급한 건이 묻힌다.
+ */
+function DdayBadge({ date }: { date?: string | null }) {
+  const label = formatDday(date)
+  if (!label) return null
+  const passed = label.startsWith('D+')
+  const soon = label === 'D-DAY' || /^D-([0-9]|1[0-4])$/.test(label)
+  return (
+    <span
+      className={cn(
+        'rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums',
+        passed
+          ? 'bg-muted text-muted-foreground'
+          : soon
+            ? 'bg-destructive/10 text-destructive'
+            : 'bg-primary/10 text-primary',
+      )}
+    >
+      {label}
+    </span>
   )
 }

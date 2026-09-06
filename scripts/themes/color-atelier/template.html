@@ -89,7 +89,7 @@
 
     <div data-slot="map"></div>
 
-    <div class="ca-location__guides" data-field-when-any="traffic_info,parking_info,shuttle_info">
+    <div class="ca-location__guides" data-field-when-any="traffic_info,parking_info,shuttle_info,custom_notice_body">
       <div class="ca-location__guide" data-field-when="traffic_info">
         <h4 class="ca-location__guide-title">교통 안내</h4>
         <p class="ca-location__guide-desc" data-field="traffic_info">지하철 7호선 학동역 1번 출구 도보 5분</p>
@@ -101,6 +101,11 @@
       <div class="ca-location__guide" data-field-when="shuttle_info">
         <h4 class="ca-location__guide-title">셔틀버스 안내</h4>
         <p class="ca-location__guide-desc" data-field="shuttle_info">운행 정보가 등록되면 이곳에 표시됩니다</p>
+      </div>
+      <!-- 관리자가 직접 붙이는 안내. 제목까지 직접 적는다(§편집기 "안내문구 추가하기") -->
+      <div class="ca-location__guide" data-field-when="custom_notice_body">
+        <h4 class="ca-location__guide-title" data-field-when="custom_notice_title" data-field="custom_notice_title">추가 안내</h4>
+        <p class="ca-location__guide-desc" data-field="custom_notice_body">내용이 등록되면 이곳에 표시됩니다</p>
       </div>
     </div>
   </section>
