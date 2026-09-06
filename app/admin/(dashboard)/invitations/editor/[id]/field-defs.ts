@@ -38,6 +38,9 @@ export const CONTENT_FIELD_DEFS: FieldDef[] = [
   { key: "traffic_info", label: "교통 안내", type: "textarea" },
   { key: "parking_info", label: "주차 안내", type: "textarea" },
   { key: "shuttle_info", label: "셔틀버스 안내", type: "textarea" },
+  // 교통·주차·셔틀 말고 더 적을 것이 있을 때. 제목까지 관리자가 직접 정한다
+  { key: "custom_notice_title", label: "안내문구 제목", type: "text" },
+  { key: "custom_notice_body", label: "안내문구 내용", type: "textarea" },
   { key: "greeting_message", label: "인사말", type: "textarea" },
   { key: "main_image", label: "메인 이미지", type: "image" },
   { key: "groom_photo", label: "신랑 사진", type: "image" },

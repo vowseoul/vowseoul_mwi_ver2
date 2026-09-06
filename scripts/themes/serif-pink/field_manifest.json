@@ -18,5 +18,7 @@
   "traffic_info",
   "parking_info",
   "shuttle_info",
+  "custom_notice_title",
+  "custom_notice_body",
   "greeting_image"
 ]
