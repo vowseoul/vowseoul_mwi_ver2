@@ -6,7 +6,7 @@ import { useCopyFeedback } from "@/lib/use-copy-feedback"
 import { isToggledOn } from "@/lib/invitation-data"
 import { soft, iconBtnStyle, type SlotProps } from "./shared"
 import { composeAccountText, isAccountFilled, parseAccountList } from "@/lib/account-fields"
-import { ACCOUNT_CARD_BG_DEFAULT } from "@/lib/theme-template"
+import { ACCOUNT_CARD_BG_DEFAULT, parseAccountIconOrder, type AccountIconKey } from "@/lib/theme-template"
 
 /* ----------------------------- Account ----------------------------- */
 function composeAccount(bank?: string, number?: string, holder?: string): string {
@@ -25,13 +25,83 @@ function openPayApp(app: "kakao" | "toss", accountNumber: string) {
 
 const digitsOnly = (value: string) => value.replace(/[^0-9]/g, "")
 
-function AccountRow({ label, value }: { label: string; value: string }) {
+/**
+ * 계좌 오른쪽 아이콘 세 개를 정해진 순서로 만든다.
+ *
+ * 순서는 관리자가 정한다(§편집기 디자인 > 마음 전하실 곳) — 어느 앱을 먼저 쓰는지는
+ * 하객층에 따라 갈리고, 복사를 앞에 두고 싶은 경우도 있다. 목록형과 카드형이 같은
+ * 순서를 써야 하므로 아이콘 만드는 곳을 한 곳으로 모았다.
+ *
+ * copy 아이콘의 색에 accent(테마 포인트색)를 직접 쓰면 color-atelier 처럼 섹션 배경이
+ * --accent 로 교대되는 테마(vs-alt-a)에서 버튼과 배경이 같은 색이 되어 아예 보이지 않는다 —
+ * 조상 섹션이 그 순간 실제로 쓰는 글자색(currentColor)을 따라가면 어떤 교대 상태에서도
+ * 대비가 보장된다(§share-island 의 btnStyle, §color-atelier template.css 의 주소 텍스트와 동일 처방).
+ */
+function accountIconButtons({
+  order,
+  numericValue,
+  copied,
+  onCopy,
+  size,
+  omit = [],
+}: {
+  order: AccountIconKey[]
+  numericValue: string
+  copied: boolean
+  onCopy: () => void
+  size: number
+  omit?: AccountIconKey[]
+}): React.ReactNode[] {
+  const make: Record<AccountIconKey, () => React.ReactNode> = {
+    kakao: () => (
+      <button
+        key="kakao"
+        onClick={(e) => { e.stopPropagation(); openPayApp("kakao", numericValue) }}
+        aria-label="카카오페이로 보내기"
+        title="카카오페이"
+        style={iconBtnStyle(
+          "color-mix(in srgb, #FFE300 50%, transparent)", "color-mix(in srgb, #FFE300 16%, transparent)", "#3C1E1E"
+        )}
+      >
+        <MessageCircle size={size} />
+      </button>
+    ),
+    toss: () => (
+      <button
+        key="toss"
+        onClick={(e) => { e.stopPropagation(); openPayApp("toss", numericValue) }}
+        aria-label="토스로 보내기"
+        title="토스"
+        style={iconBtnStyle(
+          "color-mix(in srgb, #0064FF 45%, transparent)", "color-mix(in srgb, #0064FF 14%, transparent)", "#0064FF"
+        )}
+      >
+        <Send size={size} />
+      </button>
+    ),
+    copy: () => (
+      <button
+        key="copy"
+        onClick={(e) => { e.stopPropagation(); onCopy() }}
+        aria-label={copied ? "복사됨" : "계좌번호 복사"}
+        title={copied ? "복사됨" : "계좌번호 복사"}
+        style={{
+          ...iconBtnStyle("currentColor", copied ? soft(18) : "transparent", "currentColor"),
+          transition: "background 200ms ease-out, transform 200ms ease-out",
+          transform: copied ? "scale(1.04)" : "scale(1)",
+        }}
+      >
+        {copied ? <Check size={size} /> : <Copy size={size} />}
+      </button>
+    ),
+  }
+  return order.filter((k) => !omit.includes(k)).map((k) => make[k]())
+}
+
+function AccountRow({ label, value, iconOrder }: { label: string; value: string; iconOrder: AccountIconKey[] }) {
   const { isCopied, copy: copyText } = useCopyFeedback()
   const copied = isCopied()
   const numericValue = digitsOnly(value)
-  const copy = () => copyText(numericValue)
-  const sendViaKakaoPay = () => openPayApp("kakao", numericValue)
-  const sendViaToss = () => openPayApp("toss", numericValue)
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${soft(25)}`, gap: 8 }}>
       <div style={{ textAlign: "left", minWidth: 0 }}>
@@ -39,27 +109,13 @@ function AccountRow({ label, value }: { label: string; value: string }) {
         <div style={{ fontSize: 13.5 }}>{value}</div>
       </div>
       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-        <button onClick={sendViaKakaoPay} aria-label="카카오페이로 보내기" title="카카오페이" style={iconBtnStyle(
-          "color-mix(in srgb, #FFE300 50%, transparent)", "color-mix(in srgb, #FFE300 16%, transparent)", "#3C1E1E"
-        )}>
-          <MessageCircle size={16} />
-        </button>
-        <button onClick={sendViaToss} aria-label="토스로 보내기" title="토스" style={iconBtnStyle(
-          "color-mix(in srgb, #0064FF 45%, transparent)", "color-mix(in srgb, #0064FF 14%, transparent)", "#0064FF"
-        )}>
-          <Send size={16} />
-        </button>
-        {/* accent(테마 포인트색)를 직접 쓰면 color-atelier 처럼 섹션 배경이 --accent 로 교대되는
-            테마(vs-alt-a)에서 버튼과 배경이 같은 색이 되어 아예 보이지 않는다 — 조상 섹션이
-            그 순간 실제로 쓰는 글자색(currentColor)을 따라가면 어떤 교대 상태에서도 대비가
-            보장된다(§share-island 의 btnStyle, §color-atelier template.css 의 주소 텍스트와 동일 처방). */}
-        <button onClick={copy} aria-label={copied ? "복사됨" : "계좌번호 복사"} title={copied ? "복사됨" : "계좌번호 복사"} style={{
-          ...iconBtnStyle("currentColor", copied ? soft(18) : "transparent", "currentColor"),
-          transition: "background 200ms ease-out, transform 200ms ease-out",
-          transform: copied ? "scale(1.04)" : "scale(1)",
-        }}>
-          {copied ? <Check size={16} /> : <Copy size={16} />}
-        </button>
+        {accountIconButtons({
+          order: iconOrder,
+          numericValue,
+          copied,
+          onCopy: () => copyText(numericValue),
+          size: 16,
+        })}
       </div>
     </div>
   )
@@ -120,23 +176,10 @@ function cardBackground(source: string, customColor: string, opacityPct: number)
   return `color-mix(in srgb, ${base} ${pct}%, transparent)`
 }
 
-function AccountCard({ entry, background }: { entry: CardEntry; background: string }) {
+function AccountCard({ entry, background, iconOrder }: { entry: CardEntry; background: string; iconOrder: AccountIconKey[] }) {
   const { isCopied, copy } = useCopyFeedback()
   const copied = isCopied()
   const numericValue = digitsOnly(entry.number)
-
-  // 목록형과 같은 아이콘을 쓴다 — 글자 버튼은 카드에서 가장 눈에 띄는 요소가 돼
-  // 정작 읽어야 할 예금주·계좌번호를 덮었다. 라벨은 aria-label/title 로 남긴다.
-  const payBtn = (label: string, onClick: () => void, style: React.CSSProperties, icon: React.ReactNode) => (
-    <button
-      onClick={(e) => { e.stopPropagation(); onClick() }}
-      aria-label={`${label}로 보내기`}
-      title={label}
-      style={style}
-    >
-      {icon}
-    </button>
-  )
 
   return (
     <div
@@ -164,24 +207,28 @@ function AccountCard({ entry, background }: { entry: CardEntry; background: stri
           <span style={{ fontSize: 11, opacity: 0.55, flexShrink: 0 }}>{entry.bank}</span>
         </div>
       </div>
+      {/* 카드는 카드 자체를 누르면 복사되므로 복사 아이콘은 빼고 송금 앱만 둔다 —
+          순서는 목록형과 같은 설정을 따른다. */}
       <div style={{ display: "flex", gap: 5, justifyContent: "flex-end" }}>
-        {payBtn("카카오페이", () => openPayApp("kakao", numericValue), iconBtnStyle(
-          "color-mix(in srgb, #FFE300 50%, transparent)", "color-mix(in srgb, #FFE300 16%, transparent)", "#3C1E1E"
-        ), <MessageCircle size={14} />)}
-        {payBtn("토스", () => openPayApp("toss", numericValue), iconBtnStyle(
-          "color-mix(in srgb, #0064FF 45%, transparent)", "color-mix(in srgb, #0064FF 14%, transparent)", "#0064FF"
-        ), <Send size={14} />)}
+        {accountIconButtons({
+          order: iconOrder,
+          numericValue,
+          copied,
+          onCopy: () => copy(numericValue),
+          size: 14,
+          omit: ["copy"],
+        })}
       </div>
     </div>
   )
 }
 
-function AccountCardColumn({ title, entries, background }: { title: string; entries: CardEntry[]; background: string }) {
+function AccountCardColumn({ title, entries, background, iconOrder }: { title: string; entries: CardEntry[]; background: string; iconOrder: AccountIconKey[] }) {
   if (entries.length === 0) return null
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
       <div style={{ fontSize: 12, textAlign: "center", paddingBottom: 6, borderBottom: `1px solid ${soft(25)}` }}>{title}</div>
-      {entries.map((e, i) => <AccountCard key={i} entry={e} background={background} />)}
+      {entries.map((e, i) => <AccountCard key={i} entry={e} background={background} iconOrder={iconOrder} />)}
     </div>
   )
 }
@@ -223,6 +270,7 @@ function AccountIsland({ data, raw, blockOverrides }: SlotProps) {
   // 카드형은 관계·이름·계좌번호·은행을 자리마다 나눠 놓아야 해서, 한 줄로 합쳐 쓰는
   // 목록형과 달리 원본 필드를 그대로 받는다.
   const isCard = blockOverrides?.account?.accountLayout === "card"
+  const iconOrder = parseAccountIconOrder(blockOverrides?.account?.accountIconOrder)
   const cardBg = cardBackground(
     blockOverrides?.account?.accountCardBg || ACCOUNT_CARD_BG_DEFAULT.source,
     blockOverrides?.account?.accountCardBgColor || ACCOUNT_CARD_BG_DEFAULT.color,
@@ -257,19 +305,19 @@ function AccountIsland({ data, raw, blockOverrides }: SlotProps) {
       )}
       {showRows && isCard && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, alignItems: "start" }}>
-          <AccountCardColumn title="신랑측" entries={groomCards} background={cardBg} />
-          <AccountCardColumn title="신부측" entries={brideCards} background={cardBg} />
+          <AccountCardColumn title="신랑측" entries={groomCards} background={cardBg} iconOrder={iconOrder} />
+          <AccountCardColumn title="신부측" entries={brideCards} background={cardBg} iconOrder={iconOrder} />
         </div>
       )}
-      {showRows && !isCard && groom && <AccountRow label="신랑측" value={groom} />}
-      {showRows && !isCard && bride && <AccountRow label="신부측" value={bride} />}
+      {showRows && !isCard && groom && <AccountRow label="신랑측" value={groom} iconOrder={iconOrder} />}
+      {showRows && !isCard && bride && <AccountRow label="신부측" value={bride} iconOrder={iconOrder} />}
       {/* 혼주 계좌도 계좌마다 한 줄씩 — 본인 계좌와 똑같이 계좌번호만 복사되고
           카카오페이·토스 버튼도 함께 붙는다 */}
       {showRows && !isCard && groomRows.map((a, i) => (
-        <AccountRow key={`g${i}`} label="신랑측 혼주" value={composeAccountText(a)} />
+        <AccountRow key={`g${i}`} label="신랑측 혼주" value={composeAccountText(a)} iconOrder={iconOrder} />
       ))}
       {showRows && !isCard && brideRows.map((a, i) => (
-        <AccountRow key={`b${i}`} label="신부측 혼주" value={composeAccountText(a)} />
+        <AccountRow key={`b${i}`} label="신부측 혼주" value={composeAccountText(a)} iconOrder={iconOrder} />
       ))}
       {/* 예전 자유 입력(문자열)으로 발행된 혼주 계좌는 은행·번호가 나뉘어 있지 않아 카드로
           만들 수 없다 — 카드형에서도 이 항목만 기존 줄 형태로 남긴다 */}

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { normalizeNaverPlaceUrl } from "@/lib/naver-place"
 import { soft, type SlotProps } from "./shared"
 
 /* ------------------------------- Map --------------------------------
@@ -15,6 +16,9 @@ const NAVER_CLIENT_ID = "od370yq3ix"
 function MapIsland({ data }: SlotProps) {
   const address = data.venue_address || ""
   const venueName = data.venue_name || ""
+  // 관리자가 네이버 지도에서 그 예식장을 열어 붙여넣은 주소. 있으면 주소 검색이 아니라
+  // 그 장소 페이지로 바로 보낸다(§lib/naver-place.ts).
+  const placeUrl = normalizeNaverPlaceUrl(data.venue_naver_place)
   const mapRef = useRef<HTMLDivElement>(null)
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [mapError, setMapError] = useState(false)
@@ -83,7 +87,8 @@ function MapIsland({ data }: SlotProps) {
     }
   }, [address, venueName])
 
-  const openNaver = () => window.open(`https://map.naver.com/v5/search/${encodeURIComponent(address)}`, "_blank")
+  const openNaver = () =>
+    window.open(placeUrl ?? `https://map.naver.com/v5/search/${encodeURIComponent(address)}`, "_blank")
   const openKakao = () => {
     const url = coords
       ? `https://map.kakao.com/link/to/${encodeURIComponent(venueName)},${coords.lat},${coords.lng}`

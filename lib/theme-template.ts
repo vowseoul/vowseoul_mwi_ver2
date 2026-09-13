@@ -240,6 +240,8 @@ const BlockOverrideSchema = z.object({
   accountCardBgColor: nonEmptyString,
   /** account 카드형 전용: 카드 배경 불투명도(0~100). 미설정 시 ACCOUNT_CARD_BG_DEFAULT.opacity */
   accountCardBgOpacity: finiteNumber,
+  /** account 블럭: 계좌 오른쪽 아이콘 순서. 미설정 시 ACCOUNT_ICON_DEFAULT_ORDER */
+  accountIconOrder: z.array(z.enum(["kakao", "toss", "copy"])),
   /** greeting 블럭 전용: 인사말 아이콘 모양 (미설정 시 하트) */
   greetingIconShape: z.enum(["heart", "custom"]),
   /** greeting 블럭 전용: greetingIconShape가 'custom'일 때 사용할 업로드 이미지 URL */
@@ -251,6 +253,37 @@ const BlockOverrideSchema = z.object({
 }).partial()
 
 export type BlockOverride = z.infer<typeof BlockOverrideSchema>
+
+/**
+ * 계좌 오른쪽 아이콘 순서 — 렌더러(account-island)와 편집기가 공유한다.
+ *
+ * 어느 앱을 먼저 쓰는지는 하객층에 따라 갈리고, 복사를 앞에 두고 싶은 경우도 있다.
+ * 배열에 없는 값은 무시하고 빠진 값은 뒤에 붙인다(§parseAccountIconOrder) — 예전
+ * 청첩장에 이 값이 없거나 일부만 적혀 있어도 아이콘이 사라지지 않는다.
+ */
+export const ACCOUNT_ICON_KEYS = ["kakao", "toss", "copy"] as const
+export type AccountIconKey = (typeof ACCOUNT_ICON_KEYS)[number]
+export const ACCOUNT_ICON_DEFAULT_ORDER: AccountIconKey[] = ["kakao", "toss", "copy"]
+export const ACCOUNT_ICON_LABELS: Record<AccountIconKey, string> = {
+  kakao: "카카오페이",
+  toss: "토스",
+  copy: "복사하기",
+}
+
+/** 저장된 순서를 안전하게 읽는다 — 모르는 값은 버리고, 빠진 아이콘은 기본 순서대로 뒤에 붙인다 */
+export function parseAccountIconOrder(value: unknown): AccountIconKey[] {
+  const raw = Array.isArray(value) ? value : []
+  const seen = new Set<AccountIconKey>()
+  const picked: AccountIconKey[] = []
+  for (const v of raw) {
+    if (!ACCOUNT_ICON_KEYS.includes(v as AccountIconKey)) continue
+    const key = v as AccountIconKey
+    if (seen.has(key)) continue // 같은 아이콘이 두 번 그려지면 안 된다
+    seen.add(key)
+    picked.push(key)
+  }
+  return [...picked, ...ACCOUNT_ICON_DEFAULT_ORDER.filter((k) => !seen.has(k))]
+}
 
 /** 달력 박스 배경 기본값 — 렌더러(calendar-island)와 편집기 슬라이더가 공유한다 */
 // 기본값을 바꿀 때는 기존 청첩장에 현재 값을 명시적으로 박아 넣은 뒤 바꿔야 한다 —

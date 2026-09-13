@@ -49,6 +49,17 @@ export const CONTENT_FIELD_DEFS: FieldDef[] = [
   { key: "rsvp_meal_menu", label: "식사 종류 (쉼표로 구분, 비우면 한식/양식 기본)", type: "text" },
 ]
 
+/**
+ * slot_manifest 에 'map' 이 있을 때만 노출. 템플릿의 data-field 로 그려지는 값이 아니라
+ * 지도 아일랜드가 "네이버지도" 버튼의 목적지로 쓰는 값이라 field_manifest 에 없다
+ * (§ACCOUNT_FIELD_DEFS 와 같은 이유).
+ */
+export const MAP_FIELD_DEF: FieldDef = {
+  key: "venue_naver_place",
+  label: "네이버 지도 장소 주소 (선택)",
+  type: "text",
+}
+
 /** slot_manifest 에 'account' 가 있을 때만 노출 (필드키 마커가 아니라 슬롯 데이터라 field_manifest 에 없음) */
 export const ACCOUNT_FIELD_DEFS: FieldDef[] = [
   { key: "account_groom_bank", label: "은행", type: "text" },
@@ -93,7 +104,7 @@ export const SLOT_LABELS: Record<string, string> = {
   map: "오시는 길 (지도)",
 }
 
-export const ALL_TEXT_FIELD_DEFS = [...CONTENT_FIELD_DEFS, ...ACCOUNT_FIELD_DEFS]
+export const ALL_TEXT_FIELD_DEFS = [...CONTENT_FIELD_DEFS, ...ACCOUNT_FIELD_DEFS, MAP_FIELD_DEF]
 export const MANAGED_CONTENT_KEYS = new Set([
   ...ALL_TEXT_FIELD_DEFS.map((f) => f.key),
   "wedding_date", "wedding_time", "gallery_images", "gallery_view_type", "gallery_align", "greeting_image_ratio", "wedding_programs", "show_wedding_program",
