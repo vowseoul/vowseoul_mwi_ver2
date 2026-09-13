@@ -28,6 +28,8 @@ import {
   BLOCK_LABEL_FALLBACK,
   buildThemeTokens,
   ACCOUNT_CARD_BG_DEFAULT,
+  ACCOUNT_ICON_LABELS,
+  parseAccountIconOrder,
   BLOCK_TINT_DEFAULT_OPACITY,
   BLOCK_TINT_PATTERNS,
   BLOCK_TINT_STEP_LABELS,
@@ -1898,7 +1900,43 @@ export default function CustomizeClient({
                             )}
                             {b.key === "account" && (
                               <Field className="border-t pt-4">
-                                <FieldLabel>계좌 표시 방식</FieldLabel>
+                                {/* 아이콘 순서 — 카드형·목록형이 같은 설정을 쓴다.
+                                    카드형에는 복사 아이콘이 없지만(카드를 누르면 복사)
+                                    목록형으로 되돌렸을 때를 위해 목록에 남겨 둔다. */}
+                                <FieldLabel>계좌 아이콘 순서</FieldLabel>
+                                <div className="space-y-1.5">
+                                  {parseAccountIconOrder(override?.accountIconOrder).map((key, i, arr) => (
+                                    <div key={key} className="flex items-center gap-2 rounded-md border border-border px-2.5 py-1.5">
+                                      <span className="w-5 text-xs text-muted-foreground tabular-nums">{i + 1}</span>
+                                      <span className="flex-1 text-sm">{ACCOUNT_ICON_LABELS[key]}</span>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        disabled={i === 0}
+                                        aria-label={`${ACCOUNT_ICON_LABELS[key]} 위로`}
+                                        onClick={() => setBlockOverride(b.key, { accountIconOrder: moveArrayItem(arr, i, -1) })}
+                                      >
+                                        <ArrowUp className="h-3.5 w-3.5" />
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        disabled={i === arr.length - 1}
+                                        aria-label={`${ACCOUNT_ICON_LABELS[key]} 아래로`}
+                                        onClick={() => setBlockOverride(b.key, { accountIconOrder: moveArrayItem(arr, i, 1) })}
+                                      >
+                                        <ArrowDown className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </div>
+                                  ))}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  위에서부터 왼쪽 순서로 놓입니다.
+                                </p>
+
+                                <FieldLabel className="border-t pt-4">계좌 표시 방식</FieldLabel>
                                 <RadioGroup
                                   value={override?.accountLayout || "list"}
                                   onValueChange={(v) => setBlockOverride(b.key, { accountLayout: v as "list" | "card" })}
