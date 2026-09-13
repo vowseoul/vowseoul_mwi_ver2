@@ -12,6 +12,7 @@ import {
   REVIEW_STATUS_LABEL,
   CONTENT_FIELD_DEFS,
   ACCOUNT_FIELD_DEFS,
+  MAP_FIELD_DEF,
   DECEASED_KEY_BY_NAME_FIELD,
   DECEASED_KEYS,
   CONTACT_FIELD_DEFS,
@@ -72,6 +73,7 @@ import { Switch } from "@/components/ui/switch"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { SaveButton } from "@/components/ui/save-button"
+import { isNaverPlaceUrl } from "@/lib/naver-place"
 import { QrCodeDialog } from "@/components/admin/qr-code-dialog"
 import { ExtraAccountEditor } from "@/components/account-fields"
 import { isAccountFilled, parseAccountList, type AccountEntry } from "@/lib/account-fields"
@@ -191,6 +193,7 @@ export default function CustomizeClient({
     [fieldManifest]
   )
   const showAccountFields = slots.includes("account")
+  const showMap = slots.includes("map")
   const showContact = slots.includes("contact")
   const showGallery = slots.includes("gallery")
   const showSequence = slots.includes("sequence")
@@ -826,6 +829,31 @@ export default function CustomizeClient({
                   {visibleContentFields.filter((f) => ["venue_name", "venue_hall", "venue_address"].includes(f.key)).map((f) => (
                     <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
                   ))}
+                  {/* "네이버지도" 버튼이 열 주소. 비워두면 지금처럼 주소 문자열을 검색한다 —
+                      그러면 건물이 아니라 지번·도로명 결과가 뜬다. 네이버 지도에서 그 예식장을
+                      열고 주소창을 그대로 붙여넣으면 그 장소 페이지로 바로 보낸다. */}
+                  {showMap && (
+                    <Field>
+                      <FieldLabel htmlFor={MAP_FIELD_DEF.key}>{MAP_FIELD_DEF.label}</FieldLabel>
+                      <Input
+                        id={MAP_FIELD_DEF.key}
+                        value={content[MAP_FIELD_DEF.key] || ""}
+                        onChange={(e) => setField(MAP_FIELD_DEF.key, e.target.value)}
+                        placeholder="https://map.naver.com/p/entry/place/..."
+                      />
+                      {content[MAP_FIELD_DEF.key]?.trim() && !isNaverPlaceUrl(content[MAP_FIELD_DEF.key]) ? (
+                        <p className="text-xs text-destructive">
+                          네이버 지도 주소만 넣을 수 있습니다. 저장되더라도 이 값은 무시되고 주소 검색으로 열립니다.
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          비워두면 예식장 주소로 검색합니다. 네이버 지도 앱·웹에서 예식장을 열고
+                          주소(또는 공유 링크)를 그대로 붙여넣으면 그 장소가 바로 열립니다.
+                        </p>
+                      )}
+                    </Field>
+                  )}
+
                   {visibleContentFields.filter((f) => ["traffic_info", "parking_info", "shuttle_info"].includes(f.key)).map((f) => (
                     <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
                   ))}
