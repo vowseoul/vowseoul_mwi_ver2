@@ -100,18 +100,24 @@ export function fontPreviewStyle(font: RegisteredFont): { fontFamily: string } {
 }
 
 /**
- * 최종 토큰(--font-kr/--font-en)이 등록된 커스텀 폰트를 가리키면
- * 그 로딩 정보(embed 코드 또는 TTF 파일 URL)를 뽑아 InvitationFrame 에 전달할 형태로 만든다.
- * iframe 안에는 이 정보가 없으면 폰트 자체가 로드되지 않아 브라우저 기본 글꼴로 표시된다.
+ * 최종 토큰(--font-kr/--font-en)이나 그 외 개별 기능이 고르는 폰트(히어로 문구, 인트로 연출 등의
+ * font-family)가 등록된 커스텀 폰트를 가리키면 그 로딩 정보(embed 코드 또는 TTF 파일 URL)를 뽑아
+ * InvitationFrame 에 전달할 형태로 만든다. iframe 안에는 이 정보가 없으면 폰트 자체가 로드되지
+ * 않아 브라우저 기본 글꼴로 표시된다 — "폰트를 골라도 적용 안 되는" 버그의 원인이라, --font-kr/
+ * --font-en 말고 다른 곳에서 font-family 값을 새로 쓰는 기능은 반드시 extraFamilies로 넘겨야 한다.
  */
 export function resolveFontFaces(
   tokens: TokenMap,
-  fonts: RegisteredFont[]
+  fonts: RegisteredFont[],
+  extraFamilies: (string | undefined)[] = []
 ): { family: string; embedCode?: string; fileUrl?: string }[] {
   const wanted = new Set<string>()
   for (const key of ["--font-kr", "--font-en"]) {
     const v = tokens[key]
     if (typeof v === "string" && v) wanted.add(firstFontName(v))
+  }
+  for (const v of extraFamilies) {
+    if (v) wanted.add(firstFontName(v))
   }
   if (wanted.size === 0) return []
 

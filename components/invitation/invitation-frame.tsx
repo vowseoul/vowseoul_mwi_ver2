@@ -360,6 +360,14 @@ export function InvitationFrame({
       if (typeof override.py === "number") {
         rules.push(`[data-block="${key}"]{padding-top:${override.py}px;padding-bottom:${override.py}px;}`)
       }
+      if (key === "hero") {
+        if (typeof override.heroFontSize === "number") {
+          rules.push(`[data-block="hero"] [data-hero-text]{font-size:${override.heroFontSize}px;}`)
+        }
+        if (override.heroFont) {
+          rules.push(`[data-block="hero"] [data-hero-text]{font-family:${override.heroFont};}`)
+        }
+      }
     }
     for (const key of hiddenBlocks) {
       rules.push(`[data-block="${key}"]{display:none;}`)
@@ -429,6 +437,20 @@ export function InvitationFrame({
         if (labelEl.dataset.vsDefaultText === undefined) labelEl.dataset.vsDefaultText = labelEl.textContent ?? ""
         labelEl.textContent = override?.label || labelEl.dataset.vsDefaultText
       }
+    })
+  }, [doc, blockOverrides])
+
+  // hero 정적 문구([data-hero-text], DOM 순서 = heroTexts 인덱스) 직접 수정 바인딩. title/label과 같은
+  // 규칙이지만 기본 텍스트를 innerHTML로 캐시/복원한다 — Soft Envelope처럼 <br/>로 줄바꿈하는 테마가 있어
+  // textContent로 캐시하면 복원 시 줄바꿈이 사라진다. 오버라이드 적용은 자유 텍스트라 textContent로 쓴다.
+  useEffect(() => {
+    if (!doc) return
+    const heroTexts = blockOverrides.hero?.heroTexts
+    doc.querySelectorAll<HTMLElement>('[data-block="hero"] [data-hero-text]').forEach((el, i) => {
+      if (el.dataset.vsDefaultHtml === undefined) el.dataset.vsDefaultHtml = el.innerHTML
+      const text = heroTexts?.[i]
+      if (text) el.textContent = text
+      else el.innerHTML = el.dataset.vsDefaultHtml
     })
   }, [doc, blockOverrides])
 
