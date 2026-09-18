@@ -254,6 +254,11 @@ const BlockOverrideSchema = z.object({
   accountCardBgOpacity: finiteNumber,
   /** account 블럭: 계좌 오른쪽 아이콘 순서. 미설정 시 ACCOUNT_ICON_DEFAULT_ORDER */
   accountIconOrder: z.array(z.enum(["kakao", "toss", "copy"])),
+  /** account 목록형 전용: 오른쪽 아이콘 버튼 한 변 크기(px). 계좌번호가 길어 2줄로 넘어갈 때
+   *  아이콘을 줄여 텍스트에 가로 폭을 더 줄 수 있다. 미설정 시 38 */
+  accountIconSize: finiteNumber,
+  /** account 목록형 전용: "은행 계좌번호 예금주" 텍스트 크기(px). 미설정 시 13.5 */
+  accountTextSize: finiteNumber,
   /** greeting 블럭 전용: 인사말 아이콘 모양 (미설정 시 하트) */
   greetingIconShape: z.enum(["heart", "custom"]),
   /** greeting 블럭 전용: greetingIconShape가 'custom'일 때 사용할 업로드 이미지 URL */

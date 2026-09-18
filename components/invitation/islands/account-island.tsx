@@ -43,6 +43,7 @@ function accountIconButtons({
   copied,
   onCopy,
   size,
+  boxSize,
   omit = [],
 }: {
   order: AccountIconKey[]
@@ -50,8 +51,12 @@ function accountIconButtons({
   copied: boolean
   onCopy: () => void
   size: number
+  /** 버튼 한 변 크기(px) — 계좌번호가 길어 2줄로 넘어갈 때 이 값을 줄이면 텍스트에 가로
+   *  폭을 더 줄 수 있다(§AccountRow accountIconSize). 미설정 시 iconBtnStyle 기본값(38) */
+  boxSize?: number
   omit?: AccountIconKey[]
 }): React.ReactNode[] {
+  const boxStyle: React.CSSProperties = boxSize ? { width: boxSize, height: boxSize } : {}
   const make: Record<AccountIconKey, () => React.ReactNode> = {
     kakao: () => (
       <button
@@ -59,9 +64,12 @@ function accountIconButtons({
         onClick={(e) => { e.stopPropagation(); openPayApp("kakao", numericValue) }}
         aria-label="카카오페이로 보내기"
         title="카카오페이"
-        style={iconBtnStyle(
-          "color-mix(in srgb, #FFE300 50%, transparent)", "color-mix(in srgb, #FFE300 16%, transparent)", "#3C1E1E"
-        )}
+        style={{
+          ...iconBtnStyle(
+            "color-mix(in srgb, #FFE300 50%, transparent)", "color-mix(in srgb, #FFE300 16%, transparent)", "#3C1E1E"
+          ),
+          ...boxStyle,
+        }}
       >
         <MessageCircle size={size} />
       </button>
@@ -72,9 +80,12 @@ function accountIconButtons({
         onClick={(e) => { e.stopPropagation(); openPayApp("toss", numericValue) }}
         aria-label="토스로 보내기"
         title="토스"
-        style={iconBtnStyle(
-          "color-mix(in srgb, #0064FF 45%, transparent)", "color-mix(in srgb, #0064FF 14%, transparent)", "#0064FF"
-        )}
+        style={{
+          ...iconBtnStyle(
+            "color-mix(in srgb, #0064FF 45%, transparent)", "color-mix(in srgb, #0064FF 14%, transparent)", "#0064FF"
+          ),
+          ...boxStyle,
+        }}
       >
         <Send size={size} />
       </button>
@@ -87,6 +98,7 @@ function accountIconButtons({
         title={copied ? "복사됨" : "계좌번호 복사"}
         style={{
           ...iconBtnStyle("currentColor", copied ? soft(18) : "transparent", "currentColor"),
+          ...boxStyle,
           transition: "background 200ms ease-out, transform 200ms ease-out",
           transform: copied ? "scale(1.04)" : "scale(1)",
         }}
@@ -98,7 +110,13 @@ function accountIconButtons({
   return order.filter((k) => !omit.includes(k)).map((k) => make[k]())
 }
 
-function AccountRow({ label, value, iconOrder }: { label: string; value: string; iconOrder: AccountIconKey[] }) {
+function AccountRow({ label, value, iconOrder, iconSize, textSize }: {
+  label: string
+  value: string
+  iconOrder: AccountIconKey[]
+  iconSize: number
+  textSize: number
+}) {
   const { isCopied, copy: copyText } = useCopyFeedback()
   const copied = isCopied()
   const numericValue = digitsOnly(value)
@@ -106,7 +124,7 @@ function AccountRow({ label, value, iconOrder }: { label: string; value: string;
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${soft(25)}`, gap: 8 }}>
       <div style={{ textAlign: "left", minWidth: 0 }}>
         <div style={{ fontSize: 11, opacity: 0.6 }}>{label}</div>
-        <div style={{ fontSize: 13.5 }}>{value}</div>
+        <div style={{ fontSize: textSize }}>{value}</div>
       </div>
       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
         {accountIconButtons({
@@ -114,7 +132,8 @@ function AccountRow({ label, value, iconOrder }: { label: string; value: string;
           numericValue,
           copied,
           onCopy: () => copyText(numericValue),
-          size: 16,
+          size: Math.round(iconSize * 0.42),
+          boxSize: iconSize,
         })}
       </div>
     </div>
@@ -124,7 +143,7 @@ function AccountRow({ label, value, iconOrder }: { label: string; value: string;
  * 정해져 있지 않아(아버지·어머니 각각 또는 한쪽만) 관리자가 자유 형식 텍스트로 입력한다.
  * 숫자만 추출하는 기존 복사 방식은 여러 줄/여러 계좌가 섞인 텍스트에 맞지 않아 원문 그대로 복사한다.
  */
-function ExtraAccountRow({ label, value }: { label: string; value: string }) {
+function ExtraAccountRow({ label, value, iconSize, textSize }: { label: string; value: string; iconSize: number; textSize: number }) {
   const { isCopied, copy: copyText } = useCopyFeedback()
   const copied = isCopied()
   const copy = () => copyText(value)
@@ -132,14 +151,15 @@ function ExtraAccountRow({ label, value }: { label: string; value: string }) {
     <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${soft(25)}`, gap: 8 }}>
       <div style={{ textAlign: "left", minWidth: 0 }}>
         <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 2 }}>{label}</div>
-        <div style={{ fontSize: 13.5, whiteSpace: "pre-line" }}>{value}</div>
+        <div style={{ fontSize: textSize, whiteSpace: "pre-line" }}>{value}</div>
       </div>
       <button onClick={copy} aria-label={copied ? "복사됨" : "계좌번호 복사"} title={copied ? "복사됨" : "계좌번호 복사"} style={{
         ...iconBtnStyle("currentColor", copied ? soft(18) : "transparent", "currentColor"),
+        width: iconSize, height: iconSize,
         transition: "background 200ms ease-out, transform 200ms ease-out",
         transform: copied ? "scale(1.04)" : "scale(1)",
       }}>
-        {copied ? <Check size={16} /> : <Copy size={16} />}
+        {copied ? <Check size={Math.round(iconSize * 0.42)} /> : <Copy size={Math.round(iconSize * 0.42)} />}
       </button>
     </div>
   )
@@ -271,6 +291,8 @@ function AccountIsland({ data, raw, blockOverrides }: SlotProps) {
   // 목록형과 달리 원본 필드를 그대로 받는다.
   const isCard = blockOverrides?.account?.accountLayout === "card"
   const iconOrder = parseAccountIconOrder(blockOverrides?.account?.accountIconOrder)
+  const iconSize = blockOverrides?.account?.accountIconSize ?? 38
+  const textSize = blockOverrides?.account?.accountTextSize ?? 13.5
   const cardBg = cardBackground(
     blockOverrides?.account?.accountCardBg || ACCOUNT_CARD_BG_DEFAULT.source,
     blockOverrides?.account?.accountCardBgColor || ACCOUNT_CARD_BG_DEFAULT.color,
@@ -309,20 +331,20 @@ function AccountIsland({ data, raw, blockOverrides }: SlotProps) {
           <AccountCardColumn title="신부측" entries={brideCards} background={cardBg} iconOrder={iconOrder} />
         </div>
       )}
-      {showRows && !isCard && groom && <AccountRow label="신랑측" value={groom} iconOrder={iconOrder} />}
-      {showRows && !isCard && bride && <AccountRow label="신부측" value={bride} iconOrder={iconOrder} />}
+      {showRows && !isCard && groom && <AccountRow label="신랑측" value={groom} iconOrder={iconOrder} iconSize={iconSize} textSize={textSize} />}
+      {showRows && !isCard && bride && <AccountRow label="신부측" value={bride} iconOrder={iconOrder} iconSize={iconSize} textSize={textSize} />}
       {/* 혼주 계좌도 계좌마다 한 줄씩 — 본인 계좌와 똑같이 계좌번호만 복사되고
           카카오페이·토스 버튼도 함께 붙는다 */}
       {showRows && !isCard && groomRows.map((a, i) => (
-        <AccountRow key={`g${i}`} label="신랑측 혼주" value={composeAccountText(a)} iconOrder={iconOrder} />
+        <AccountRow key={`g${i}`} label="신랑측 혼주" value={composeAccountText(a)} iconOrder={iconOrder} iconSize={iconSize} textSize={textSize} />
       ))}
       {showRows && !isCard && brideRows.map((a, i) => (
-        <AccountRow key={`b${i}`} label="신부측 혼주" value={composeAccountText(a)} iconOrder={iconOrder} />
+        <AccountRow key={`b${i}`} label="신부측 혼주" value={composeAccountText(a)} iconOrder={iconOrder} iconSize={iconSize} textSize={textSize} />
       ))}
       {/* 예전 자유 입력(문자열)으로 발행된 혼주 계좌는 은행·번호가 나뉘어 있지 않아 카드로
           만들 수 없다 — 카드형에서도 이 항목만 기존 줄 형태로 남긴다 */}
-      {showRows && extraGroomText && <ExtraAccountRow label="신랑측 혼주" value={extraGroomText} />}
-      {showRows && extraBrideText && <ExtraAccountRow label="신부측 혼주" value={extraBrideText} />}
+      {showRows && extraGroomText && <ExtraAccountRow label="신랑측 혼주" value={extraGroomText} iconSize={iconSize} textSize={textSize} />}
+      {showRows && extraBrideText && <ExtraAccountRow label="신부측 혼주" value={extraBrideText} iconSize={iconSize} textSize={textSize} />}
     </div>
   )
 }

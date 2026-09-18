@@ -2073,6 +2073,33 @@ export default function CustomizeClient({
                                   은행·번호가 나뉘어 있지 않아 카드형에서도 기존 줄 형태로 표시됩니다.
                                 </p>
 
+                                {(override?.accountLayout || "list") === "list" && (
+                                  <div className="space-y-4 border-t pt-4">
+                                    <p className="text-xs text-muted-foreground">
+                                      계좌번호가 길어 한 줄에 다 안 들어가고 2줄로 넘어갈 때, 아이콘을 줄이거나 글자 크기를
+                                      줄여 한 줄에 들어가게 할 수 있습니다.
+                                    </p>
+                                    <SizeSliderField
+                                      label="아이콘 크기"
+                                      value={override?.accountIconSize}
+                                      defaultValue={38}
+                                      min={26}
+                                      max={40}
+                                      onChange={(v) => setBlockOverride(b.key, { accountIconSize: v })}
+                                      onReset={() => setBlockOverride(b.key, { accountIconSize: undefined })}
+                                    />
+                                    <SizeSliderField
+                                      label="계좌 정보 글자 크기"
+                                      value={override?.accountTextSize}
+                                      defaultValue={13.5}
+                                      min={10}
+                                      max={16}
+                                      onChange={(v) => setBlockOverride(b.key, { accountTextSize: v })}
+                                      onReset={() => setBlockOverride(b.key, { accountTextSize: undefined })}
+                                    />
+                                  </div>
+                                )}
+
                                 {(override?.accountLayout === "card") && (
                                   <div className="space-y-4 border-t pt-4">
                                     <Field>
