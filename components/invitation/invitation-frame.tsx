@@ -443,14 +443,23 @@ export function InvitationFrame({
   // hero 정적 문구([data-hero-text], DOM 순서 = heroTexts 인덱스) 직접 수정 바인딩. title/label과 같은
   // 규칙이지만 기본 텍스트를 innerHTML로 캐시/복원한다 — Soft Envelope처럼 <br/>로 줄바꿈하는 테마가 있어
   // textContent로 캐시하면 복원 시 줄바꿈이 사라진다. 오버라이드 적용은 자유 텍스트라 textContent로 쓴다.
+  // 테마 CSS가 이 마커 요소에 text-transform(예: 대문자 강제)을 걸어둔 경우가 있다 — 원래 기본 문구가
+  // 항상 그 케이스로 쓰인다는 전제로 만든 스타일이라, 직접 입력한 문구까지 강제로 바뀌면 입력한 그대로
+  // 보이지 않는다. 오버라이드 중에는 인라인으로 꺼서 입력한 대로 보이게 하고, 기본값으로 되돌리면
+  // 다시 테마 스타일을 따르도록 인라인을 지운다.
   useEffect(() => {
     if (!doc) return
     const heroTexts = blockOverrides.hero?.heroTexts
     doc.querySelectorAll<HTMLElement>('[data-block="hero"] [data-hero-text]').forEach((el, i) => {
       if (el.dataset.vsDefaultHtml === undefined) el.dataset.vsDefaultHtml = el.innerHTML
       const text = heroTexts?.[i]
-      if (text) el.textContent = text
-      else el.innerHTML = el.dataset.vsDefaultHtml
+      if (text) {
+        el.textContent = text
+        el.style.textTransform = "none"
+      } else {
+        el.innerHTML = el.dataset.vsDefaultHtml
+        el.style.removeProperty("text-transform")
+      }
     })
   }, [doc, blockOverrides])
 
