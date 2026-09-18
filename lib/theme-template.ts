@@ -149,6 +149,9 @@ export interface BlockManifestEntry {
   title: boolean
   /** 블럭 위/아래 여백 슬라이더를 보여줄지. false 면 이 블럭의 여백이 디자인상 고정이어야 한다는 뜻 */
   padding: boolean
+  /** hero 블럭 전용: [data-hero-text] 마커가 붙은 정적 문구들의 기본 텍스트(DOM 순서). 없으면 hero에
+   *  직접 수정 가능한 문구가 없다는 뜻 — 편집기가 이 배열 길이만큼 입력칸을 그린다 */
+  heroTexts?: string[]
 }
 
 /** invitations.block_order(jsonb) 를 안전한 블럭 키 배열로 정규화. 알 수 없는 키(레거시
@@ -194,6 +197,13 @@ const BlockOverrideSchema = z.object({
   title: z.string(),
   /** 영문 소제목. 빈 문자열/미설정이면 템플릿 기본 텍스트를 그대로 둔다 */
   label: z.string(),
+  /** hero 블럭 전용: [data-hero-text] 문구들의 직접 수정 텍스트(DOM 순서 인덱스 정렬). 빈 문자열/미설정
+   *  인덱스는 템플릿 기본 문구를 그대로 둔다 */
+  heroTexts: z.array(z.string()),
+  /** hero 블럭 전용: [data-hero-text] 문구 전체에 적용할 폰트 크기(px). 없으면 테마 기본 크기 */
+  heroFontSize: finiteNumber,
+  /** hero 블럭 전용: [data-hero-text] 문구 전체에 적용할 font-family 값. 없으면 테마 기본 폰트 */
+  heroFont: nonEmptyString,
   /** rsvp 블럭 전용: false 면 식사 여부 질문을 숨긴다 (미설정 시 노출) */
   mealEnabled: z.boolean(),
   /** rsvp 블럭 전용: false 면 셔틀버스 이용 질문을 숨긴다 (미설정 시 노출) */

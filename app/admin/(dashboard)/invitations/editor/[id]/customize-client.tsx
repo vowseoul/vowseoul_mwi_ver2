@@ -423,7 +423,10 @@ export default function CustomizeClient({
     return t
   }, [themeTokens, overrides])
 
-  const fontFaces = useMemo(() => resolveFontFaces(tokens, fonts), [tokens, fonts])
+  const fontFaces = useMemo(
+    () => resolveFontFaces(tokens, fonts, [blockOverrides.hero?.heroFont, intro.fontFamily]),
+    [tokens, fonts, blockOverrides.hero?.heroFont, intro.fontFamily]
+  )
 
   const accent = tokens["--accent"] || "#D76C6C"
   const activeSlots = useMemo(() => slots.filter((s) => !disabledSlots.includes(s)), [slots, disabledSlots])
@@ -474,6 +477,9 @@ export default function CustomizeClient({
     () => blockManifest.filter((b) => (b.title || b.padding || slots.includes(b.key)) && (BLOCK_KEYS as readonly string[]).includes(b.key)),
     [blockManifest, slots]
   )
+  /** hero는 항상 맨 앞에 고정이라 위 draggable 목록에서 빠지지만(title/padding도 없음), heroTexts가
+   *  선언된 테마라면 별도의 고정 아코디언 행으로 노출한다 */
+  const heroManifest = useMemo(() => blockManifest.find((b) => b.key === "hero" && b.heroTexts && b.heroTexts.length > 0), [blockManifest])
   /** 블럭 여백 슬라이더가 아직 오버라이드되지 않았을 때 보여줄 시작 위치 — 전역 --section-py 오버라이드가 있으면 그 값을, 없으면 테마 통상값(64)을 기준으로 삼는다 */
   const globalSectionPy = typeof overrides["--section-py"] === "number" ? (overrides["--section-py"] as number) : 64
   /** 'bgm'/'map'처럼 블럭에 속하지 않는 슬롯(독립 위젯이거나 다른 블럭에 얹혀 있음)은 아코디언이 아니라
@@ -1684,6 +1690,79 @@ export default function CustomizeClient({
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
+                  {heroManifest && (
+                    <Accordion
+                      type="single"
+                      collapsible
+                      value={focusBlock ?? ""}
+                      onValueChange={(v) => setFocusBlock(v || null)}
+                      className="mb-2 border-b"
+                    >
+                      <AccordionItem value="hero">
+                        <AccordionTrigger className="text-[15px] font-semibold">{heroManifest.label}</AccordionTrigger>
+                        <AccordionContent className="space-y-4 [&_[data-slot=field-label]]:text-xs [&_[data-slot=field-label]]:font-normal [&_[data-slot=field-label]]:text-muted-foreground">
+                          {heroManifest.heroTexts!.map((defaultText, i) => (
+                            <Field key={i}>
+                              <FieldLabel>{heroManifest.heroTexts!.length > 1 ? `문구 ${i + 1}` : "문구"}</FieldLabel>
+                              <Input
+                                value={blockOverrides.hero?.heroTexts?.[i] ?? ""}
+                                onChange={(e) => {
+                                  const next = [...(blockOverrides.hero?.heroTexts ?? [])]
+                                  next[i] = e.target.value
+                                  setBlockOverride("hero", { heroTexts: next })
+                                }}
+                                placeholder={defaultText}
+                              />
+                            </Field>
+                          ))}
+
+                          <Field className="border-t pt-4">
+                            <FieldLabel>서체</FieldLabel>
+                            <div className="flex items-start gap-2">
+                              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                                {fonts.length > 0 && (
+                                  <Select
+                                    value={fonts.map((f) => buildFontStack(f, "--font-kr")).find((s) => s === blockOverrides.hero?.heroFont) || ""}
+                                    onValueChange={(v) => { if (v) setBlockOverride("hero", { heroFont: v }) }}
+                                  >
+                                    <SelectTrigger className="w-full" style={blockOverrides.hero?.heroFont ? { fontFamily: blockOverrides.hero.heroFont } : undefined}>
+                                      <SelectValue placeholder="에셋에 등록된 폰트 선택…" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {fonts.map((f) => (
+                                        <SelectItem key={f.id} value={buildFontStack(f, "--font-kr")} style={fontPreviewStyle(f)}>{f.name}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                )}
+                                <Input
+                                  value={blockOverrides.hero?.heroFont ?? ""}
+                                  onChange={(e) => setBlockOverride("hero", { heroFont: e.target.value || undefined })}
+                                  placeholder="비워두면 테마 기본 폰트"
+                                />
+                              </div>
+                              {blockOverrides.hero?.heroFont && (
+                                <Button type="button" variant="ghost" size="icon-sm" title="테마 기본 폰트로" onClick={() => setBlockOverride("hero", { heroFont: undefined })}>
+                                  <X className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                            </div>
+                          </Field>
+
+                          <SizeSliderField
+                            label="문구 크기"
+                            value={blockOverrides.hero?.heroFontSize}
+                            defaultValue={16}
+                            min={10}
+                            max={64}
+                            onChange={(v) => setBlockOverride("hero", { heroFontSize: v })}
+                            onReset={() => setBlockOverride("hero", { heroFontSize: undefined })}
+                          />
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
+                  )}
+
                   <p className="mb-2 text-xs text-muted-foreground">왼쪽 손잡이를 드래그해서 블럭 순서를 바꿀 수 있습니다.</p>
                   <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleBlockDragEnd}>
                     <SortableContext items={draggableBlocks.map((b) => b.key)} strategy={verticalListSortingStrategy}>

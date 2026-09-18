@@ -77,6 +77,8 @@ export default async function InvitationReviewPage({ params }: { params: Promise
   const tokens = buildInvitationTokens(themeRow, invitation.customization_overrides)
   const fonts = await fetchRegisteredFonts()
   const disabledSlots = extractDisabledSlots(invitation.customization_overrides)
+  const blockOverrides = extractBlockOverrides(invitation.customization_overrides)
+  const intro = extractIntroSettings(invitation.customization_overrides)
 
   return (
     <ReviewClient
@@ -84,15 +86,15 @@ export default async function InvitationReviewPage({ params }: { params: Promise
       themeRow={themeRow}
       raw={mergeInvitationRaw(invitation, customer)}
       tokens={tokens}
-      fontFaces={resolveFontFaces(tokens, fonts)}
+      fontFaces={resolveFontFaces(tokens, fonts, [blockOverrides.hero?.heroFont, intro.fontFamily])}
       disabledSlots={disabledSlots}
-      blockOverrides={extractBlockOverrides(invitation.customization_overrides)}
+      blockOverrides={blockOverrides}
       blockTint={extractBlockTint(invitation.customization_overrides)}
       blockTintOpacity={extractBlockTintOpacity(invitation.customization_overrides)}
       hiddenBlocks={getHiddenBlocks(disabledSlots)}
       sectionImages={extractSectionImages(invitation.customization_overrides)}
       scrollMotion={extractScrollMotion(invitation.customization_overrides)}
-      intro={extractIntroSettings(invitation.customization_overrides)}
+      intro={intro}
       reviewStatus={invitation.review_status}
       initialRevisions={(revisions ?? []).map((r) => ({
         id: String(r.id),
