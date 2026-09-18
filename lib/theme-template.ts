@@ -204,6 +204,8 @@ const BlockOverrideSchema = z.object({
   heroFontSize: finiteNumber,
   /** hero 블럭 전용: [data-hero-text] 문구 전체에 적용할 font-family 값. 없으면 테마 기본 폰트 */
   heroFont: nonEmptyString,
+  /** hero 블럭 전용: [data-hero-text] 문구 전체에 적용할 자간(px). 없으면 테마 기본 자간 */
+  heroLetterSpacing: finiteNumber,
   /** rsvp 블럭 전용: false 면 식사 여부 질문을 숨긴다 (미설정 시 노출) */
   mealEnabled: z.boolean(),
   /** rsvp 블럭 전용: false 면 셔틀버스 이용 질문을 숨긴다 (미설정 시 노출) */
