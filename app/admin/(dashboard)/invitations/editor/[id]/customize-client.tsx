@@ -31,6 +31,8 @@ import {
   ACCOUNT_CARD_BG_DEFAULT,
   ACCOUNT_ICON_LABELS,
   parseAccountIconOrder,
+  ACCOUNT_GROUP_LABELS,
+  parseAccountGroupOrder,
   BLOCK_TINT_DEFAULT_OPACITY,
   BLOCK_TINT_PATTERNS,
   BLOCK_TINT_STEP_LABELS,
@@ -2017,10 +2019,47 @@ export default function CustomizeClient({
                             )}
                             {b.key === "account" && (
                               <Field className="border-t pt-4">
+                                {/* 계좌 그룹 순서 — 목록형·카드형이 같은 설정을 쓴다. 신랑/신부는
+                                    서로 다른 필드라 열을 섞을 수 없어, 카드형에서는 "어느 열이
+                                    먼저인지"와 "열 안에서 본인·혼주 어느 쪽이 먼저인지"로 반영된다. */}
+                                <FieldLabel>계좌 순서</FieldLabel>
+                                <div className="space-y-1.5">
+                                  {parseAccountGroupOrder(override?.accountOrder).map((key, i, arr) => (
+                                    <div key={key} className="flex items-center gap-2 rounded-md border border-border px-2.5 py-1.5">
+                                      <span className="w-5 text-xs text-muted-foreground tabular-nums">{i + 1}</span>
+                                      <span className="flex-1 text-sm">{ACCOUNT_GROUP_LABELS[key]}</span>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        disabled={i === 0}
+                                        aria-label={`${ACCOUNT_GROUP_LABELS[key]} 위로`}
+                                        onClick={() => setBlockOverride(b.key, { accountOrder: moveArrayItem(arr, i, -1) })}
+                                      >
+                                        <ArrowUp className="h-3.5 w-3.5" />
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        disabled={i === arr.length - 1}
+                                        aria-label={`${ACCOUNT_GROUP_LABELS[key]} 아래로`}
+                                        onClick={() => setBlockOverride(b.key, { accountOrder: moveArrayItem(arr, i, 1) })}
+                                      >
+                                        <ArrowDown className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </div>
+                                  ))}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  혼주 계좌가 여러 건이면 그 안의 순서는 입력한 순서를 따르고, 여기서는 그룹 전체가
+                                  몇 번째로 나올지만 정합니다.
+                                </p>
+
                                 {/* 아이콘 순서 — 카드형·목록형이 같은 설정을 쓴다.
                                     카드형에는 복사 아이콘이 없지만(카드를 누르면 복사)
                                     목록형으로 되돌렸을 때를 위해 목록에 남겨 둔다. */}
-                                <FieldLabel>계좌 아이콘 순서</FieldLabel>
+                                <FieldLabel className="border-t pt-4">계좌 아이콘 순서</FieldLabel>
                                 <div className="space-y-1.5">
                                   {parseAccountIconOrder(override?.accountIconOrder).map((key, i, arr) => (
                                     <div key={key} className="flex items-center gap-2 rounded-md border border-border px-2.5 py-1.5">

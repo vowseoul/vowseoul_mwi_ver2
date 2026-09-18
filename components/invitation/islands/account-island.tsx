@@ -1,12 +1,12 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { Fragment, useEffect, useRef, useState } from "react"
 import { Copy, Check, MessageCircle, Send, ChevronDown } from "lucide-react"
 import { useCopyFeedback } from "@/lib/use-copy-feedback"
 import { isToggledOn } from "@/lib/invitation-data"
 import { soft, iconBtnStyle, type SlotProps } from "./shared"
 import { composeAccountText, isAccountFilled, parseAccountList } from "@/lib/account-fields"
-import { ACCOUNT_CARD_BG_DEFAULT, parseAccountIconOrder, type AccountIconKey } from "@/lib/theme-template"
+import { ACCOUNT_CARD_BG_DEFAULT, parseAccountGroupOrder, parseAccountIconOrder, type AccountIconKey } from "@/lib/theme-template"
 
 /* ----------------------------- Account ----------------------------- */
 function composeAccount(bank?: string, number?: string, holder?: string): string {
@@ -298,16 +298,50 @@ function AccountIsland({ data, raw, blockOverrides }: SlotProps) {
     blockOverrides?.account?.accountCardBgColor || ACCOUNT_CARD_BG_DEFAULT.color,
     blockOverrides?.account?.accountCardBgOpacity ?? ACCOUNT_CARD_BG_DEFAULT.opacity,
   )
+
+  // 계좌 그룹(본인/혼주 × 신랑/신부) 순서 — 목록형은 이 순서로 위→아래, 카드형은 같은 순서를
+  // "어느 열이 먼저 나오는가"(신랑측 두 그룹 중 더 앞선 인덱스 vs 신부측)와 "열 안에서 본인·혼주
+  // 어느 쪽이 먼저인가"로 나눠 적용한다 — 계좌는 신랑/신부 데이터가 서로 다른 필드라 열을
+  // 섞을 수는 없지만, 그 안에서의 순서와 어느 열이 왼쪽인지는 자유롭게 바꿀 수 있다.
+  const accountOrder = parseAccountGroupOrder(blockOverrides?.account?.accountOrder)
+  const orderIndex = (key: (typeof accountOrder)[number]) => accountOrder.indexOf(key)
+  const groomFirst = Math.min(orderIndex("groom"), orderIndex("groomExtra")) <= Math.min(orderIndex("bride"), orderIndex("brideExtra"))
+  const groomExtraFirst = orderIndex("groomExtra") < orderIndex("groom")
+  const brideExtraFirst = orderIndex("brideExtra") < orderIndex("bride")
+
   const cardEntry = (relation: string, holder?: string, bank?: string, number?: string): CardEntry | null =>
     number ? { relation, holder: holder || "", bank: bank || "", number } : null
-  const groomCards = [
-    cardEntry("신랑", data.account_groom_holder, data.account_groom_bank, data.account_groom_number),
-    ...groomRows.map((a) => cardEntry("신랑 혼주", a.holder, a.bank, a.number)),
-  ].filter((e): e is CardEntry => e !== null)
-  const brideCards = [
-    cardEntry("신부", data.account_bride_holder, data.account_bride_bank, data.account_bride_number),
-    ...brideRows.map((a) => cardEntry("신부 혼주", a.holder, a.bank, a.number)),
-  ].filter((e): e is CardEntry => e !== null)
+  const groomOwnCard = cardEntry("신랑", data.account_groom_holder, data.account_groom_bank, data.account_groom_number)
+  const groomExtraCards = groomRows.map((a) => cardEntry("신랑 혼주", a.holder, a.bank, a.number))
+  const groomCards = (groomExtraFirst ? [...groomExtraCards, groomOwnCard] : [groomOwnCard, ...groomExtraCards])
+    .filter((e): e is CardEntry => e !== null)
+  const brideOwnCard = cardEntry("신부", data.account_bride_holder, data.account_bride_bank, data.account_bride_number)
+  const brideExtraCards = brideRows.map((a) => cardEntry("신부 혼주", a.holder, a.bank, a.number))
+  const brideCards = (brideExtraFirst ? [...brideExtraCards, brideOwnCard] : [brideOwnCard, ...brideExtraCards])
+    .filter((e): e is CardEntry => e !== null)
+
+  // 목록형 — 그룹별 내용을 만들어두고 accountOrder 순서대로 늘어놓는다. 혼주 그룹은 신구
+  // 데이터 형식(계좌 목록 배열 또는 예전 자유 입력 텍스트)을 하나로 합쳐 한 그룹으로 다룬다.
+  const rowGroups: Record<(typeof accountOrder)[number], React.ReactNode> = {
+    groom: groom ? <AccountRow label="신랑측" value={groom} iconOrder={iconOrder} iconSize={iconSize} textSize={textSize} /> : null,
+    bride: bride ? <AccountRow label="신부측" value={bride} iconOrder={iconOrder} iconSize={iconSize} textSize={textSize} /> : null,
+    groomExtra: (groomRows.length > 0 || extraGroomText) ? (
+      <>
+        {groomRows.map((a, i) => (
+          <AccountRow key={`g${i}`} label="신랑측 혼주" value={composeAccountText(a)} iconOrder={iconOrder} iconSize={iconSize} textSize={textSize} />
+        ))}
+        {extraGroomText && <ExtraAccountRow label="신랑측 혼주" value={extraGroomText} iconSize={iconSize} textSize={textSize} />}
+      </>
+    ) : null,
+    brideExtra: (brideRows.length > 0 || extraBrideText) ? (
+      <>
+        {brideRows.map((a, i) => (
+          <AccountRow key={`b${i}`} label="신부측 혼주" value={composeAccountText(a)} iconOrder={iconOrder} iconSize={iconSize} textSize={textSize} />
+        ))}
+        {extraBrideText && <ExtraAccountRow label="신부측 혼주" value={extraBrideText} iconSize={iconSize} textSize={textSize} />}
+      </>
+    ) : null,
+  }
 
   return (
     <div ref={rootRef} style={{ textAlign: "left", maxWidth: isCard ? 400 : 320, margin: "0 auto" }}>
@@ -327,24 +361,20 @@ function AccountIsland({ data, raw, blockOverrides }: SlotProps) {
       )}
       {showRows && isCard && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, alignItems: "start" }}>
-          <AccountCardColumn title="신랑측" entries={groomCards} background={cardBg} iconOrder={iconOrder} />
-          <AccountCardColumn title="신부측" entries={brideCards} background={cardBg} iconOrder={iconOrder} />
+          {groomFirst ? (
+            <>
+              <AccountCardColumn title="신랑측" entries={groomCards} background={cardBg} iconOrder={iconOrder} />
+              <AccountCardColumn title="신부측" entries={brideCards} background={cardBg} iconOrder={iconOrder} />
+            </>
+          ) : (
+            <>
+              <AccountCardColumn title="신부측" entries={brideCards} background={cardBg} iconOrder={iconOrder} />
+              <AccountCardColumn title="신랑측" entries={groomCards} background={cardBg} iconOrder={iconOrder} />
+            </>
+          )}
         </div>
       )}
-      {showRows && !isCard && groom && <AccountRow label="신랑측" value={groom} iconOrder={iconOrder} iconSize={iconSize} textSize={textSize} />}
-      {showRows && !isCard && bride && <AccountRow label="신부측" value={bride} iconOrder={iconOrder} iconSize={iconSize} textSize={textSize} />}
-      {/* 혼주 계좌도 계좌마다 한 줄씩 — 본인 계좌와 똑같이 계좌번호만 복사되고
-          카카오페이·토스 버튼도 함께 붙는다 */}
-      {showRows && !isCard && groomRows.map((a, i) => (
-        <AccountRow key={`g${i}`} label="신랑측 혼주" value={composeAccountText(a)} iconOrder={iconOrder} iconSize={iconSize} textSize={textSize} />
-      ))}
-      {showRows && !isCard && brideRows.map((a, i) => (
-        <AccountRow key={`b${i}`} label="신부측 혼주" value={composeAccountText(a)} iconOrder={iconOrder} iconSize={iconSize} textSize={textSize} />
-      ))}
-      {/* 예전 자유 입력(문자열)으로 발행된 혼주 계좌는 은행·번호가 나뉘어 있지 않아 카드로
-          만들 수 없다 — 카드형에서도 이 항목만 기존 줄 형태로 남긴다 */}
-      {showRows && extraGroomText && <ExtraAccountRow label="신랑측 혼주" value={extraGroomText} iconSize={iconSize} textSize={textSize} />}
-      {showRows && extraBrideText && <ExtraAccountRow label="신부측 혼주" value={extraBrideText} iconSize={iconSize} textSize={textSize} />}
+      {showRows && !isCard && accountOrder.map((key) => <Fragment key={key}>{rowGroups[key]}</Fragment>)}
     </div>
   )
 }

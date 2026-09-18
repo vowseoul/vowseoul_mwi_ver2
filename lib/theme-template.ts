@@ -254,6 +254,10 @@ const BlockOverrideSchema = z.object({
   accountCardBgOpacity: finiteNumber,
   /** account 블럭: 계좌 오른쪽 아이콘 순서. 미설정 시 ACCOUNT_ICON_DEFAULT_ORDER */
   accountIconOrder: z.array(z.enum(["kakao", "toss", "copy"])),
+  /** account 블럭: 본인/혼주 계좌 그룹 순서. 목록형은 이 순서 그대로 위→아래로, 카드형은
+   *  같은 순서를 신랑측/신부측 두 열에 각각 필터링해 적용한다(§parseAccountGroupOrder).
+   *  미설정 시 ACCOUNT_GROUP_DEFAULT_ORDER */
+  accountOrder: z.array(z.enum(["groom", "groomExtra", "bride", "brideExtra"])),
   /** account 목록형 전용: 오른쪽 아이콘 버튼 한 변 크기(px). 계좌번호가 길어 2줄로 넘어갈 때
    *  아이콘을 줄여 텍스트에 가로 폭을 더 줄 수 있다. 미설정 시 38 */
   accountIconSize: finiteNumber,
@@ -300,6 +304,34 @@ export function parseAccountIconOrder(value: unknown): AccountIconKey[] {
     picked.push(key)
   }
   return [...picked, ...ACCOUNT_ICON_DEFAULT_ORDER.filter((k) => !seen.has(k))]
+}
+
+/** 계좌 그룹 — 본인 계좌와 혼주 계좌(목록/자유입력 모두 포함)를 각각 한 덩어리로 묶어
+ *  움직인다. 혼주 계좌가 여러 건이어도 그 안의 상대 순서는 각자 입력한 순서를 그대로 따르고,
+ *  이 순서는 "그 그룹 전체가 몇 번째로 나오는가"만 정한다. */
+export const ACCOUNT_GROUP_KEYS = ["groom", "groomExtra", "bride", "brideExtra"] as const
+export type AccountGroupKey = (typeof ACCOUNT_GROUP_KEYS)[number]
+export const ACCOUNT_GROUP_DEFAULT_ORDER: AccountGroupKey[] = ["groom", "groomExtra", "bride", "brideExtra"]
+export const ACCOUNT_GROUP_LABELS: Record<AccountGroupKey, string> = {
+  groom: "신랑측 본인 계좌",
+  groomExtra: "신랑측 혼주 계좌",
+  bride: "신부측 본인 계좌",
+  brideExtra: "신부측 혼주 계좌",
+}
+
+/** 저장된 계좌 그룹 순서를 안전하게 읽는다 — parseAccountIconOrder와 같은 규칙 */
+export function parseAccountGroupOrder(value: unknown): AccountGroupKey[] {
+  const raw = Array.isArray(value) ? value : []
+  const seen = new Set<AccountGroupKey>()
+  const picked: AccountGroupKey[] = []
+  for (const v of raw) {
+    if (!ACCOUNT_GROUP_KEYS.includes(v as AccountGroupKey)) continue
+    const key = v as AccountGroupKey
+    if (seen.has(key)) continue
+    seen.add(key)
+    picked.push(key)
+  }
+  return [...picked, ...ACCOUNT_GROUP_DEFAULT_ORDER.filter((k) => !seen.has(k))]
 }
 
 /** 달력 박스 배경 기본값 — 렌더러(calendar-island)와 편집기 슬라이더가 공유한다 */
