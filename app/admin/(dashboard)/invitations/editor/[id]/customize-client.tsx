@@ -1758,6 +1758,16 @@ export default function CustomizeClient({
                             onChange={(v) => setBlockOverride("hero", { heroFontSize: v })}
                             onReset={() => setBlockOverride("hero", { heroFontSize: undefined })}
                           />
+
+                          <SizeSliderField
+                            label="자간"
+                            value={blockOverrides.hero?.heroLetterSpacing}
+                            defaultValue={0}
+                            min={-2}
+                            max={20}
+                            onChange={(v) => setBlockOverride("hero", { heroLetterSpacing: v })}
+                            onReset={() => setBlockOverride("hero", { heroLetterSpacing: undefined })}
+                          />
                         </AccordionContent>
                       </AccordionItem>
                     </Accordion>

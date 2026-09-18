@@ -367,6 +367,9 @@ export function InvitationFrame({
         if (override.heroFont) {
           rules.push(`[data-block="hero"] [data-hero-text]{font-family:${override.heroFont};}`)
         }
+        if (typeof override.heroLetterSpacing === "number") {
+          rules.push(`[data-block="hero"] [data-hero-text]{letter-spacing:${override.heroLetterSpacing}px;}`)
+        }
       }
     }
     for (const key of hiddenBlocks) {
