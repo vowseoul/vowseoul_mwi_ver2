@@ -42,11 +42,14 @@ function GalleryIsland({ raw }: SlotProps) {
   const isGrid = raw?.gallery_view_type === "grid"
   const objectPosition = raw?.gallery_align === "bottom" ? "center bottom" : "center center"
 
-  // 그리드형 줄 수 — 2줄(3열)/3줄(4열) 두 가지. 이 줄 수를 넘는 사진은 처음엔 숨겨두고
+  // 그리드형 줄 수 — 2줄(3열)/3줄(4열) 두 가지, 이 줄 수를 넘는 사진은 처음엔 숨겨두고
   // "더보기"를 눌러야 나머지가 펼쳐진다(슬라이드형은 가로 스크롤이라 이 개념이 없다).
-  const gridRows = raw?.gallery_grid_rows === "3" ? 3 : 2
-  const gridCols = gridRows === 3 ? 4 : 3
-  const gridLimit = gridRows * gridCols
+  // gallery_grid_rows 가 아예 없으면(이 기능이 생기기 전에 그리드형으로 발행된 청첩장)
+  // 무제한(옛 동작 그대로 2열·전체 표시)으로 둔다 — 새로 만드는 청첩장만 기본값이 2줄이고
+  // (§hooks/queries/useInvitations.ts), 이미 발행된 것은 이 필드를 건드리기 전까진 그대로다.
+  const gridRows = raw?.gallery_grid_rows === "3" ? 3 : raw?.gallery_grid_rows === "2" ? 2 : 0
+  const gridCols = gridRows === 3 ? 4 : gridRows === 2 ? 3 : 2
+  const gridLimit = gridRows === 0 ? Infinity : gridRows * gridCols
   const [gridExpanded, setGridExpanded] = useState(false)
   const gridHasMore = isGrid && images.length > gridLimit
   const visibleImages = isGrid && !gridExpanded ? images.slice(0, gridLimit) : images

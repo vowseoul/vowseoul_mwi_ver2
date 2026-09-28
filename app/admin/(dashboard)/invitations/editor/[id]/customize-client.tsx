@@ -341,8 +341,11 @@ export default function CustomizeClient({
   const [galleryAlign, setGalleryAlign] = useState<"center" | "bottom">(
     () => (initialRaw.gallery_align === "bottom" ? "bottom" : "center")
   )
-  const [galleryGridRows, setGalleryGridRows] = useState<"2" | "3">(
-    () => (initialRaw.gallery_grid_rows === "3" ? "3" : "2")
+  // 이 필드가 아예 없는 청첩장(이 기능이 생기기 전에 만들어진 것)은 ""로 두어 그리드형이
+  // 무제한(전체 표시)이던 기존 동작을 그대로 보존한다 — 여기서 "2"를 기본값으로 두면 관련
+  // 없는 다른 항목만 고쳐 저장해도 조용히 2줄 제한이 생겨버린다(§gallery-island.tsx).
+  const [galleryGridRows, setGalleryGridRows] = useState<"" | "2" | "3">(
+    () => (initialRaw.gallery_grid_rows === "3" ? "3" : initialRaw.gallery_grid_rows === "2" ? "2" : "")
   )
   const [greetingImageRatio, setGreetingImageRatio] = useState<"natural" | "fill">(
     () => (initialRaw.greeting_image_ratio === "fill" ? "fill" : "natural")
