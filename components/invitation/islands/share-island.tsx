@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useCopyFeedback } from "@/lib/use-copy-feedback"
+import { normalizeNaverPlaceUrl } from "@/lib/naver-place"
 import { soft, type SlotProps } from "./shared"
 
 interface KakaoGlobal {
@@ -74,6 +75,12 @@ function ShareIsland({ accent, data }: SlotProps) {
   const shareViaKakao = () => {
     if (!kakao || typeof window === "undefined") return
     const url = window.location.href
+    // 위치 보기 버튼 — "네이버지도" 버튼(§map-island.tsx openNaver)과 같은 규칙: 관리자가
+    // 붙여넣은 장소 URL이 있으면 그 장소 페이지로, 없으면 주소 검색으로 보낸다. 주소 자체가
+    // 없으면 열 곳이 없으니 버튼을 아예 넣지 않는다.
+    const placeUrl = data.venue_address
+      ? normalizeNaverPlaceUrl(data.venue_naver_place) ?? `https://map.naver.com/v5/search/${encodeURIComponent(data.venue_address)}`
+      : null
     kakao.Share.sendDefault({
       objectType: "feed",
       content: {
@@ -82,7 +89,10 @@ function ShareIsland({ accent, data }: SlotProps) {
         imageUrl: data.kakao_share_img || data.main_image || "",
         link: { mobileWebUrl: url, webUrl: url },
       },
-      buttons: [{ title: "청첩장 보기", link: { mobileWebUrl: url, webUrl: url } }],
+      buttons: [
+        { title: "청첩장 보기", link: { mobileWebUrl: url, webUrl: url } },
+        ...(placeUrl ? [{ title: "위치 보기", link: { mobileWebUrl: placeUrl, webUrl: placeUrl } }] : []),
+      ],
     })
   }
 

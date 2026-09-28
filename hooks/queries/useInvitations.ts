@@ -200,10 +200,10 @@ export function useCreateInvitationMutation() {
         invitationMessage: invitationMessageDefault,
         galleryImages: [],
         galleryViewType: 'slide',
-        // 그리드형으로 바꿀 때의 기본 줄 수 — 이 필드가 아예 없는 예전 청첩장은 무제한(모든
-        // 사진을 한 번에) 보여주는 예전 동작을 그대로 유지해야 하므로(§gallery-island.tsx),
+        // 그리드형으로 바꿀 때의 기본 가로 줄 수 — 이 필드가 아예 없는 예전 청첩장은 무제한
+        // (모든 사진을 한 번에) 보여주는 예전 동작을 그대로 유지해야 하므로(§gallery-island.tsx),
         // 새로 만드는 청첩장에만 명시적으로 심어 새 기본값(2줄)을 갖게 한다.
-        gallery_grid_rows: '2',
+        gallery_grid_cols: '2',
         trafficInfo: '지하철 역 도보 5분 거리',
         parkingInfo: '식장 내 무료 주차 지원',
         rsvpEnabled: true,
