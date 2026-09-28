@@ -3,7 +3,7 @@ import TemplateInvitationClient from "./template-invitation-client"
 import { buildInvitationTokens, extractBlockOrder, extractBlockOverrides, extractBlockTint, extractBlockTintOpacity, extractDisabledSlots, extractSectionImages, getHiddenBlocks, type ThemeRow } from "@/lib/theme-template"
 import { extractScrollMotion } from "@/lib/scroll-motion"
 import { extractIntroSettings } from "@/lib/intro-settings"
-import { mergeInvitationRaw, type RawInvitationData } from "@/lib/invitation-data"
+import { mergeInvitationRaw, withOgMeta, type RawInvitationData } from "@/lib/invitation-data"
 import { fetchRegisteredFonts, resolveFontFaces } from "@/lib/fonts"
 import { Metadata, Viewport } from "next"
 import { after } from "next/server"
@@ -216,7 +216,7 @@ export default async function Page({ params }: PageProps) {
     return (
       <TemplateInvitationClient
         themeRow={themeRow}
-        raw={mergeInvitationRaw(invitation, customer)}
+        raw={withOgMeta(mergeInvitationRaw(invitation, customer), invitation.og_meta)}
         invitationId={String(invitation.id)}
         tokens={tokens}
         fontFaces={resolveFontFaces(tokens, fonts, [blockOverrides.hero?.heroFont, intro.fontFamily])}
