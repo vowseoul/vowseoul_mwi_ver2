@@ -78,9 +78,13 @@ function ShareIsland({ accent, data }: SlotProps) {
     // 위치 보기 버튼 — "네이버지도" 버튼(§map-island.tsx openNaver)과 같은 규칙: 관리자가
     // 붙여넣은 장소 URL이 있으면 그 장소 페이지로, 없으면 주소 검색으로 보낸다. 주소 자체가
     // 없으면 열 곳이 없으니 버튼을 아예 넣지 않는다.
-    const placeUrl = data.venue_address
+    const naverUrl = data.venue_address
       ? normalizeNaverPlaceUrl(data.venue_naver_place) ?? `https://map.naver.com/v5/search/${encodeURIComponent(data.venue_address)}`
       : null
+    // 카카오톡 공유 버튼 링크는 "제품 링크 관리"에 등록된 우리 도메인이 아니면 신뢰하지
+    // 않고 등록된 기본 도메인 루트로 대신 보낸다 — map.naver.com을 직접 넣으면 엉뚱한
+    // 페이지(관리자 홈)로 튄다. 우리 도메인 경유지(§app/api/go/naver-map)를 거쳐 보낸다.
+    const placeUrl = naverUrl ? `${window.location.origin}/api/go/naver-map?url=${encodeURIComponent(naverUrl)}` : null
     kakao.Share.sendDefault({
       objectType: "feed",
       content: {
