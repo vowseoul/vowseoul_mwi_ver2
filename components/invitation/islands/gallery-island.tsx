@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { ChevronDown } from "lucide-react"
 import { isToggledOn } from "@/lib/invitation-data"
 import type { SlotProps } from "./shared"
 
@@ -40,6 +41,15 @@ function GalleryIsland({ raw }: SlotProps) {
     : SAMPLE_GALLERY
   const isGrid = raw?.gallery_view_type === "grid"
   const objectPosition = raw?.gallery_align === "bottom" ? "center bottom" : "center center"
+
+  // 그리드형 줄 수 — 2줄(3열)/3줄(4열) 두 가지. 이 줄 수를 넘는 사진은 처음엔 숨겨두고
+  // "더보기"를 눌러야 나머지가 펼쳐진다(슬라이드형은 가로 스크롤이라 이 개념이 없다).
+  const gridRows = raw?.gallery_grid_rows === "3" ? 3 : 2
+  const gridCols = gridRows === 3 ? 4 : 3
+  const gridLimit = gridRows * gridCols
+  const [gridExpanded, setGridExpanded] = useState(false)
+  const gridHasMore = isGrid && images.length > gridLimit
+  const visibleImages = isGrid && !gridExpanded ? images.slice(0, gridLimit) : images
 
   /** 확대방지 — 켜면 하객이 갤러리 사진을 어떤 방법으로도 크게 볼 수 없다:
    *  라이트박스(클릭 확대) 비활성 + 핀치줌/더블탭/Ctrl+휠 차단 + 드래그·길게눌러 저장 차단.
@@ -257,12 +267,28 @@ function GalleryIsland({ raw }: SlotProps) {
   const tileCursor = zoomBlocked ? "default" : "pointer"
 
   const thumbnails = isGrid ? (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, width: "100%" }}>
-      {images.map((src, i) => (
-        <div key={i} onClick={() => openLightbox(i)} style={{ aspectRatio: "1/1", overflow: "hidden", cursor: tileCursor }}>
-          <FadeImage src={src} alt="" style={imgStyle} />
-        </div>
-      ))}
+    <div style={{ width: "100%" }}>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${gridCols}, 1fr)`, gap: 8 }}>
+        {visibleImages.map((src, i) => (
+          <div key={i} onClick={() => openLightbox(i)} style={{ aspectRatio: "1/1", overflow: "hidden", cursor: tileCursor }}>
+            <FadeImage src={src} alt="" style={imgStyle} />
+          </div>
+        ))}
+      </div>
+      {gridHasMore && (
+        <button
+          onClick={() => setGridExpanded((v) => !v)}
+          aria-expanded={gridExpanded}
+          style={{
+            width: "100%", marginTop: 10, padding: "10px 0", borderRadius: 6, cursor: "pointer",
+            border: "1px solid currentColor", background: "transparent", color: "inherit",
+            fontSize: 13, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+          }}
+        >
+          {gridExpanded ? "접기" : "더보기"}
+          <ChevronDown size={15} style={{ transform: gridExpanded ? "rotate(180deg)" : "none", transition: "transform 200ms ease-out" }} />
+        </button>
+      )}
     </div>
   ) : (
     <div style={{ display: "flex", gap: 8, overflowX: "auto", width: "100%", paddingBottom: 8, scrollSnapType: "x mandatory" }}>

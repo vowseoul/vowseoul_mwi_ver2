@@ -341,6 +341,9 @@ export default function CustomizeClient({
   const [galleryAlign, setGalleryAlign] = useState<"center" | "bottom">(
     () => (initialRaw.gallery_align === "bottom" ? "bottom" : "center")
   )
+  const [galleryGridRows, setGalleryGridRows] = useState<"2" | "3">(
+    () => (initialRaw.gallery_grid_rows === "3" ? "3" : "2")
+  )
   const [greetingImageRatio, setGreetingImageRatio] = useState<"natural" | "fill">(
     () => (initialRaw.greeting_image_ratio === "fill" ? "fill" : "natural")
   )
@@ -402,6 +405,7 @@ export default function CustomizeClient({
     ...extraArrayFieldsPayload,
     gallery_view_type: galleryViewType,
     gallery_align: galleryAlign,
+    gallery_grid_rows: galleryGridRows,
     greeting_image_ratio: greetingImageRatio,
     wedding_programs: sequenceRows,
     show_wedding_program: showProgram ? "예" : "아니오",
@@ -653,6 +657,7 @@ export default function CustomizeClient({
       ...extraArrayFieldsPayload,
       gallery_view_type: galleryViewType,
       gallery_align: galleryAlign,
+      gallery_grid_rows: galleryGridRows,
       greeting_image_ratio: greetingImageRatio,
       wedding_programs: sequenceRows,
       show_wedding_program: showProgram ? "예" : "아니오",
@@ -1018,6 +1023,29 @@ export default function CustomizeClient({
                         </div>
                       </RadioGroup>
                     </Field>
+
+                    {galleryViewType === "grid" && (
+                      <Field>
+                        <FieldLabel>그리드 줄 수</FieldLabel>
+                        <RadioGroup
+                          value={galleryGridRows}
+                          onValueChange={(v) => setGalleryGridRows(v as "2" | "3")}
+                          className="flex flex-row gap-6"
+                        >
+                          <div className="flex items-center gap-2">
+                            <RadioGroupItem value="2" id="gallery-grid-rows-2" />
+                            <Label htmlFor="gallery-grid-rows-2" className="font-normal cursor-pointer">2줄 (3열)</Label>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <RadioGroupItem value="3" id="gallery-grid-rows-3" />
+                            <Label htmlFor="gallery-grid-rows-3" className="font-normal cursor-pointer">3줄 (4열)</Label>
+                          </div>
+                        </RadioGroup>
+                        <FieldDescription>
+                          정해진 줄 수를 넘는 사진은 화면에 바로 보이지 않고, 하객이 &ldquo;더보기&rdquo;를 눌러야 나머지가 펼쳐집니다.
+                        </FieldDescription>
+                      </Field>
+                    )}
 
                     {galleryViewType === "slide" && (
                       <Field>
