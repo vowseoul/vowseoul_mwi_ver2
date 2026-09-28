@@ -42,14 +42,19 @@ function GalleryIsland({ raw }: SlotProps) {
   const isGrid = raw?.gallery_view_type === "grid"
   const objectPosition = raw?.gallery_align === "bottom" ? "center bottom" : "center center"
 
-  // 그리드형 줄 수 — 2줄(3열)/3줄(4열) 두 가지, 이 줄 수를 넘는 사진은 처음엔 숨겨두고
-  // "더보기"를 눌러야 나머지가 펼쳐진다(슬라이드형은 가로 스크롤이라 이 개념이 없다).
-  // gallery_grid_rows 가 아예 없으면(이 기능이 생기기 전에 그리드형으로 발행된 청첩장)
-  // 무제한(옛 동작 그대로 2열·전체 표시)으로 둔다 — 새로 만드는 청첩장만 기본값이 2줄이고
+  // 그리드형 가로 줄 수(2줄=2열/3줄=3열)와, 그 아래로 처음에 몇 줄까지 보여줄지(기본은
+  // 2열→3줄, 3열→4줄이지만 직접 조절 가능)를 각각 고른다. 그 줄 수를 넘는 사진은 처음엔
+  // 숨겨두고 "더보기"를 눌러야 나머지가 펼쳐진다(슬라이드형은 가로 스크롤이라 이 개념이 없다).
+  // gallery_grid_cols 가 아예 없으면(이 기능이 생기기 전에 그리드형으로 발행된 청첩장)
+  // 무제한(옛 동작 그대로 2열·전체 표시)으로 둔다 — 새로 만드는 청첩장만 기본값이 있고
   // (§hooks/queries/useInvitations.ts), 이미 발행된 것은 이 필드를 건드리기 전까진 그대로다.
-  const gridRows = raw?.gallery_grid_rows === "3" ? 3 : raw?.gallery_grid_rows === "2" ? 2 : 0
-  const gridCols = gridRows === 3 ? 4 : gridRows === 2 ? 3 : 2
-  const gridLimit = gridRows === 0 ? Infinity : gridRows * gridCols
+  const gridCols = raw?.gallery_grid_cols === "3" ? 3 : raw?.gallery_grid_cols === "2" ? 2 : 0
+  const defaultShowRows = gridCols === 3 ? 4 : 3
+  const showRows = typeof raw?.gallery_grid_show_rows === "number" && raw.gallery_grid_show_rows > 0
+    ? raw.gallery_grid_show_rows
+    : defaultShowRows
+  const gridLimit = gridCols === 0 ? Infinity : gridCols * showRows
+  const effectiveGridCols = gridCols === 0 ? 2 : gridCols
   const [gridExpanded, setGridExpanded] = useState(false)
   const gridHasMore = isGrid && images.length > gridLimit
   const visibleImages = isGrid && !gridExpanded ? images.slice(0, gridLimit) : images
@@ -271,7 +276,7 @@ function GalleryIsland({ raw }: SlotProps) {
 
   const thumbnails = isGrid ? (
     <div style={{ width: "100%" }}>
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${gridCols}, 1fr)`, gap: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${effectiveGridCols}, 1fr)`, gap: 8 }}>
         {visibleImages.map((src, i) => (
           <div key={i} onClick={() => openLightbox(i)} style={{ aspectRatio: "1/1", overflow: "hidden", cursor: tileCursor }}>
             <FadeImage src={src} alt="" style={imgStyle} />

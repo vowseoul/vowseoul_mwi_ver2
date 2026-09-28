@@ -343,9 +343,14 @@ export default function CustomizeClient({
   )
   // 이 필드가 아예 없는 청첩장(이 기능이 생기기 전에 만들어진 것)은 ""로 두어 그리드형이
   // 무제한(전체 표시)이던 기존 동작을 그대로 보존한다 — 여기서 "2"를 기본값으로 두면 관련
-  // 없는 다른 항목만 고쳐 저장해도 조용히 2줄 제한이 생겨버린다(§gallery-island.tsx).
-  const [galleryGridRows, setGalleryGridRows] = useState<"" | "2" | "3">(
-    () => (initialRaw.gallery_grid_rows === "3" ? "3" : initialRaw.gallery_grid_rows === "2" ? "2" : "")
+  // 없는 다른 항목만 고쳐 저장해도 조용히 줄 제한이 생겨버린다(§gallery-island.tsx).
+  const [galleryGridCols, setGalleryGridCols] = useState<"" | "2" | "3">(
+    () => (initialRaw.gallery_grid_cols === "3" ? "3" : initialRaw.gallery_grid_cols === "2" ? "2" : "")
+  )
+  // 처음에 아래로 몇 줄까지 보여줄지 — 비워두면(undefined) 열 수에 따른 기본값(2열→3줄,
+  // 3열→4줄)을 그대로 쓴다(§gallery-island.tsx defaultShowRows).
+  const [galleryGridShowRows, setGalleryGridShowRows] = useState<number | undefined>(
+    () => (typeof initialRaw.gallery_grid_show_rows === "number" ? initialRaw.gallery_grid_show_rows : undefined)
   )
   const [greetingImageRatio, setGreetingImageRatio] = useState<"natural" | "fill">(
     () => (initialRaw.greeting_image_ratio === "fill" ? "fill" : "natural")
@@ -408,7 +413,8 @@ export default function CustomizeClient({
     ...extraArrayFieldsPayload,
     gallery_view_type: galleryViewType,
     gallery_align: galleryAlign,
-    gallery_grid_rows: galleryGridRows,
+    gallery_grid_cols: galleryGridCols,
+    gallery_grid_show_rows: galleryGridShowRows,
     greeting_image_ratio: greetingImageRatio,
     wedding_programs: sequenceRows,
     show_wedding_program: showProgram ? "예" : "아니오",
@@ -419,7 +425,7 @@ export default function CustomizeClient({
     account_collapsed: accountCollapsed ? "예" : "아니오",
     bgm_autoplay: bgmAutoplay ? "예" : "아니오",
     bgm_url: bgmUrl,
-  }), [initialRaw, content, extraArrayFieldsPayload, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign, greetingImageRatio, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone, galleryZoomBlock, accountCollapsed, bgmAutoplay, bgmUrl])
+  }), [initialRaw, content, extraArrayFieldsPayload, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign, galleryGridCols, galleryGridShowRows, greetingImageRatio, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone, galleryZoomBlock, accountCollapsed, bgmAutoplay, bgmUrl])
 
   const data = useMemo(() => buildFieldData(liveRaw), [liveRaw])
 
@@ -660,7 +666,8 @@ export default function CustomizeClient({
       ...extraArrayFieldsPayload,
       gallery_view_type: galleryViewType,
       gallery_align: galleryAlign,
-      gallery_grid_rows: galleryGridRows,
+      gallery_grid_cols: galleryGridCols,
+      gallery_grid_show_rows: galleryGridShowRows,
       greeting_image_ratio: greetingImageRatio,
       wedding_programs: sequenceRows,
       show_wedding_program: showProgram ? "예" : "아니오",
@@ -1028,26 +1035,39 @@ export default function CustomizeClient({
                     </Field>
 
                     {galleryViewType === "grid" && (
-                      <Field>
-                        <FieldLabel>그리드 줄 수</FieldLabel>
-                        <RadioGroup
-                          value={galleryGridRows}
-                          onValueChange={(v) => setGalleryGridRows(v as "2" | "3")}
-                          className="flex flex-row gap-6"
-                        >
-                          <div className="flex items-center gap-2">
-                            <RadioGroupItem value="2" id="gallery-grid-rows-2" />
-                            <Label htmlFor="gallery-grid-rows-2" className="font-normal cursor-pointer">2줄 (3열)</Label>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <RadioGroupItem value="3" id="gallery-grid-rows-3" />
-                            <Label htmlFor="gallery-grid-rows-3" className="font-normal cursor-pointer">3줄 (4열)</Label>
-                          </div>
-                        </RadioGroup>
+                      <>
+                        <Field>
+                          <FieldLabel>그리드 가로 줄 수</FieldLabel>
+                          <RadioGroup
+                            value={galleryGridCols}
+                            onValueChange={(v) => setGalleryGridCols(v as "2" | "3")}
+                            className="flex flex-row gap-6"
+                          >
+                            <div className="flex items-center gap-2">
+                              <RadioGroupItem value="2" id="gallery-grid-cols-2" />
+                              <Label htmlFor="gallery-grid-cols-2" className="font-normal cursor-pointer">2줄</Label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <RadioGroupItem value="3" id="gallery-grid-cols-3" />
+                              <Label htmlFor="gallery-grid-cols-3" className="font-normal cursor-pointer">3줄</Label>
+                            </div>
+                          </RadioGroup>
+                        </Field>
+
+                        <SizeSliderField
+                          label="아래로 보여줄 기본 줄 수"
+                          unit="줄"
+                          value={galleryGridShowRows}
+                          defaultValue={galleryGridCols === "3" ? 4 : 3}
+                          min={1}
+                          max={10}
+                          onChange={setGalleryGridShowRows}
+                          onReset={() => setGalleryGridShowRows(undefined)}
+                        />
                         <FieldDescription>
                           정해진 줄 수를 넘는 사진은 화면에 바로 보이지 않고, 하객이 &ldquo;더보기&rdquo;를 눌러야 나머지가 펼쳐집니다.
                         </FieldDescription>
-                      </Field>
+                      </>
                     )}
 
                     {galleryViewType === "slide" && (
