@@ -2,7 +2,7 @@ import { cookies } from 'next/headers'
 import { redirect, notFound } from 'next/navigation'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { dashboardCookieName, verifyDashboardToken } from '@/lib/dashboard-session'
-import { mergeInvitationRaw } from '@/lib/invitation-data'
+import { mergeInvitationRaw, withOgMeta } from '@/lib/invitation-data'
 import { buildInvitationTokens, extractBlockOverrides, extractBlockTint, extractBlockTintOpacity, extractDisabledSlots, extractSectionImages, getHiddenBlocks, type ThemeRow } from '@/lib/theme-template'
 import { extractScrollMotion } from '@/lib/scroll-motion'
 import { extractIntroSettings } from '@/lib/intro-settings'
@@ -84,7 +84,7 @@ export default async function InvitationReviewPage({ params }: { params: Promise
     <ReviewClient
       invitationId={id}
       themeRow={themeRow}
-      raw={mergeInvitationRaw(invitation, customer)}
+      raw={withOgMeta(mergeInvitationRaw(invitation, customer), invitation.og_meta)}
       tokens={tokens}
       fontFaces={resolveFontFaces(tokens, fonts, [blockOverrides.hero?.heroFont, intro.fontFamily])}
       disabledSlots={disabledSlots}

@@ -45,6 +45,21 @@ export function mergeInvitationRaw(
   return raw
 }
 
+/**
+ * 링크 미리보기(og_meta) 값을 렌더용 raw 에 얹는다 — 공유하기 버튼 카드(§share-island.tsx)가
+ * 자기 전용 값이 비어 있을 때 링크 미리보기의 사진·제목·설명을 그대로 쓰기 위해서다.
+ * mergeInvitationRaw 에 넣지 않은 이유: 그 함수는 파기 크론·응답 화면 등 렌더와 무관한
+ * 곳에서도 쓰여, 거기에 이 키들이 섞이면 안 된다.
+ */
+export function withOgMeta(raw: RawInvitationData, ogMeta: unknown): RawInvitationData {
+  const og = (ogMeta && typeof ogMeta === "object") ? ogMeta as Record<string, unknown> : {}
+  const out: RawInvitationData = { ...raw }
+  if (typeof og.title === "string" && og.title) out.og_title = og.title
+  if (typeof og.description === "string" && og.description) out.og_description = og.description
+  if (typeof og.image === "string" && og.image) out.og_image = og.image
+  return out
+}
+
 const MONTHS_EN = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
 const WEEKDAYS_KR = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"]
 

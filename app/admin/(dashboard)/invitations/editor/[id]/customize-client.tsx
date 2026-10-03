@@ -379,6 +379,12 @@ export default function CustomizeClient({
   const [ogDescription, setOgDescription] = useState(String(ogMetaInitial.description ?? ""))
   const [ogImage, setOgImage] = useState(String(ogMetaInitial.image ?? ""))
   const [uploadingOgImage, setUploadingOgImage] = useState(false)
+  // 공유하기 버튼(카카오 SDK) 카드 전용 — 비워두면 위 링크 미리보기 값을 그대로 쓴다
+  // (§share-island.tsx). content_data 에 저장된다.
+  const [shareBtnImg, setShareBtnImg] = useState(String(initialRaw.share_btn_img ?? ""))
+  const [shareBtnTitle, setShareBtnTitle] = useState(String(initialRaw.share_btn_title ?? ""))
+  const [shareBtnText, setShareBtnText] = useState(String(initialRaw.share_btn_text ?? ""))
+  const [uploadingShareBtnImg, setUploadingShareBtnImg] = useState(false)
 
   const [uploadingKey, setUploadingKey] = useState<string | null>(null)
 
@@ -415,6 +421,12 @@ export default function CustomizeClient({
     gallery_align: galleryAlign,
     gallery_grid_cols: galleryGridCols,
     gallery_grid_show_rows: galleryGridShowRows,
+    og_title: ogTitle,
+    og_description: ogDescription,
+    og_image: ogImage,
+    share_btn_title: shareBtnTitle,
+    share_btn_text: shareBtnText,
+    share_btn_img: shareBtnImg,
     greeting_image_ratio: greetingImageRatio,
     wedding_programs: sequenceRows,
     show_wedding_program: showProgram ? "예" : "아니오",
@@ -425,7 +437,7 @@ export default function CustomizeClient({
     account_collapsed: accountCollapsed ? "예" : "아니오",
     bgm_autoplay: bgmAutoplay ? "예" : "아니오",
     bgm_url: bgmUrl,
-  }), [initialRaw, content, extraArrayFieldsPayload, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign, galleryGridCols, galleryGridShowRows, greetingImageRatio, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone, galleryZoomBlock, accountCollapsed, bgmAutoplay, bgmUrl])
+  }), [initialRaw, content, extraArrayFieldsPayload, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign, galleryGridCols, galleryGridShowRows, ogTitle, ogDescription, ogImage, shareBtnTitle, shareBtnText, shareBtnImg, greetingImageRatio, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone, galleryZoomBlock, accountCollapsed, bgmAutoplay, bgmUrl])
 
   const data = useMemo(() => buildFieldData(liveRaw), [liveRaw])
 
@@ -576,6 +588,16 @@ export default function CustomizeClient({
     }
   }
 
+  const uploadShareBtnImg = async (file: File) => {
+    setUploadingShareBtnImg(true)
+    try {
+      setShareBtnImg(await uploadImage(file, "invitations/kakao-share"))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "이미지 업로드에 실패했습니다.")
+    } finally {
+      setUploadingShareBtnImg(false)
+    }
+  }
   const uploadOgImage = async (file: File) => {
     setUploadingOgImage(true)
     try {
@@ -611,6 +633,7 @@ export default function CustomizeClient({
     greetingImageRatio, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone,
     galleryZoomBlock, accountCollapsed, bgmAutoplay, extraGroomList, extraBrideList, extraContactsList,
     bgmUrl, themeVersionId, blockOrder, ogTitle, ogDescription, ogImage,
+    shareBtnImg, shareBtnTitle, shareBtnText, galleryGridCols, galleryGridShowRows,
   })
   const [initialFingerprint, setInitialFingerprint] = useState(dirtyFingerprint)
   const isDirty = dirtyFingerprint !== initialFingerprint
@@ -668,6 +691,9 @@ export default function CustomizeClient({
       gallery_align: galleryAlign,
       gallery_grid_cols: galleryGridCols,
       gallery_grid_show_rows: galleryGridShowRows,
+      share_btn_title: shareBtnTitle,
+      share_btn_text: shareBtnText,
+      share_btn_img: shareBtnImg,
       greeting_image_ratio: greetingImageRatio,
       wedding_programs: sequenceRows,
       show_wedding_program: showProgram ? "예" : "아니오",
@@ -1365,6 +1391,7 @@ export default function CustomizeClient({
               </CardHeader>
               <CardContent>
                 <FieldGroup className="space-y-4">
+                  <p className="text-sm font-medium">링크 미리보기 (카카오톡에 주소를 붙여넣어 보낼 때)</p>
                   <ImageField
                     def={{ key: "og_image", label: "썸네일 이미지", type: "image" }}
                     value={ogImage}
@@ -1390,6 +1417,44 @@ export default function CustomizeClient({
                       placeholder="2026년 5월 7일 낮 12시"
                     />
                   </Field>
+
+                  <div className="space-y-4 border-t pt-4">
+                    <div>
+                      <p className="text-sm font-medium">공유하기 버튼 카드 (청첩장 하단 &ldquo;카카오톡 공유&rdquo; 버튼)</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        비워두면 위 링크 미리보기의 사진·제목·설명이 그대로 쓰입니다. 다르게 보내고 싶은 항목만 채우세요.
+                      </p>
+                    </div>
+                    <ImageField
+                      def={{ key: "share_btn_img", label: "썸네일 이미지", type: "image" }}
+                      value={shareBtnImg}
+                      uploading={uploadingShareBtnImg}
+                      onUpload={uploadShareBtnImg}
+                      onClear={() => setShareBtnImg("")}
+                    />
+                    <Field>
+                      <FieldLabel htmlFor="shareBtnTitle">제목</FieldLabel>
+                      <Input
+                        id="shareBtnTitle"
+                        value={shareBtnTitle}
+                        onChange={(e) => setShareBtnTitle(e.target.value)}
+                        placeholder={ogTitle || (groom && bride ? `${groom} ♥ ${bride}` : "철수 ♥ 영희")}
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="shareBtnText">설명</FieldLabel>
+                      <Textarea
+                        id="shareBtnText"
+                        value={shareBtnText}
+                        onChange={(e) => setShareBtnText(e.target.value)}
+                        placeholder={ogDescription || "저희 결혼식에 초대합니다"}
+                        rows={2}
+                      />
+                      <FieldDescription>
+                        Enter로 줄을 나눌 수 있습니다. 카카오 카드는 설명을 최대 2줄까지만 보여주고 넘으면 &ldquo;...&rdquo;로 잘립니다.
+                      </FieldDescription>
+                    </Field>
+                  </div>
                 </FieldGroup>
               </CardContent>
             </Card>
