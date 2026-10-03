@@ -5,12 +5,12 @@ import { Copy, Check, MessageCircle, Send, ChevronDown } from "lucide-react"
 import { useCopyFeedback } from "@/lib/use-copy-feedback"
 import { isToggledOn } from "@/lib/invitation-data"
 import { soft, iconBtnStyle, type SlotProps } from "./shared"
-import { composeAccountText, isAccountFilled, parseAccountList } from "@/lib/account-fields"
+import { isAccountFilled, parseAccountList } from "@/lib/account-fields"
 import { ACCOUNT_CARD_BG_DEFAULT, parseAccountGroupOrder, parseAccountIconOrder, type AccountIconKey } from "@/lib/theme-template"
 
 /* ----------------------------- Account ----------------------------- */
-function composeAccount(bank?: string, number?: string, holder?: string): string {
-  return [bank, number, holder].filter(Boolean).join(" ")
+function composeAccount(bank?: string, number?: string): string {
+  return [bank, number].filter(Boolean).join(" ")
 }
 /* 계좌번호만 복사해두고 카카오페이/토스 앱을 열어준다 — 은행마다 다른 공식 송금 API 없이도
   // 이 딥링크들로 앱이 열리므로, 사용자가 그 안에서 붙여넣기만 하면 된다. 계좌번호+금액을
@@ -110,21 +110,26 @@ function accountIconButtons({
   return order.filter((k) => !omit.includes(k)).map((k) => make[k]())
 }
 
-function AccountRow({ label, value, iconOrder, iconSize, textSize }: {
+/** 목록형 한 줄 — 위에서부터 관계 라벨, "은행 계좌번호"(줄바꿈 없이 한 줄), 그 아래 예금주.
+ *  예전엔 은행·번호·예금주를 한 문자열로 이어 붙여 폭에 따라 아무 데서나 줄이 갈렸다 —
+ *  계좌번호가 길면 번호 중간이나 예금주 앞뒤에서 끊겨 모양이 계좌마다 달랐다. */
+function AccountRow({ label, primary, holder, iconOrder, iconSize, textSize }: {
   label: string
-  value: string
+  primary: string
+  holder: string
   iconOrder: AccountIconKey[]
   iconSize: number
   textSize: number
 }) {
   const { isCopied, copy: copyText } = useCopyFeedback()
   const copied = isCopied()
-  const numericValue = digitsOnly(value)
+  const numericValue = digitsOnly(primary)
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${soft(25)}`, gap: 8 }}>
       <div style={{ textAlign: "left", minWidth: 0 }}>
         <div style={{ fontSize: 11, opacity: 0.6 }}>{label}</div>
-        <div style={{ fontSize: textSize }}>{value}</div>
+        <div style={{ fontSize: textSize, whiteSpace: "nowrap" }}>{primary}</div>
+        {holder && <div style={{ fontSize: textSize, whiteSpace: "nowrap" }}>{holder}</div>}
       </div>
       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
         {accountIconButtons({
@@ -255,8 +260,8 @@ function AccountCardColumn({ title, entries, background, iconOrder }: { title: s
 
 function AccountIsland({ data, raw, blockOverrides }: SlotProps) {
   const rootRef = useRef<HTMLDivElement>(null)
-  const groom = composeAccount(data.account_groom_bank, data.account_groom_number, data.account_groom_holder)
-  const bride = composeAccount(data.account_bride_bank, data.account_bride_number, data.account_bride_holder)
+  const groom = composeAccount(data.account_groom_bank, data.account_groom_number)
+  const bride = composeAccount(data.account_bride_bank, data.account_bride_number)
 
   // 혼주 계좌는 값이 배열이라 data 가 아니라 raw 에서 읽어야 한다 — buildFieldData 는
   // 문자열/숫자만 통과시키고 배열·객체는 슬롯이 raw 로 직접 쓰라고 빼둔다(§lib/invitation-data.ts).
@@ -323,12 +328,12 @@ function AccountIsland({ data, raw, blockOverrides }: SlotProps) {
   // 목록형 — 그룹별 내용을 만들어두고 accountOrder 순서대로 늘어놓는다. 혼주 그룹은 신구
   // 데이터 형식(계좌 목록 배열 또는 예전 자유 입력 텍스트)을 하나로 합쳐 한 그룹으로 다룬다.
   const rowGroups: Record<(typeof accountOrder)[number], React.ReactNode> = {
-    groom: groom ? <AccountRow label="신랑측" value={groom} iconOrder={iconOrder} iconSize={iconSize} textSize={textSize} /> : null,
-    bride: bride ? <AccountRow label="신부측" value={bride} iconOrder={iconOrder} iconSize={iconSize} textSize={textSize} /> : null,
+    groom: groom ? <AccountRow label="신랑측" primary={groom} holder={data.account_groom_holder || ""} iconOrder={iconOrder} iconSize={iconSize} textSize={textSize} /> : null,
+    bride: bride ? <AccountRow label="신부측" primary={bride} holder={data.account_bride_holder || ""} iconOrder={iconOrder} iconSize={iconSize} textSize={textSize} /> : null,
     groomExtra: (groomRows.length > 0 || extraGroomText) ? (
       <>
         {groomRows.map((a, i) => (
-          <AccountRow key={`g${i}`} label="신랑측 혼주" value={composeAccountText(a)} iconOrder={iconOrder} iconSize={iconSize} textSize={textSize} />
+          <AccountRow key={`g${i}`} label="신랑측 혼주" primary={composeAccount(a.bank?.trim(), a.number?.trim())} holder={a.holder?.trim() || ""} iconOrder={iconOrder} iconSize={iconSize} textSize={textSize} />
         ))}
         {extraGroomText && <ExtraAccountRow label="신랑측 혼주" value={extraGroomText} iconSize={iconSize} textSize={textSize} />}
       </>
@@ -336,7 +341,7 @@ function AccountIsland({ data, raw, blockOverrides }: SlotProps) {
     brideExtra: (brideRows.length > 0 || extraBrideText) ? (
       <>
         {brideRows.map((a, i) => (
-          <AccountRow key={`b${i}`} label="신부측 혼주" value={composeAccountText(a)} iconOrder={iconOrder} iconSize={iconSize} textSize={textSize} />
+          <AccountRow key={`b${i}`} label="신부측 혼주" primary={composeAccount(a.bank?.trim(), a.number?.trim())} holder={a.holder?.trim() || ""} iconOrder={iconOrder} iconSize={iconSize} textSize={textSize} />
         ))}
         {extraBrideText && <ExtraAccountRow label="신부측 혼주" value={extraBrideText} iconSize={iconSize} textSize={textSize} />}
       </>
