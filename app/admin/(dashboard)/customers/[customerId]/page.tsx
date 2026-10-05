@@ -73,12 +73,14 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
   const [orderAmount, setOrderAmount] = useState(0)
   const [orderStatus, setOrderStatus] = useState<Order['status']>('registered')
   const [orderNotes, setOrderNotes] = useState('')
+  const [orderRef, setOrderRef] = useState('')
 
   useEffect(() => {
     if (order) {
       setOrderAmount(order.amount)
       setOrderStatus(order.status)
       setOrderNotes(order.notes || '')
+      setOrderRef(order.external_order_ref || '')
     }
   }, [order])
 
@@ -114,7 +116,13 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
     try {
       await saveOrderMutation.mutateAsync({
         orderId: order.id,
-        updates: { amount: orderAmount, status: orderStatus, notes: orderNotes },
+        updates: {
+          amount: orderAmount,
+          status: orderStatus,
+          notes: orderNotes,
+          // 숫자만 남긴다 — 스마트스토어에서 복사하면 공백·하이픈이 섞여 들어온다.
+          external_order_ref: orderRef.replace(/\D/g, '') || null,
+        },
       })
       toast.success('주문 정보가 저장되었습니다.')
     } catch (err: any) {
@@ -829,6 +837,20 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                         )}
                       </Field>
                     </div>
+                    <Field>
+                      <FieldLabel htmlFor="orderRef">스마트스토어 주문번호</FieldLabel>
+                      <Input
+                        id="orderRef"
+                        inputMode="numeric"
+                        placeholder="주문번호 또는 상품주문번호"
+                        value={orderRef}
+                        onChange={(e) => setOrderRef(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        넣어 두면 매출 앱(vow-data)의 진행 보드에 이 고객의 제작 상태와 예식일이 함께
+                        보입니다.
+                      </p>
+                    </Field>
                     <Field>
                       <FieldLabel htmlFor="orderNotes">관리 메모 / 특이사항</FieldLabel>
                       <Textarea

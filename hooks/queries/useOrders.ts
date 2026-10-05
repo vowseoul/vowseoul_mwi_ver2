@@ -83,7 +83,7 @@ export function useSaveOrderMutation() {
       updates,
     }: {
       orderId: string
-      updates: Partial<Pick<Order, 'amount' | 'status' | 'notes'>>
+      updates: Partial<Pick<Order, 'amount' | 'status' | 'notes' | 'external_order_ref'>>
     }) => {
       const { data, error } = await supabase.from('orders').update(updates).eq('id', orderId).select().single()
       if (error) throw error
