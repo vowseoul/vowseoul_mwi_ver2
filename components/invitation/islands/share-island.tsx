@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { useCopyFeedback } from "@/lib/use-copy-feedback"
 import { normalizeNaverPlaceUrl } from "@/lib/naver-place"
+import { resolveShareCard } from "@/lib/kakao-share"
 import { soft, type SlotProps } from "./shared"
 
 interface KakaoGlobal {
@@ -59,9 +60,9 @@ function ShareIsland({ accent, data }: SlotProps) {
   const { isCopied, copy } = useCopyFeedback()
   const copied = isCopied()
   const kakao = useKakaoShare()
-  // 공유하기 버튼 카드 전용 값 → 없으면 링크 미리보기(og_meta) 값 → 예전 폼 값 → 기본값 순.
-  // 링크 미리보기에만 사진을 넣으면 두 곳이 같은 사진을 쓰고, 여기 따로 넣어야 달라진다.
-  const title = data.share_btn_title || data.og_title || data.kakao_share_title || [data.groom_name, data.bride_name].filter(Boolean).join(" ♥ ") || "모바일 청첩장"
+  // 카드 내용 규칙은 편집기 미리보기와 같은 함수를 쓴다(§lib/kakao-share.ts)
+  const card = resolveShareCard(data)
+  const title = card.title
 
   const handleShare = () => {
     if (typeof window === "undefined") return
@@ -91,8 +92,8 @@ function ShareIsland({ accent, data }: SlotProps) {
       objectType: "feed",
       content: {
         title,
-        description: data.share_btn_text || data.og_description || data.kakao_share_text || "저희 결혼식에 초대합니다",
-        imageUrl: data.share_btn_img || data.og_image || data.kakao_share_img || data.main_image || "",
+        description: card.description,
+        imageUrl: card.image,
         link: { mobileWebUrl: url, webUrl: url },
       },
       buttons: [

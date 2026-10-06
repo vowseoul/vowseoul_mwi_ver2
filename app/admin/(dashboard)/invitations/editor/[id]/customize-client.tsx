@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabase"
 import { uploadImage, SHARE_THUMBNAIL_OPTIONS, isShareThumbnailField } from "@/lib/image-upload"
 import { InvitationFrame, type TokenMap } from "@/components/invitation/invitation-frame"
 import { ScaledPreview } from "@/components/ui/scaled-preview"
+import { LinkPreviewCard, ShareButtonCard } from "@/components/admin/kakao-card-preview"
+import { resolveLinkPreview, resolveShareCard } from "@/lib/kakao-share"
 import { buildSlots } from "@/components/invitation/slot-registry"
 import { buildFieldData, mergeInvitationRaw, normalizeSequence, isToggledOff, isToggledOn, WEDDING_TIME_FORMATS, isWeddingTimeFormat, formatWeddingTime, toTimeInputValue, type SequenceEvent, type WeddingTimeFormat } from "@/lib/invitation-data"
 import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes-warning"
@@ -445,6 +447,12 @@ export default function CustomizeClient({
   }), [initialRaw, content, extraArrayFieldsPayload, weddingDate, weddingTime, weddingTimeFormat, galleryImages, galleryViewType, galleryAlign, galleryGridCols, galleryGridShowRows, ogTitle, ogDescription, ogImage, shareBtnTitle, shareBtnText, shareBtnImg, greetingImageRatio, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone, galleryZoomBlock, accountCollapsed, bgmAutoplay, bgmUrl])
 
   const data = useMemo(() => buildFieldData(liveRaw), [liveRaw])
+  // 카카오톡 공유 카드 미리보기 — 실제로 내보내는 곳과 같은 규칙(§lib/kakao-share.ts).
+  // *Defaults 는 입력칸을 비웠을 때 쓰일 값이라 placeholder 로 보여준다.
+  const linkPreview = useMemo(() => resolveLinkPreview(liveRaw), [liveRaw])
+  const linkPreviewDefaults = useMemo(() => resolveLinkPreview({ ...liveRaw, og_title: "", og_description: "", og_image: "" }), [liveRaw])
+  const shareCard = useMemo(() => resolveShareCard(data), [data])
+  const shareCardDefaults = useMemo(() => resolveShareCard({ ...data, share_btn_title: "", share_btn_text: "", share_btn_img: "" }), [data])
 
   const tokens: TokenMap = useMemo(() => {
     const t: TokenMap = { ...themeTokens }
@@ -1431,31 +1439,40 @@ export default function CustomizeClient({
               <CardContent>
                 <FieldGroup className="space-y-4">
                   <p className="text-sm font-medium">링크 미리보기 (카카오톡에 주소를 붙여넣어 보낼 때)</p>
-                  <ImageField
-                    def={{ key: "og_image", label: "썸네일 이미지", type: "image" }}
-                    value={ogImage}
-                    uploading={uploadingOgImage}
-                    onUpload={uploadOgImage}
-                    onClear={() => setOgImage("")}
-                  />
-                  <Field>
-                    <FieldLabel htmlFor="ogTitle">제목</FieldLabel>
-                    <Input
-                      id="ogTitle"
-                      value={ogTitle}
-                      onChange={(e) => setOgTitle(e.target.value)}
-                      placeholder={groom && bride ? `${groom} ♥ ${bride} 결혼합니다` : "철수 ♥ 영희 결혼합니다"}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="ogDescription">설명</FieldLabel>
-                    <Input
-                      id="ogDescription"
-                      value={ogDescription}
-                      onChange={(e) => setOgDescription(e.target.value)}
-                      placeholder="2026년 5월 7일 낮 12시"
-                    />
-                  </Field>
+                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
+                    <div className="space-y-4">
+                      <ImageField
+                        def={{ key: "og_image", label: "썸네일 이미지", type: "image" }}
+                        value={ogImage}
+                        uploading={uploadingOgImage}
+                        onUpload={uploadOgImage}
+                        onClear={() => setOgImage("")}
+                      />
+                      <Field>
+                        <FieldLabel htmlFor="ogTitle">제목</FieldLabel>
+                        <Input
+                          id="ogTitle"
+                          value={ogTitle}
+                          onChange={(e) => setOgTitle(e.target.value)}
+                          placeholder={linkPreviewDefaults.title}
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="ogDescription">설명</FieldLabel>
+                        <Input
+                          id="ogDescription"
+                          value={ogDescription}
+                          onChange={(e) => setOgDescription(e.target.value)}
+                          placeholder={linkPreviewDefaults.description || "예: 2026년 5월 7일 낮 12시"}
+                        />
+                        <FieldDescription>주소 붙여넣기 미리보기는 줄바꿈이 적용되지 않습니다.</FieldDescription>
+                      </Field>
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-muted-foreground">미리보기</p>
+                      <LinkPreviewCard content={linkPreview} />
+                    </div>
+                  </div>
 
                   <div className="space-y-4 border-t pt-4">
                     <div>
@@ -1464,36 +1481,47 @@ export default function CustomizeClient({
                         비워두면 위 링크 미리보기의 사진·제목·설명이 그대로 쓰입니다. 다르게 보내고 싶은 항목만 채우세요.
                       </p>
                     </div>
-                    <ImageField
-                      def={{ key: "share_btn_img", label: "썸네일 이미지", type: "image" }}
-                      value={shareBtnImg}
-                      uploading={uploadingShareBtnImg}
-                      onUpload={uploadShareBtnImg}
-                      onClear={() => setShareBtnImg("")}
-                    />
-                    <Field>
-                      <FieldLabel htmlFor="shareBtnTitle">제목</FieldLabel>
-                      <Input
-                        id="shareBtnTitle"
-                        value={shareBtnTitle}
-                        onChange={(e) => setShareBtnTitle(e.target.value)}
-                        placeholder={ogTitle || (groom && bride ? `${groom} ♥ ${bride}` : "철수 ♥ 영희")}
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="shareBtnText">설명</FieldLabel>
-                      <Textarea
-                        id="shareBtnText"
-                        value={shareBtnText}
-                        onChange={(e) => setShareBtnText(e.target.value)}
-                        placeholder={ogDescription || "저희 결혼식에 초대합니다"}
-                        rows={2}
-                      />
-                      <FieldDescription>
-                        Enter로 줄을 나눌 수 있습니다. 카카오 카드는 설명을 최대 2줄까지만 보여주고 넘으면 &ldquo;...&rdquo;로 잘립니다.
-                      </FieldDescription>
-                    </Field>
+                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
+                      <div className="space-y-4">
+                        <ImageField
+                          def={{ key: "share_btn_img", label: "썸네일 이미지", type: "image" }}
+                          value={shareBtnImg}
+                          uploading={uploadingShareBtnImg}
+                          onUpload={uploadShareBtnImg}
+                          onClear={() => setShareBtnImg("")}
+                        />
+                        <Field>
+                          <FieldLabel htmlFor="shareBtnTitle">제목</FieldLabel>
+                          <Input
+                            id="shareBtnTitle"
+                            value={shareBtnTitle}
+                            onChange={(e) => setShareBtnTitle(e.target.value)}
+                            placeholder={shareCardDefaults.title}
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="shareBtnText">설명</FieldLabel>
+                          <Textarea
+                            id="shareBtnText"
+                            value={shareBtnText}
+                            onChange={(e) => setShareBtnText(e.target.value)}
+                            placeholder={shareCardDefaults.description}
+                            rows={2}
+                          />
+                          <FieldDescription>
+                            Enter로 줄을 나눌 수 있습니다. 카카오 카드는 설명을 최대 2줄까지만 보여주고 넘으면 &ldquo;...&rdquo;로 잘립니다.
+                          </FieldDescription>
+                        </Field>
+                      </div>
+                      <div className="space-y-1.5">
+                        <p className="text-xs text-muted-foreground">미리보기</p>
+                        <ShareButtonCard content={shareCard} hasLocation={!!data.venue_address} />
+                      </div>
+                    </div>
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    미리보기는 입력하는 대로 바로 바뀝니다. 사진을 자르는 위치·비율은 카카오톡이 정해서 실제 카드와 조금 다를 수 있습니다.
+                  </p>
                 </FieldGroup>
               </CardContent>
             </Card>

@@ -5,6 +5,7 @@ import { extractScrollMotion } from "@/lib/scroll-motion"
 import { extractIntroSettings } from "@/lib/intro-settings"
 import { mergeInvitationRaw, withOgMeta, type RawInvitationData } from "@/lib/invitation-data"
 import { fetchRegisteredFonts, resolveFontFaces } from "@/lib/fonts"
+import { resolveLinkPreview } from "@/lib/kakao-share"
 import { Metadata, Viewport } from "next"
 import { after } from "next/server"
 import { headers } from "next/headers"
@@ -106,16 +107,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   try {
     const { invitation, customer } = await loadInvitation(slug)
     if (invitation) {
-      const raw = mergeInvitationRaw(invitation, customer)
-      const og = (invitation.og_meta && typeof invitation.og_meta === 'object')
-        ? invitation.og_meta as Record<string, string>
-        : {}
-
-      const groom = String(raw.groom_name ?? '신랑')
-      const bride = String(raw.bride_name ?? '신부')
-      const title = og.title || `${groom} ♥ ${bride} 결혼합니다`
-      const description = og.description || [raw.wedding_date, raw.venue_name].filter(Boolean).join(' · ')
-      const image = og.image || (typeof raw.main_image === 'string' ? raw.main_image : '')
+      // 링크 미리보기 내용 규칙은 편집기 미리보기와 같은 함수를 쓴다(§lib/kakao-share.ts)
+      const { title, description, image } = resolveLinkPreview(withOgMeta(mergeInvitationRaw(invitation, customer), invitation.og_meta))
 
       return {
         title,
