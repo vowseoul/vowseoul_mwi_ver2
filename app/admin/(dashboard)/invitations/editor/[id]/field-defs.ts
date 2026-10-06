@@ -107,7 +107,7 @@ export const SLOT_LABELS: Record<string, string> = {
 export const ALL_TEXT_FIELD_DEFS = [...CONTENT_FIELD_DEFS, ...ACCOUNT_FIELD_DEFS, MAP_FIELD_DEF]
 export const MANAGED_CONTENT_KEYS = new Set([
   ...ALL_TEXT_FIELD_DEFS.map((f) => f.key),
-  "wedding_date", "wedding_time", "gallery_images", "gallery_view_type", "gallery_align", "gallery_grid_cols", "gallery_grid_show_rows", "share_btn_title", "share_btn_text", "share_btn_img", "greeting_image_ratio", "wedding_programs", "show_wedding_program",
+  "wedding_date", "wedding_time", "wedding_time_format", "gallery_images", "gallery_view_type", "gallery_align", "gallery_grid_cols", "gallery_grid_show_rows", "share_btn_title", "share_btn_text", "share_btn_img", "greeting_image_ratio", "wedding_programs", "show_wedding_program",
   "phone_expose", "groom_show_phone", "bride_show_phone",
   "gallery_zoom_block", "account_collapsed", "bgm_autoplay",
   "extra_contacts",

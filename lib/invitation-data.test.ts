@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatWeddingTimeLabel, buildFieldData, mergeInvitationRaw, normalizeLegacyKeys, normalizeSequence, isToggledOff, isToggledOn } from './invitation-data'
+import { formatWeddingTimeLabel, formatWeddingTime, toTimeInputValue, buildFieldData, mergeInvitationRaw, normalizeLegacyKeys, normalizeSequence, isToggledOff, isToggledOn } from './invitation-data'
 
 describe('normalizeLegacyKeys', () => {
   it('레거시 camelCase 키를 필드키로 매핑한다', () => {
@@ -250,5 +250,39 @@ describe('formatWeddingTimeLabel', () => {
     for (const raw of ['', '  ', '00:00', null, undefined, 12]) {
       expect(formatWeddingTimeLabel(raw)).toBe('')
     }
+  })
+})
+
+describe('formatWeddingTime', () => {
+  it('converts parseable times to each format', () => {
+    expect(formatWeddingTime('오후 4시 10분', 'en')).toBe('4:10PM')
+    expect(formatWeddingTime('16:10', 'ko')).toBe('오후 4시 10분')
+    expect(formatWeddingTime('12:00', 'ko')).toBe('낮 12시')
+    expect(formatWeddingTime('오전 11시', '24h')).toBe('11:00')
+  })
+  it('keeps typed text as-is in text mode and for unparseable input', () => {
+    expect(formatWeddingTime('오후 4시 10분', 'text')).toBe('오후 4시 10분')
+    expect(formatWeddingTime('저녁 무렵', 'ko')).toBe('저녁 무렵')
+  })
+  it('treats 00:00 as no time', () => {
+    expect(formatWeddingTime('00:00', 'ko')).toBe('')
+  })
+  it('applies the chosen format to every time output in buildFieldData', () => {
+    const data = buildFieldData({ wedding_date: '2026-10-03', wedding_time: '오후 4시 10분', wedding_time_format: 'text' })
+    expect(data.wedding_time).toBe('오후 4시 10분')
+    expect(data.wedding_datetime_display).toBe('2026. 10. 03. 오후 4시 10분')
+  })
+  it('keeps the legacy hero format when no format is chosen', () => {
+    const data = buildFieldData({ wedding_date: '2026-10-03', wedding_time: '오후 4시 10분' })
+    expect(data.wedding_time).toBe('오후 4시 10분')
+    expect(data.wedding_datetime_display).toBe('2026. 10. 03. 4:10PM')
+  })
+})
+
+describe('toTimeInputValue', () => {
+  it('returns HH:MM for parseable input and empty otherwise', () => {
+    expect(toTimeInputValue('오후 4시 10분')).toBe('16:10')
+    expect(toTimeInputValue('9:05')).toBe('09:05')
+    expect(toTimeInputValue('저녁 무렵')).toBe('')
   })
 })
