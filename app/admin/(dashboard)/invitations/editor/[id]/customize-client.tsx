@@ -6,7 +6,7 @@ import { uploadImage, SHARE_THUMBNAIL_OPTIONS, isShareThumbnailField } from "@/l
 import { InvitationFrame, type TokenMap } from "@/components/invitation/invitation-frame"
 import { ScaledPreview } from "@/components/ui/scaled-preview"
 import { buildSlots } from "@/components/invitation/slot-registry"
-import { buildFieldData, mergeInvitationRaw, normalizeSequence, isToggledOff, isToggledOn, type SequenceEvent } from "@/lib/invitation-data"
+import { buildFieldData, mergeInvitationRaw, normalizeSequence, isToggledOff, isToggledOn, WEDDING_TIME_FORMATS, isWeddingTimeFormat, formatWeddingTime, toTimeInputValue, type SequenceEvent, type WeddingTimeFormat } from "@/lib/invitation-data"
 import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes-warning"
 import {
   REVIEW_STATUS_LABEL,
@@ -329,6 +329,10 @@ export default function CustomizeClient({
     !!String(initialRaw.custom_notice_title ?? "").trim() || !!String(initialRaw.custom_notice_body ?? "").trim()
   )
   const [weddingTime, setWeddingTime] = useState(String(initialRaw.wedding_time ?? ""))
+  // ""면 고르지 않은 상태 — 예전 표기(테마 기본) 그대로다(§lib/invitation-data.ts buildFieldData)
+  const [weddingTimeFormat, setWeddingTimeFormat] = useState<WeddingTimeFormat | "">(
+    () => (isWeddingTimeFormat(initialRaw.wedding_time_format) ? initialRaw.wedding_time_format : "")
+  )
 
   const [galleryImages, setGalleryImages] = useState<string[]>(() =>
     Array.isArray(initialRaw.gallery_images)
@@ -415,6 +419,7 @@ export default function CustomizeClient({
     ...content,
     wedding_date: weddingDate,
     wedding_time: weddingTime,
+    wedding_time_format: weddingTimeFormat,
     gallery_images: galleryImages,
     ...extraArrayFieldsPayload,
     gallery_view_type: galleryViewType,
@@ -437,7 +442,7 @@ export default function CustomizeClient({
     account_collapsed: accountCollapsed ? "예" : "아니오",
     bgm_autoplay: bgmAutoplay ? "예" : "아니오",
     bgm_url: bgmUrl,
-  }), [initialRaw, content, extraArrayFieldsPayload, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign, galleryGridCols, galleryGridShowRows, ogTitle, ogDescription, ogImage, shareBtnTitle, shareBtnText, shareBtnImg, greetingImageRatio, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone, galleryZoomBlock, accountCollapsed, bgmAutoplay, bgmUrl])
+  }), [initialRaw, content, extraArrayFieldsPayload, weddingDate, weddingTime, weddingTimeFormat, galleryImages, galleryViewType, galleryAlign, galleryGridCols, galleryGridShowRows, ogTitle, ogDescription, ogImage, shareBtnTitle, shareBtnText, shareBtnImg, greetingImageRatio, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone, galleryZoomBlock, accountCollapsed, bgmAutoplay, bgmUrl])
 
   const data = useMemo(() => buildFieldData(liveRaw), [liveRaw])
 
@@ -629,7 +634,7 @@ export default function CustomizeClient({
   // 변경사항이 있으면 새로고침/탭 닫기 시 브라우저 확인을 받는다(§useUnsavedChangesWarning).
   const dirtyFingerprint = JSON.stringify({
     overrides, disabledSlots, blockOverrides, sectionImages, scrollMotion, intro,
-    content, weddingDate, weddingTime, galleryImages, galleryViewType, galleryAlign,
+    content, weddingDate, weddingTime, weddingTimeFormat, galleryImages, galleryViewType, galleryAlign,
     greetingImageRatio, sequenceRows, showProgram, phoneExpose, groomShowPhone, brideShowPhone,
     galleryZoomBlock, accountCollapsed, bgmAutoplay, extraGroomList, extraBrideList, extraContactsList,
     bgmUrl, themeVersionId, blockOrder, ogTitle, ogDescription, ogImage,
@@ -685,6 +690,7 @@ export default function CustomizeClient({
       ...content,
       wedding_date: weddingDate,
       wedding_time: weddingTime,
+      wedding_time_format: weddingTimeFormat,
       gallery_images: galleryImages,
       ...extraArrayFieldsPayload,
       gallery_view_type: galleryViewType,
@@ -872,9 +878,42 @@ export default function CustomizeClient({
                     </Field>
                     <Field>
                       <FieldLabel htmlFor="weddingTime">예식 시간</FieldLabel>
-                      <Input id="weddingTime" value={weddingTime} onChange={(e) => setWeddingTime(e.target.value)} placeholder="예: 낮 12시" />
+                      {weddingTimeFormat === "" || weddingTimeFormat === "text" ? (
+                        <Input id="weddingTime" value={weddingTime} onChange={(e) => setWeddingTime(e.target.value)} placeholder="예: 오후 4시 10분" />
+                      ) : (
+                        <Input id="weddingTime" type="time" value={toTimeInputValue(weddingTime)} onChange={(e) => setWeddingTime(e.target.value)} />
+                      )}
                     </Field>
                   </div>
+                  <Field>
+                    <FieldLabel>시간 표기</FieldLabel>
+                    <Select
+                      value={weddingTimeFormat || "default"}
+                      onValueChange={(v) => {
+                        const next = v === "default" ? "" : (v as WeddingTimeFormat)
+                        // 시간 선택기로 바꿀 때 지금 문구를 읽을 수 있으면 "HH:MM"으로 옮겨 둔다 —
+                        // 안 그러면 선택기가 빈칸으로 보인다. 못 읽으면 문구를 그대로 남긴다.
+                        if (next && next !== "text") {
+                          const hhmm = toTimeInputValue(weddingTime)
+                          if (hhmm) setWeddingTime(hhmm)
+                        }
+                        setWeddingTimeFormat(next)
+                      }}
+                    >
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">테마 기본 (예전 방식)</SelectItem>
+                        {WEDDING_TIME_FORMATS.map((f) => (
+                          <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FieldDescription>
+                      {weddingTimeFormat
+                        ? <>청첩장의 모든 예식 시간 표기(메인 화면, 달력 아래)가 같은 모양으로 맞춰집니다. 표시 예: &ldquo;{formatWeddingTime(weddingTime, weddingTimeFormat) || "—"}&rdquo;</>
+                        : <>테마마다 표기가 다를 수 있습니다(예: Color Atelier 메인 화면은 &ldquo;4:10PM&rdquo;). 한 가지로 맞추려면 표기 방식을 고르세요.</>}
+                    </FieldDescription>
+                  </Field>
                   {visibleContentFields.filter((f) => ["venue_name", "venue_hall", "venue_address"].includes(f.key)).map((f) => (
                     <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
                   ))}

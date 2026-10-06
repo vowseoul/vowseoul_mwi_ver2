@@ -63,29 +63,25 @@ export function withOgMeta(raw: RawInvitationData, ogMeta: unknown): RawInvitati
 const MONTHS_EN = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
 const WEEKDAYS_KR = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"]
 
-/** 'YYYY-MM-DD' (+선택적 시간) 문자열을 로컬 자정 기준 Date 로 파싱 */
 /**
- * 예식 시간 문자열을 "12PM" 형태로 정규화한다.
+ * 예식 시간 문자열을 시/분으로 읽는다.
  *
  * 입력이 한 가지가 아니다. 폼의 시간 선택기를 쓰면 "12:00"/"13:00" 이 들어오지만,
  * 예전 데이터와 직접 입력분에는 "낮 12시" 같은 한국어 표현이 그대로 남아 있다
- * (실제 DB 에 둘 다 있다). 해석되면 영문 표기로 바꾸고, 아니면 원문을 그대로 둔다 —
- * 못 읽었다고 시간을 지워버리면 고객이 적어 넣은 정보가 화면에서 사라진다.
+ * (실제 DB 에 둘 다 있다). 못 읽으면 null — 호출부는 원문을 그대로 보여줘야 한다
+ * (못 읽었다고 시간을 지워버리면 고객이 적어 넣은 정보가 화면에서 사라진다).
  *
- * "00:00" 은 시간 없음으로 본다. 예식이 자정에 열리는 일은 없고, 시간을 고르지 않은
- * 채 저장된 값이 이 형태로 남아 있다 — 그대로 두면 "12AM" 이라고 표시된다.
+ * "00:00" 은 "none"(시간 없음)으로 본다. 예식이 자정에 열리는 일은 없고, 시간을 고르지
+ * 않은 채 저장된 값이 이 형태로 남아 있다 — 그대로 두면 "12AM" 이라고 표시된다.
  */
-export function formatWeddingTimeLabel(value: unknown): string {
-  const raw = typeof value === "string" ? value.trim() : ""
-  if (!raw) return ""
-
+function parseWeddingTime(raw: string): { hour: number; minute: number } | "none" | null {
   const hhmm = raw.match(/^(\d{1,2}):(\d{2})$/)
   if (hhmm) {
     const h = Number(hhmm[1])
     const min = Number(hhmm[2])
-    if (h === 0 && min === 0) return ""
-    if (h > 23 || min > 59) return raw
-    return toAmPm(h, min)
+    if (h === 0 && min === 0) return "none"
+    if (h > 23 || min > 59) return null
+    return { hour: h, minute: min }
   }
 
   // "낮 12시 30분", "오후 1시" 처럼 쓰는 경우. 오전/아침 만 AM 으로 보고 나머지 시간대
@@ -94,16 +90,57 @@ export function formatWeddingTimeLabel(value: unknown): string {
   if (kr) {
     let h = Number(kr[1])
     const min = Number(kr[2] ?? 0)
-    if (h > 12 || min > 59) return raw
+    if (h > 12 || min > 59) return null
     const isAm = /오전|아침/.test(raw)
     const isPm = /오후|낮|저녁|밤/.test(raw)
-    if (!isAm && !isPm) return raw // 오전/오후가 없으면 12시간제인지 알 수 없다
+    if (!isAm && !isPm) return null // 오전/오후가 없으면 12시간제인지 알 수 없다
     if (isAm && h === 12) h = 0
     else if (isPm && h !== 12) h += 12
-    return toAmPm(h, min)
+    return { hour: h, minute: min }
   }
 
-  return raw
+  return null
+}
+
+/** 예식 시간 표기 방식 — 편집기 "예식 일시 · 장소" 카드에서 고른다(content_data.wedding_time_format).
+ *  미설정이면 예전 그대로다: Color Atelier 히어로만 "4:10PM"으로 바꾸고 나머지는 입력한 그대로. */
+export const WEDDING_TIME_FORMATS = [
+  { value: "text", label: "직접 입력 (입력한 그대로)" },
+  { value: "en", label: "4:10PM" },
+  { value: "ko", label: "오후 4시 10분" },
+  { value: "24h", label: "16:10" },
+] as const
+export type WeddingTimeFormat = (typeof WEDDING_TIME_FORMATS)[number]["value"]
+
+export function isWeddingTimeFormat(value: unknown): value is WeddingTimeFormat {
+  return WEDDING_TIME_FORMATS.some((f) => f.value === value)
+}
+
+/** 고른 표기 방식으로 예식 시간을 바꾼다. 읽지 못하는 문구는 원문 그대로 둔다. */
+export function formatWeddingTime(value: unknown, format: WeddingTimeFormat): string {
+  const raw = typeof value === "string" ? value.trim() : ""
+  if (!raw || format === "text") return raw
+  const t = parseWeddingTime(raw)
+  if (t === "none") return ""
+  if (!t) return raw
+  if (format === "en") return toAmPm(t.hour, t.minute)
+  if (format === "24h") return `${t.hour}:${String(t.minute).padStart(2, "0")}`
+  const period = t.hour === 12 ? "낮" : t.hour < 12 ? "오전" : "오후"
+  const h12 = t.hour % 12 === 0 ? 12 : t.hour % 12
+  return t.minute === 0 ? `${period} ${h12}시` : `${period} ${h12}시 ${t.minute}분`
+}
+
+/** 시간 선택기(<input type="time">)에 넣을 "HH:MM". 읽지 못하면 빈 문자열 */
+export function toTimeInputValue(value: unknown): string {
+  const raw = typeof value === "string" ? value.trim() : ""
+  const t = raw ? parseWeddingTime(raw) : null
+  if (!t || t === "none") return ""
+  return `${String(t.hour).padStart(2, "0")}:${String(t.minute).padStart(2, "0")}`
+}
+
+/** 예전 기본 표기 — 표기 방식을 고르지 않은 청첩장의 "12PM" 형태 (Color Atelier 히어로) */
+export function formatWeddingTimeLabel(value: unknown): string {
+  return formatWeddingTime(value, "en")
 }
 
 function toAmPm(hour24: number, minute: number): string {
@@ -112,6 +149,7 @@ function toAmPm(hour24: number, minute: number): string {
   return minute === 0 ? `${h12}${suffix}` : `${h12}:${String(minute).padStart(2, "0")}${suffix}`
 }
 
+/** 'YYYY-MM-DD' (+선택적 시간) 문자열을 로컬 자정 기준 Date 로 파싱 */
 function parseWeddingDate(value: unknown): Date | null {
   if (typeof value !== "string" || !value) return null
   const datePart = value.slice(0, 10)
@@ -346,6 +384,10 @@ export function buildFieldData(rawInput: RawInvitationData, now = new Date()): F
   }
 
   // 2) 파생 표시 필드 계산
+  // 표기 방식을 고른 청첩장은 예식 시간이 나오는 모든 곳(테마의 wedding_time 필드, 히어로의
+  // 날짜+시간, 달력 아래 줄)을 같은 표기로 맞춘다. 고르지 않았으면 예전 동작 그대로.
+  const timeFormat = isWeddingTimeFormat(raw.wedding_time_format) ? raw.wedding_time_format : null
+  if (timeFormat) data.wedding_time = formatWeddingTime(raw.wedding_time, timeFormat)
   const d = parseWeddingDate(raw.wedding_date)
   if (d) {
     const y = d.getFullYear()
@@ -357,7 +399,7 @@ export function buildFieldData(rawInput: RawInvitationData, now = new Date()): F
     // 날짜+시간을 한 줄로 쓰는 테마용(§scripts/themes/color-atelier). wedding_date_display 를
     // 그대로 두는 이유: 이미 네 테마가 전부 그 키를 쓰고 있어, 거기에 시간을 붙이면
     // 시간을 원치 않는 테마까지 한꺼번에 바뀐다.
-    const timeLabel = formatWeddingTimeLabel(raw.wedding_time)
+    const timeLabel = timeFormat ? formatWeddingTime(raw.wedding_time, timeFormat) : formatWeddingTimeLabel(raw.wedding_time)
     data.wedding_datetime_display = timeLabel
       ? `${data.wedding_date_display}. ${timeLabel}`
       : data.wedding_date_display

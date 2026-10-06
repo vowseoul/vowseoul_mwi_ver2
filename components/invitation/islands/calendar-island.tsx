@@ -144,7 +144,8 @@ function hexToRgba(hex: string, opacityPct: number): string {
 
 function CalendarIsland({ accent, data, raw, blockOverrides }: SlotProps) {
   const dateStr = (typeof raw?.wedding_date === "string" ? raw.wedding_date : data.wedding_date) || ""
-  const timeStr = (typeof raw?.wedding_time === "string" ? raw.wedding_time : data.wedding_time) || ""
+  // data.wedding_time — 표기 방식을 고른 청첩장이면 이미 그 표기로 바뀌어 있다(§buildFieldData)
+  const timeStr = data.wedding_time || ""
   const ddayEnabled = blockOverrides?.calendar?.ddayEnabled !== false
   const ddayRollingEnabled = blockOverrides?.calendar?.ddayRollingEnabled === true
   const dayShape = blockOverrides?.calendar?.calendarDayShape || "circle"
