@@ -41,6 +41,8 @@ export interface ThankYouCardOptions {
   bodyOffsetY?: number
   /** 본문 끝 → 이름 간격을 기본값에서 더하거나 뺀다(px, +면 아래) */
   nameOffsetY?: number
+  /** 글자 크기(px). 줄 간격도 같은 비율로 따라 커진다. 미설정 시 DEFAULT_FONT_SIZE */
+  fontSize?: number
 }
 
 /*
@@ -50,9 +52,10 @@ export interface ThankYouCardOptions {
  * 문구가 길어져도 위쪽 그림을 덮지 않는다.
  */
 /** 기본 폰트(교보 손글씨 2020) 기준. 이 폰트는 글자가 작게 그려져 시안과 같은 크기가 되려면 44px 이다 */
-const FONT_SIZE = 44
+export const DEFAULT_FONT_SIZE = 44
+export const FONT_SIZE_RANGE = { min: 28, max: 64 }
 /** 줄 간격(줄 중심 사이 거리). 빈 줄도 한 줄로 친다 */
-const LINE_STEP = 62.7
+const LINE_STEP_RATIO = 62.7 / DEFAULT_FONT_SIZE
 const TEXT_MAX_WIDTH = 960
 /** 본문 첫 줄 중심의 y */
 const BODY_FIRST_LINE_Y = 834
@@ -112,7 +115,9 @@ export function drawThankYouCard(ctx: CanvasRenderingContext2D, o: ThankYouCardO
   ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT)
   if (o.backgroundImage) drawCover(ctx, o.backgroundImage)
 
-  ctx.font = `${FONT_SIZE}px ${o.fontFamily}`
+  const fontSize = o.fontSize ?? DEFAULT_FONT_SIZE
+  const LINE_STEP = fontSize * LINE_STEP_RATIO
+  ctx.font = `${fontSize}px ${o.fontFamily}`
   ctx.textAlign = "center"
   ctx.textBaseline = "middle"
   const cx = CARD_WIDTH / 2

@@ -17,6 +17,8 @@ import { buildFontStack, fetchRegisteredFonts, fontPreviewStyle, type Registered
 import { useInjectFontFaces } from "@/lib/use-font-faces"
 import {
   BODY_OFFSET_RANGE,
+  DEFAULT_FONT_SIZE,
+  FONT_SIZE_RANGE,
   CARD_HEIGHT,
   CARD_WIDTH,
   NAME_OFFSET_RANGE,
@@ -33,25 +35,31 @@ const TEMPLATES_API = "/api/admin/thankyou-templates"
 
 interface SavedText { title: string; body: string; name: string }
 
-function OffsetSlider({ label, value, min, max, onChange }: {
+const formatOffset = (v: number) => (v === 0 ? "기본 위치" : `${v > 0 ? "아래로" : "위로"} ${Math.abs(v)}px`)
+
+function ValueSlider({ label, value, defaultValue = 0, min, max, step = 2, format, onChange }: {
   label: string
   value: number
+  defaultValue?: number
   min: number
   max: number
+  step?: number
+  format: (v: number) => string
   onChange: (v: number) => void
 }) {
+  const changed = value !== defaultValue
   return (
     <Field>
       <div className="flex items-center justify-between">
         <FieldLabel>{label}</FieldLabel>
-        <span className={cn("text-xs tabular-nums", value ? "text-foreground" : "text-muted-foreground")}>
-          {value === 0 ? "기본 위치" : `${value > 0 ? "아래로" : "위로"} ${Math.abs(value)}px`}
+        <span className={cn("text-xs tabular-nums", changed ? "text-foreground" : "text-muted-foreground")}>
+          {format(value)}
         </span>
       </div>
       <div className="flex items-center gap-2">
-        <Slider value={[value]} min={min} max={max} step={2} onValueChange={([v]) => onChange(v)} className="flex-1" />
-        {value !== 0 && (
-          <Button type="button" variant="ghost" size="icon-sm" title="기본 위치로" onClick={() => onChange(0)}>
+        <Slider value={[value]} min={min} max={max} step={step} onValueChange={([v]) => onChange(v)} className="flex-1" />
+        {changed && (
+          <Button type="button" variant="ghost" size="icon-sm" title="기본값으로" onClick={() => onChange(defaultValue)}>
             <RotateCcw className="h-3.5 w-3.5" />
           </Button>
         )}
@@ -105,6 +113,7 @@ export function ThankYouCardTool() {
   const [name, setName] = useState(DEFAULT_THANK_YOU_NAME)
   const [fonts, setFonts] = useState<RegisteredFont[]>([])
   const [fontFamily, setFontFamily] = useState(DEFAULT_FONT)
+  const [fontSize, setFontSize] = useState(DEFAULT_FONT_SIZE)
   const [bodyOffsetY, setBodyOffsetY] = useState(0)
   const [nameOffsetY, setNameOffsetY] = useState(0)
   const [templates, setTemplates] = useState<SavedText[]>([])
@@ -155,10 +164,10 @@ export function ThankYouCardTool() {
         /* 폰트를 못 불러오면 대체 글꼴로 그린다 */
       }
       if (cancelled) return
-      drawThankYouCard(ctx, { backgroundImage: img, backgroundColor: bgColor, textColor, fontFamily, body, name, bodyOffsetY, nameOffsetY })
+      drawThankYouCard(ctx, { backgroundImage: img, backgroundColor: bgColor, textColor, fontFamily, body, name, bodyOffsetY, nameOffsetY, fontSize })
     })()
     return () => { cancelled = true }
-  }, [bgImage, bgColor, textColor, fontFamily, body, name, fonts, bodyOffsetY, nameOffsetY])
+  }, [bgImage, bgColor, textColor, fontFamily, body, name, fonts, bodyOffsetY, nameOffsetY, fontSize])
 
   const loadTemplate = (title: string) => {
     const t = templates.find((x) => x.title === title)
@@ -430,9 +439,19 @@ export function ThankYouCardTool() {
             </div>
 
             <div className="space-y-4">
-              <p className="text-sm font-medium">5. 위치</p>
-              <OffsetSlider label="감사장 내용 (이름도 함께 움직임)" value={bodyOffsetY} min={BODY_OFFSET_RANGE.min} max={BODY_OFFSET_RANGE.max} onChange={setBodyOffsetY} />
-              <OffsetSlider label="이름 박스 (내용과의 간격)" value={nameOffsetY} min={NAME_OFFSET_RANGE.min} max={NAME_OFFSET_RANGE.max} onChange={setNameOffsetY} />
+              <p className="text-sm font-medium">5. 크기 · 위치</p>
+              <ValueSlider
+                label="글자 크기 (줄 간격도 함께 바뀜)"
+                value={fontSize}
+                defaultValue={DEFAULT_FONT_SIZE}
+                min={FONT_SIZE_RANGE.min}
+                max={FONT_SIZE_RANGE.max}
+                step={1}
+                format={(v) => `${v}px${v === DEFAULT_FONT_SIZE ? " · 기본" : ""}`}
+                onChange={setFontSize}
+              />
+              <ValueSlider label="감사장 내용 (이름도 함께 움직임)" value={bodyOffsetY} min={BODY_OFFSET_RANGE.min} max={BODY_OFFSET_RANGE.max} format={formatOffset} onChange={setBodyOffsetY} />
+              <ValueSlider label="이름 박스 (내용과의 간격)" value={nameOffsetY} min={NAME_OFFSET_RANGE.min} max={NAME_OFFSET_RANGE.max} format={formatOffset} onChange={setNameOffsetY} />
             </div>
           </div>
 
