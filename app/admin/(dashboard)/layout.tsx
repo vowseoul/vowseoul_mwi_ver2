@@ -27,7 +27,8 @@ import {
   LogOut,
   HelpCircle,
   Bell,
-  Loader2
+  Loader2,
+  Wrench,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -41,6 +42,7 @@ const navItems = [
   { href: '/admin/assets', label: '에셋 관리', icon: Palette },
   { href: '/admin/statistics', label: '통계', icon: BarChart3 },
   { href: '/admin/inquiries', label: '문의 관리', icon: HelpCircle },
+  { href: '/admin/tools', label: '도구', icon: Wrench },
   { href: '/admin/settings', label: '시스템 설정', icon: Settings, adminOnly: true },
 ]
 

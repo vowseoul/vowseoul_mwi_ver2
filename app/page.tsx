@@ -20,7 +20,9 @@ export default function RootPage() {
     const standalone =
       window.matchMedia('(display-mode: standalone)').matches ||
       (navigator as Navigator & { standalone?: boolean }).standalone === true
-    if (standalone) router.replace('/admin')
+    // 로컬 개발 서버는 루트로 열리므로 링크트리로 보내면 작업을 시작할 수 없다
+    const isDev = process.env.NODE_ENV !== 'production'
+    if (standalone || isDev) router.replace('/admin')
     else window.location.replace(LINKTREE_URL)
   }, [router])
 
