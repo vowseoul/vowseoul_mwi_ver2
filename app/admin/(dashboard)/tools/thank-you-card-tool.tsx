@@ -192,7 +192,7 @@ export function ThankYouCardTool() {
                   type="button"
                   onClick={() => setBgImage(null)}
                   className={cn(
-                    "relative flex aspect-[9/16] w-[72px] items-end justify-center rounded-md border p-1.5 text-[11px] text-muted-foreground",
+                    "relative flex aspect-[1290/2796] w-[72px] items-end justify-center rounded-md border p-1.5 text-[11px] text-muted-foreground",
                     bgImage === null && "ring-2 ring-primary ring-offset-2",
                   )}
                   style={{ background: bgColor }}
@@ -207,7 +207,7 @@ export function ThankYouCardTool() {
                       type="button"
                       onClick={() => setBgImage(url)}
                       className={cn(
-                        "block aspect-[9/16] w-full overflow-hidden rounded-md border",
+                        "block aspect-[1290/2796] w-full overflow-hidden rounded-md border",
                         bgImage === url && "ring-2 ring-primary ring-offset-2",
                       )}
                       aria-pressed={bgImage === url}
@@ -226,7 +226,7 @@ export function ThankYouCardTool() {
                     </button>
                   </div>
                 ))}
-                <label className="flex aspect-[9/16] w-[72px] cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed text-[11px] text-muted-foreground hover:bg-muted/50">
+                <label className="flex aspect-[1290/2796] w-[72px] cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed text-[11px] text-muted-foreground hover:bg-muted/50">
                   {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
                   배경 추가
                   <input
@@ -242,7 +242,7 @@ export function ThankYouCardTool() {
                   />
                 </label>
               </div>
-              <FieldDescription>등록한 배경은 모든 직원이 함께 씁니다. 사진은 화면에 꽉 차게 잘려 들어갑니다(세로 9:16).</FieldDescription>
+              <FieldDescription>등록한 배경은 모든 직원이 함께 씁니다. 사진은 1290×2796 화면에 꽉 차게 잘려 들어가니, 이 크기로 만든 배경을 쓰면 잘리지 않습니다.</FieldDescription>
               {bgImage === null && (
                 <div className="max-w-xs pt-1">
                   <ColorInput id="tyBgColor" value={bgColor} onChange={setBgColor} />

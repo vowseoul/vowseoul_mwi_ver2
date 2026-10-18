@@ -5,16 +5,25 @@
  * 기기마다 다르게 찍히는 일이 잦고, 이 정도 배치는 직접 그리는 편이 단순하다.
  */
 
-/** 휴대폰 화면 비율(9:16) — 카카오톡 등으로 보내 전체 화면으로 보기 좋은 크기 */
-export const CARD_WIDTH = 1080
-export const CARD_HEIGHT = 1920
+/** 아이폰 프로 맥스 화면 크기(1290×2796) — 카카오톡 등으로 보내 전체 화면으로 볼 때 꽉 찬다 */
+export const CARD_WIDTH = 1290
+export const CARD_HEIGHT = 2796
 
 export const DEFAULT_THANK_YOU_TEXT = [
-  "바쁘신 와중에도 저희 결혼식에 함께해 주시고",
-  "따뜻한 축하를 보내주셔서 진심으로 감사드립니다.",
+  "소중한 날, 따뜻한 사랑으로 함께해 주셔서 감사드립니다.",
   "",
-  "보내주신 축복을 오래 간직하며",
-  "서로 아끼고 행복하게 잘 살겠습니다.",
+  "바쁘신 와중에도 귀한 걸음 하시어",
+  "저희 자녀들의 소중한 날을 함께해 주시고",
+  "따뜻한 축복을 보내 주셔서 진심으로 감사드립니다.",
+  "",
+  "보내주신 축하와 사랑 덕분에 딸 지혜의 새로운 출발이",
+  "더욱 빛나는 순간으로 오래도록 기억될 것 같습니다.",
+  "",
+  "오늘 전해주신 사랑의 마음을 깊이 간직하며",
+  "두 아이가 서로 아끼고 행복한 가정을 이루어 가도록 지켜보겠습니다.",
+  "",
+  "베풀어 주신 마음에 다시 한번 감사드리며",
+  "늘 건강과 행복이 함께하시기를 기원합니다.",
 ].join("\n")
 
 export const DEFAULT_THANK_YOU_NAME = "신랑 ○○○ · 신부 ○○○ 올림"
@@ -30,11 +39,22 @@ export interface ThankYouCardOptions {
   name: string
 }
 
-const SIDE_PADDING = 120
-const BODY_SIZE = 46
-const NAME_SIZE = 50
-const LINE_HEIGHT = 1.75
-const NAME_GAP = 110
+/*
+ * 배치 수치는 디자인 시안(1290×2796, "Thank You"·꽃다발이 위에, 봉투가 아래에 그려진
+ * 배경) 기준이다. 본문은 꽃다발 아래에서 시작해 아래로 흘러내리고, 이름은 본문 끝에서
+ * 일정 간격 아래에 옅은 상자를 깔고 놓인다 — 가운데 정렬이 아니라 위에서부터 고정이라
+ * 문구가 길어져도 위쪽 그림을 덮지 않는다.
+ */
+const FONT_SIZE = 34
+/** 줄 간격(줄 중심 사이 거리). 빈 줄도 한 줄로 친다 */
+const LINE_STEP = 62.7
+const TEXT_MAX_WIDTH = 960
+/** 본문 첫 줄 중심의 y */
+const BODY_FIRST_LINE_Y = 834
+/** 본문 마지막 줄 중심 → 이름 첫 줄 중심 */
+const NAME_GAP = 214
+const NAME_BOX_COLOR = "rgba(178, 161, 139, 0.2)" // #b2a18b, 불투명도 20%
+const NAME_BOX_PAD_X = 20
 
 /** 한 줄 폭을 넘으면 띄어쓰기 단위로, 띄어쓰기가 없는 긴 덩어리는 글자 단위로 나눈다 */
 export function wrapLines(ctx: Pick<CanvasRenderingContext2D, "measureText">, text: string, maxWidth: number): string[] {
@@ -83,32 +103,27 @@ export function drawThankYouCard(ctx: CanvasRenderingContext2D, o: ThankYouCardO
   ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT)
   if (o.backgroundImage) drawCover(ctx, o.backgroundImage)
 
-  const maxWidth = CARD_WIDTH - SIDE_PADDING * 2
-  ctx.font = `${BODY_SIZE}px ${o.fontFamily}`
-  const bodyLines = o.body.trim() ? wrapLines(ctx, o.body.trim(), maxWidth) : []
-  ctx.font = `${NAME_SIZE}px ${o.fontFamily}`
-  const nameLines = o.name.trim() ? wrapLines(ctx, o.name.trim(), maxWidth) : []
-
-  const bodyStep = BODY_SIZE * LINE_HEIGHT
-  const nameStep = NAME_SIZE * LINE_HEIGHT
-  const blockHeight =
-    bodyLines.length * bodyStep +
-    (bodyLines.length && nameLines.length ? NAME_GAP : 0) +
-    nameLines.length * nameStep
-  let y = (CARD_HEIGHT - blockHeight) / 2
-
-  ctx.fillStyle = o.textColor
+  ctx.font = `${FONT_SIZE}px ${o.fontFamily}`
   ctx.textAlign = "center"
   ctx.textBaseline = "middle"
-  ctx.font = `${BODY_SIZE}px ${o.fontFamily}`
+  const cx = CARD_WIDTH / 2
+  const bodyLines = o.body.trim() ? wrapLines(ctx, o.body.trim(), TEXT_MAX_WIDTH) : []
+  const nameLines = o.name.trim() ? wrapLines(ctx, o.name.trim(), TEXT_MAX_WIDTH) : []
+
+  let y = BODY_FIRST_LINE_Y
+  ctx.fillStyle = o.textColor
   for (const line of bodyLines) {
-    ctx.fillText(line, CARD_WIDTH / 2, y + bodyStep / 2)
-    y += bodyStep
+    ctx.fillText(line.trim(), cx, y)
+    y += LINE_STEP
   }
-  if (bodyLines.length && nameLines.length) y += NAME_GAP
-  ctx.font = `${NAME_SIZE}px ${o.fontFamily}`
-  for (const line of nameLines) {
-    ctx.fillText(line, CARD_WIDTH / 2, y + nameStep / 2)
-    y += nameStep
+
+  if (nameLines.length) {
+    const nameY = bodyLines.length ? y - LINE_STEP + NAME_GAP : BODY_FIRST_LINE_Y
+    const boxWidth = Math.max(...nameLines.map((l) => ctx.measureText(l).width)) + NAME_BOX_PAD_X * 2
+    const boxHeight = nameLines.length * LINE_STEP
+    ctx.fillStyle = NAME_BOX_COLOR
+    ctx.fillRect(cx - boxWidth / 2, nameY - LINE_STEP / 2, boxWidth, boxHeight)
+    ctx.fillStyle = o.textColor
+    nameLines.forEach((line, i) => ctx.fillText(line, cx, nameY + i * LINE_STEP))
   }
 }
