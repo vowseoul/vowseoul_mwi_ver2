@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
-import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
+import { readSetting, requireStaff, writeSetting } from "@/lib/admin-settings"
 import { BUCKET_NAME } from "@/lib/storage"
 
 /**
@@ -19,27 +19,12 @@ import { BUCKET_NAME } from "@/lib/storage"
 const KEY = "thankyou_backgrounds"
 const PUBLIC_PREFIX = `/storage/v1/object/public/${BUCKET_NAME}/`
 
-async function requireStaff() {
-  const session = await createSupabaseServerClient()
-  const { data: { user } } = await session.auth.getUser()
-  if (!user) return false
-  const admin = createSupabaseAdminClient()
-  const { data: profile } = await admin.from("profiles").select("role").eq("id", user.id).maybeSingle()
-  return !!profile?.role
-}
-
 async function readList(): Promise<string[]> {
-  const admin = createSupabaseAdminClient()
-  const { data } = await admin.from("settings").select("value").eq("key", KEY).maybeSingle()
-  const value = (data as { value?: unknown } | null)?.value
+  const value = await readSetting(KEY)
   return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : []
 }
 
-async function writeList(list: string[]) {
-  const admin = createSupabaseAdminClient()
-  const { error } = await admin.from("settings").upsert({ key: KEY, value: list })
-  if (error) throw error
-}
+const writeList = (list: string[]) => writeSetting(KEY, list)
 
 /** 우리 Storage 에 올라간 파일 주소만 받는다 — 아무 주소나 등록되면 남의 이미지를 끌어다 쓰게 된다 */
 function storagePath(url: unknown): string | null {

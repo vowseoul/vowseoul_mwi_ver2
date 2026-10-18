@@ -37,6 +37,10 @@ export interface ThankYouCardOptions {
   fontFamily: string
   body: string
   name: string
+  /** 본문 위아래 이동(px, +면 아래). 이름도 본문 끝을 기준으로 따라 움직인다 */
+  bodyOffsetY?: number
+  /** 본문 끝 → 이름 간격을 기본값에서 더하거나 뺀다(px, +면 아래) */
+  nameOffsetY?: number
 }
 
 /*
@@ -45,7 +49,8 @@ export interface ThankYouCardOptions {
  * 일정 간격 아래에 옅은 상자를 깔고 놓인다 — 가운데 정렬이 아니라 위에서부터 고정이라
  * 문구가 길어져도 위쪽 그림을 덮지 않는다.
  */
-const FONT_SIZE = 34
+/** 기본 폰트(교보 손글씨 2020) 기준. 이 폰트는 글자가 작게 그려져 시안과 같은 크기가 되려면 44px 이다 */
+const FONT_SIZE = 44
 /** 줄 간격(줄 중심 사이 거리). 빈 줄도 한 줄로 친다 */
 const LINE_STEP = 62.7
 const TEXT_MAX_WIDTH = 960
@@ -55,6 +60,10 @@ const BODY_FIRST_LINE_Y = 834
 const NAME_GAP = 214
 const NAME_BOX_COLOR = "rgba(178, 161, 139, 0.2)" // #b2a18b, 불투명도 20%
 const NAME_BOX_PAD_X = 20
+
+/** 위치 슬라이더 범위(px). 기본 위치에서 이만큼 위·아래로 옮길 수 있다 */
+export const BODY_OFFSET_RANGE = { min: -600, max: 800 }
+export const NAME_OFFSET_RANGE = { min: -150, max: 800 }
 
 /** 한 줄 폭을 넘으면 띄어쓰기 단위로, 띄어쓰기가 없는 긴 덩어리는 글자 단위로 나눈다 */
 export function wrapLines(ctx: Pick<CanvasRenderingContext2D, "measureText">, text: string, maxWidth: number): string[] {
@@ -110,7 +119,8 @@ export function drawThankYouCard(ctx: CanvasRenderingContext2D, o: ThankYouCardO
   const bodyLines = o.body.trim() ? wrapLines(ctx, o.body.trim(), TEXT_MAX_WIDTH) : []
   const nameLines = o.name.trim() ? wrapLines(ctx, o.name.trim(), TEXT_MAX_WIDTH) : []
 
-  let y = BODY_FIRST_LINE_Y
+  const bodyTop = BODY_FIRST_LINE_Y + (o.bodyOffsetY ?? 0)
+  let y = bodyTop
   ctx.fillStyle = o.textColor
   for (const line of bodyLines) {
     ctx.fillText(line.trim(), cx, y)
@@ -118,7 +128,7 @@ export function drawThankYouCard(ctx: CanvasRenderingContext2D, o: ThankYouCardO
   }
 
   if (nameLines.length) {
-    const nameY = bodyLines.length ? y - LINE_STEP + NAME_GAP : BODY_FIRST_LINE_Y
+    const nameY = (bodyLines.length ? y - LINE_STEP + NAME_GAP : bodyTop) + (o.nameOffsetY ?? 0)
     const boxWidth = Math.max(...nameLines.map((l) => ctx.measureText(l).width)) + NAME_BOX_PAD_X * 2
     const boxHeight = nameLines.length * LINE_STEP
     ctx.fillStyle = NAME_BOX_COLOR

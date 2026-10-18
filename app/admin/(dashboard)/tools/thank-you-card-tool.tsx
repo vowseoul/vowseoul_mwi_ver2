@@ -2,28 +2,63 @@
 
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
-import { Check, Download, ImagePlus, Loader2, Trash2 } from "lucide-react"
+import { Check, Download, ImagePlus, Loader2, RotateCcw, Save, Trash2 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Slider } from "@/components/ui/slider"
 import { confirmDialog } from "@/components/ui/confirm-dialog"
 import { cn } from "@/lib/utils"
 import { uploadImage } from "@/lib/image-upload"
 import { buildFontStack, fetchRegisteredFonts, fontPreviewStyle, type RegisteredFont } from "@/lib/fonts"
 import { useInjectFontFaces } from "@/lib/use-font-faces"
 import {
+  BODY_OFFSET_RANGE,
   CARD_HEIGHT,
   CARD_WIDTH,
+  NAME_OFFSET_RANGE,
   DEFAULT_THANK_YOU_NAME,
   DEFAULT_THANK_YOU_TEXT,
   drawThankYouCard,
 } from "@/lib/thank-you-card"
 
 const DEFAULT_FONT = "serif"
+/** 감사장 기본 폰트 — 에셋 관리에 등록된 교보 손글씨 2020. 없으면 DEFAULT_FONT 로 그린다 */
+const PREFERRED_FONT_FAMILY = "KyoboHandwriting2020"
 const API = "/api/admin/thankyou-backgrounds"
+const TEMPLATES_API = "/api/admin/thankyou-templates"
+
+interface SavedText { title: string; body: string; name: string }
+
+function OffsetSlider({ label, value, min, max, onChange }: {
+  label: string
+  value: number
+  min: number
+  max: number
+  onChange: (v: number) => void
+}) {
+  return (
+    <Field>
+      <div className="flex items-center justify-between">
+        <FieldLabel>{label}</FieldLabel>
+        <span className={cn("text-xs tabular-nums", value ? "text-foreground" : "text-muted-foreground")}>
+          {value === 0 ? "기본 위치" : `${value > 0 ? "아래로" : "위로"} ${Math.abs(value)}px`}
+        </span>
+      </div>
+      <div className="flex items-center gap-2">
+        <Slider value={[value]} min={min} max={max} step={2} onValueChange={([v]) => onChange(v)} className="flex-1" />
+        {value !== 0 && (
+          <Button type="button" variant="ghost" size="icon-sm" title="기본 위치로" onClick={() => onChange(0)}>
+            <RotateCcw className="h-3.5 w-3.5" />
+          </Button>
+        )}
+      </div>
+    </Field>
+  )
+}
 
 /** 한 번 불러온 배경은 다시 내려받지 않는다 — 글자를 칠 때마다 그림을 다시 그린다 */
 const imageCache = new Map<string, Promise<HTMLImageElement>>()
@@ -70,6 +105,12 @@ export function ThankYouCardTool() {
   const [name, setName] = useState(DEFAULT_THANK_YOU_NAME)
   const [fonts, setFonts] = useState<RegisteredFont[]>([])
   const [fontFamily, setFontFamily] = useState(DEFAULT_FONT)
+  const [bodyOffsetY, setBodyOffsetY] = useState(0)
+  const [nameOffsetY, setNameOffsetY] = useState(0)
+  const [templates, setTemplates] = useState<SavedText[]>([])
+  const [selectedTitle, setSelectedTitle] = useState("")
+  const [saveTitle, setSaveTitle] = useState("")
+  const [savingTemplate, setSavingTemplate] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [drawError, setDrawError] = useState("")
@@ -77,7 +118,16 @@ export function ThankYouCardTool() {
   useInjectFontFaces(fonts)
 
   useEffect(() => {
-    fetchRegisteredFonts().then(setFonts)
+    fetchRegisteredFonts().then((list) => {
+      setFonts(list)
+      const preferred = list.find((f) => f.family === PREFERRED_FONT_FAMILY)
+      // 사용자가 이미 다른 폰트를 골랐으면 덮어쓰지 않는다
+      if (preferred) setFontFamily((cur) => (cur === DEFAULT_FONT ? buildFontStack(preferred, "--font-kr") : cur))
+    })
+    fetch(TEMPLATES_API)
+      .then((r) => r.json())
+      .then((d) => { if (Array.isArray(d.templates)) setTemplates(d.templates) })
+      .catch(() => toast.error("저장한 문구를 불러오지 못했습니다."))
     fetch(API)
       .then((r) => r.json())
       .then((d) => { if (Array.isArray(d.backgrounds)) setBackgrounds(d.backgrounds) })
@@ -105,15 +155,60 @@ export function ThankYouCardTool() {
         /* 폰트를 못 불러오면 대체 글꼴로 그린다 */
       }
       if (cancelled) return
-      drawThankYouCard(ctx, { backgroundImage: img, backgroundColor: bgColor, textColor, fontFamily, body, name })
+      drawThankYouCard(ctx, { backgroundImage: img, backgroundColor: bgColor, textColor, fontFamily, body, name, bodyOffsetY, nameOffsetY })
     })()
     return () => { cancelled = true }
-  }, [bgImage, bgColor, textColor, fontFamily, body, name, fonts])
+  }, [bgImage, bgColor, textColor, fontFamily, body, name, fonts, bodyOffsetY, nameOffsetY])
+
+  const loadTemplate = (title: string) => {
+    const t = templates.find((x) => x.title === title)
+    if (!t) return
+    setSelectedTitle(title)
+    setSaveTitle(title)
+    setBody(t.body)
+    setName(t.name)
+  }
+
+  const saveTemplate = async () => {
+    const title = saveTitle.trim()
+    if (!title) {
+      toast.error("저장할 제목을 입력해주세요.")
+      return
+    }
+    if (templates.some((t) => t.title === title) &&
+        !(await confirmDialog({ title: `"${title}" 문구를 지금 내용으로 바꿀까요?`, confirmText: "덮어쓰기" }))) return
+    setSavingTemplate(true)
+    try {
+      const res = await fetch(TEMPLATES_API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, body, name }) })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "저장하지 못했습니다.")
+      setTemplates(data.templates)
+      setSelectedTitle(title)
+      toast.success(`"${title}" 문구를 저장했습니다.`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "저장하지 못했습니다.")
+    } finally {
+      setSavingTemplate(false)
+    }
+  }
+
+  const deleteTemplate = async () => {
+    const title = selectedTitle
+    if (!title || !(await confirmDialog({ title: `"${title}" 문구를 삭제하시겠습니까?`, destructive: true, confirmText: "삭제" }))) return
+    const res = await fetch(TEMPLATES_API, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title }) })
+    const data = await res.json()
+    if (!res.ok) {
+      toast.error(data.error || "삭제하지 못했습니다.")
+      return
+    }
+    setTemplates(data.templates)
+    setSelectedTitle("")
+  }
 
   const uploadBackground = async (file: File) => {
     setUploading(true)
     try {
-      const url = await uploadImage(file, "tools/thank-you", { maxDimension: 2160, quality: 0.9 })
+      const url = await uploadImage(file, "tools/thank-you", { maxDimension: CARD_HEIGHT, quality: 0.9 })
       const res = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "배경을 등록하지 못했습니다.")
@@ -251,6 +346,32 @@ export function ThankYouCardTool() {
             </Field>
 
             <Field>
+              <FieldLabel>저장한 문구</FieldLabel>
+              {/* 값을 항상 비워 두는 고르개 — 같은 문구를 다시 골라도 매번 다시 불러와서,
+                  고치다가 처음 저장한 상태로 되돌릴 수 있다 */}
+              <Select value="" onValueChange={loadTemplate} disabled={templates.length === 0}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={templates.length ? "불러올 문구 고르기" : "저장한 문구가 없습니다"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {templates.map((t) => (
+                    <SelectItem key={t.title} value={t.title}>{t.title}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedTitle && (
+                <div className="flex items-center justify-between gap-2 text-sm">
+                  <span className="min-w-0 truncate text-muted-foreground">불러온 문구: <span className="text-foreground">{selectedTitle}</span></span>
+                  <Button type="button" variant="ghost" size="sm" className="shrink-0 gap-1.5 text-destructive hover:text-destructive" onClick={deleteTemplate}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                    이 문구 삭제
+                  </Button>
+                </div>
+              )}
+              <FieldDescription>고르면 아래 감사장 내용과 이름이 그 문구로 바뀝니다. 모든 직원이 함께 씁니다.</FieldDescription>
+            </Field>
+
+            <Field>
               <FieldLabel htmlFor="tyBody">2. 감사장 내용</FieldLabel>
               <Textarea id="tyBody" value={body} onChange={(e) => setBody(e.target.value)} rows={6} />
               <div className="flex justify-end">
@@ -263,6 +384,25 @@ export function ThankYouCardTool() {
             <Field>
               <FieldLabel htmlFor="tyName">3. 이름</FieldLabel>
               <Input id="tyName" value={name} onChange={(e) => setName(e.target.value)} />
+            </Field>
+
+            <Field>
+              <FieldLabel htmlFor="tySaveTitle">지금 내용 저장하기</FieldLabel>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="tySaveTitle"
+                  value={saveTitle}
+                  onChange={(e) => setSaveTitle(e.target.value)}
+                  placeholder="제목 (예: 신부측 혼주용)"
+                  maxLength={40}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveTemplate() } }}
+                />
+                <Button type="button" variant="outline" className="shrink-0 gap-1.5" onClick={saveTemplate} disabled={savingTemplate}>
+                  {savingTemplate ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  저장
+                </Button>
+              </div>
+              <FieldDescription>감사장 내용과 이름을 함께 저장합니다. 같은 제목으로 저장하면 그 문구를 덮어씁니다.</FieldDescription>
             </Field>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -287,6 +427,12 @@ export function ThankYouCardTool() {
                 <FieldLabel htmlFor="tyTextColor">글자색</FieldLabel>
                 <ColorInput id="tyTextColor" value={textColor} onChange={setTextColor} />
               </Field>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-sm font-medium">5. 위치</p>
+              <OffsetSlider label="감사장 내용 (이름도 함께 움직임)" value={bodyOffsetY} min={BODY_OFFSET_RANGE.min} max={BODY_OFFSET_RANGE.max} onChange={setBodyOffsetY} />
+              <OffsetSlider label="이름 박스 (내용과의 간격)" value={nameOffsetY} min={NAME_OFFSET_RANGE.min} max={NAME_OFFSET_RANGE.max} onChange={setNameOffsetY} />
             </div>
           </div>
 
