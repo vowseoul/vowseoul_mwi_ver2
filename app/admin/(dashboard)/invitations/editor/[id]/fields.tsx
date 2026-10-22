@@ -25,11 +25,13 @@ import type { FieldDef } from "./field-defs"
 
 /** 블럭 아코디언 한 행을 드래그 정렬 가능하게 감싼다. render-prop으로 드래그 손잡이(attributes/listeners)를
  * 넘겨줘서 호출부가 원하는 위치(트리거 왼쪽)에 손잡이 아이콘을 꽂을 수 있게 한다. */
-export function SortableBlockRow({ id, children }: {
+export function SortableBlockRow({ id, fixed = false, children }: {
   id: string
+  /** 끌 수는 없지만 다른 행을 그 앞뒤에 놓을 수는 있는 행(메인·공유하기 등) */
+  fixed?: boolean
   children: (drag: Pick<ReturnType<typeof useSortable>, "attributes" | "listeners">) => React.ReactNode
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: { draggable: fixed } })
   return (
     <div
       ref={setNodeRef}

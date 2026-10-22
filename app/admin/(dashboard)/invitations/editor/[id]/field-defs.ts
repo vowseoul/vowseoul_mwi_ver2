@@ -114,6 +114,44 @@ export const MANAGED_CONTENT_KEYS = new Set([
   ...DECEASED_KEYS,
 ])
 
+type PlacedImage = { id: string; afterBlock: string }
+
+/**
+ * 블럭 목록에 보이는 행 순서 — 각 블럭 바로 뒤에 그 블럭 아래로 끼운 섹션 사이 사진("img:<id>")이 온다.
+ * 청첩장에 실제로 그려지는 순서와 같다(§invitation-frame.tsx sectionImages). 목록에 없는 블럭 뒤로
+ * 지정된 사진(테마를 바꾼 경우 등)은 맨 뒤에 둔다 — 끌어서 위치를 다시 정하면 된다.
+ */
+export function buildBlockListItems(rowKeys: string[], images: PlacedImage[]): string[] {
+  return [
+    ...rowKeys.flatMap((k) => [k, ...images.filter((img) => img.afterBlock === k).map((img) => `img:${img.id}`)]),
+    ...images.filter((img) => !rowKeys.includes(img.afterBlock)).map((img) => `img:${img.id}`),
+  ]
+}
+
+/**
+ * 블럭 목록에서 from 행을 to 자리로 끌어 놓은 결과. 블럭을 끌면 블럭 순서만 바뀌고 그 뒤에 끼운 사진은
+ * 블럭을 따라간다. 사진을 끌면 놓인 자리 바로 위의 블럭 뒤로 들어간다(맨 위로 끌어도 메인 뒤).
+ * 같은 블럭 아래 사진끼리의 순서는 목록 순서를 따른다.
+ */
+export function dropInBlockList<T extends PlacedImage>(
+  items: string[], from: number, to: number, images: T[], draggableKeys: string[]
+): { blockOrder: string[] } | { images: T[] } | null {
+  if (from < 0 || to < 0 || from === to) return null
+  const next = [...items]
+  const [moved] = next.splice(from, 1)
+  next.splice(to, 0, moved)
+  if (!moved.startsWith("img:")) return { blockOrder: next.filter((k) => draggableKeys.includes(k)) }
+  const anchor = next.slice(0, next.indexOf(moved)).reverse().find((k) => !k.startsWith("img:")) ?? "hero"
+  const order = next.filter((k) => k.startsWith("img:")).map((k) => k.slice(4))
+  return {
+    images: order.flatMap((id) => {
+      const img = images.find((i) => i.id === id)
+      if (!img) return []
+      return [id === moved.slice(4) ? { ...img, afterBlock: anchor } : img]
+    }),
+  }
+}
+
 /** 목록 항목을 인접한 위치와 맞바꾼다 — 갤러리 사진 순서, 섹션 삽입 이미지 순서 재정렬에 공용으로 쓴다 */
 export function moveArrayItem<T>(arr: T[], index: number, direction: -1 | 1): T[] {
   const target = index + direction

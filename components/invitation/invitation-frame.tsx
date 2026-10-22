@@ -136,7 +136,7 @@ function buildSrcDoc(template: ThemeTemplate): string {
        테마마다 별도 CSS를 만들 필요 없이 어떤 테마 뒤에 꽂혀도 자연스럽게 화면 폭을 채운다. */
     .vs-section-image { width: 100%; background: inherit; }
     .vs-section-image img { width: 100%; height: auto; display: block; }
-    .vs-section-image__caption { padding: 10px 24px; font-size: 12px; text-align: center; opacity: 0.6; }
+    .vs-section-image__caption { padding: 10px 24px; font-size: 12px; text-align: center; opacity: 0.6; white-space: pre-wrap; }
     /* 스크롤 모션 — 프리셋별 진입 전 상태. 실제 관찰/클래스 부착은 스크립트 쪽 useEffect가 담당하고,
        여기는 정적 규칙만 정의한다(설정과 무관하게 항상 존재해도 무해함 — .vs-reveal 클래스가
        없으면 아무 효과가 없다). .vs-revealed는 마지막에 두어 프리셋별 transform을 항상 이긴다. */

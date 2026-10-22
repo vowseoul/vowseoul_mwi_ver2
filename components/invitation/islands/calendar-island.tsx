@@ -226,8 +226,9 @@ function CalendarIsland({ accent, data, raw, blockOverrides }: SlotProps) {
         </div>
         {(dateText || timeText) && (
           <div style={{ marginTop: 20, textAlign: "center" }}>
-            {dateText && <p style={{ fontSize: 13, fontWeight: 600 }}>{dateText}</p>}
-            {timeText && <p style={{ fontSize: 13, marginTop: 2, opacity: 0.7 }}>{timeText}</p>}
+            {/* 관리자가 직접 쓴 문구의 줄바꿈·연속 공백을 그대로 보여준다 */}
+            {dateText && <p style={{ fontSize: 13, fontWeight: 600, whiteSpace: "pre-wrap" }}>{dateText}</p>}
+            {timeText && <p style={{ fontSize: 13, marginTop: 2, opacity: 0.7, whiteSpace: "pre-wrap" }}>{timeText}</p>}
           </div>
         )}
       </div>

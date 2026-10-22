@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Download, QrCode } from "lucide-react"
+import { Download } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -10,7 +10,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import { renderQrSvg, renderQrPngBlob, svgToDataUri } from "@/lib/qr-code"
 import { supabase } from "@/lib/supabase"
@@ -42,6 +41,8 @@ export function QrCodeDialog({
   path,
   fileBaseName,
   weddingDate,
+  open,
+  onOpenChange: setOpen,
 }: {
   invitationId: string
   /** 지금 이 청첩장의 하객용 주소. QR 에는 담기지 않고 "현재 연결"로만 보여준다. */
@@ -49,8 +50,10 @@ export function QrCodeDialog({
   fileBaseName: string
   /** 만료 안내 계산용. 없으면 안내 대신 "계산할 수 없다"고 알린다. */
   weddingDate?: string
+  /** 여는 버튼은 부르는 쪽이 둔다 — 편집기에서는 「공유」 메뉴 항목이 연다 */
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }) {
-  const [open, setOpen] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [retentionDays, setRetentionDays] = useState(DEFAULT_RETENTION_DAYS)
   const [code, setCode] = useState<string | null>(null)
@@ -153,11 +156,6 @@ export function QrCodeDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" className="gap-2">
-          <QrCode className="h-3.5 w-3.5" /> QR코드 생성
-        </Button>
-      </DialogTrigger>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>청첩장 QR코드</DialogTitle>
