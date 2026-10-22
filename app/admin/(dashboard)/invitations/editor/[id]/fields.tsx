@@ -13,6 +13,7 @@ import { GripVertical, Image as ImageIcon, Loader2, Plus, X } from "lucide-react
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { parseFontAxes } from "@/lib/font-axes"
+import { hasInvisibleFiller, replaceInvisibleFillers } from "@/lib/text-spacing"
 import type { RegisteredFont } from "@/lib/fonts"
 import type { FieldDef } from "./field-defs"
 
@@ -127,6 +128,16 @@ export function TextField({ def, value, onChange }: { def: FieldDef; value: stri
         <Textarea id={def.key} value={value} onChange={(e) => onChange(e.target.value)} rows={4} />
       ) : (
         <Input id={def.key} type={def.type === "tel" ? "tel" : "text"} value={value} onChange={(e) => onChange(e.target.value)} />
+      )}
+      {hasInvisibleFiller(value) && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+          <span>
+            빈 문자(ㅤ)는 아이폰에서 보이지 않아 칸이 사라집니다. 같은 폭의 공백으로 바꿔 표시하며, 저장하면 자동으로 바뀝니다.
+          </span>
+          <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 bg-background" onClick={() => onChange(replaceInvisibleFillers(value))}>
+            지금 바꾸기
+          </Button>
+        </div>
       )}
     </Field>
   )
