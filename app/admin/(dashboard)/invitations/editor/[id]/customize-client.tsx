@@ -6,6 +6,7 @@ import { uploadImage, SHARE_THUMBNAIL_OPTIONS, isShareThumbnailField } from "@/l
 import { InvitationFrame, type TokenMap } from "@/components/invitation/invitation-frame"
 import { ScaledPreview } from "@/components/ui/scaled-preview"
 import { LinkPreviewCard, ShareButtonCard } from "@/components/admin/kakao-card-preview"
+import { hasInvisibleFiller, replaceInvisibleFillers } from "@/lib/text-spacing"
 import { resolveLinkPreview, resolveShareCard } from "@/lib/kakao-share"
 import { buildSlots } from "@/components/invitation/slot-registry"
 import { buildFieldData, mergeInvitationRaw, normalizeSequence, isToggledOff, isToggledOn, WEDDING_TIME_FORMATS, isWeddingTimeFormat, formatWeddingTime, toTimeInputValue, type SequenceEvent, type WeddingTimeFormat } from "@/lib/invitation-data"
@@ -649,6 +650,12 @@ export default function CustomizeClient({
     shareBtnImg, shareBtnTitle, shareBtnText, galleryGridCols, galleryGridShowRows,
   })
   const [initialFingerprint, setInitialFingerprint] = useState(dirtyFingerprint)
+  const resetBaselineRef = useRef(false)
+  useEffect(() => {
+    if (!resetBaselineRef.current) return
+    resetBaselineRef.current = false
+    setInitialFingerprint(dirtyFingerprint)
+  }, [dirtyFingerprint])
   const isDirty = dirtyFingerprint !== initialFingerprint
   useUnsavedChangesWarning(isDirty)
 
@@ -718,6 +725,11 @@ export default function CustomizeClient({
       account_collapsed: accountCollapsed ? "예" : "아니오",
       bgm_autoplay: bgmAutoplay ? "예" : "아니오",
     }
+    // 아이폰에서 사라지는 빈 문자(ㅤ)는 저장할 때 같은 폭의 전각 공백으로 바꿔 둔다(§lib/text-spacing.ts).
+    // 화면 표시는 렌더 단계에서도 바뀌지만, 저장값 자체를 고쳐 두어야 다른 곳에 복사해 써도 안전하다.
+    for (const [k, v] of Object.entries(contentPayload)) {
+      if (typeof v === "string" && hasInvisibleFiller(v)) contentPayload[k] = replaceInvisibleFillers(v)
+    }
 
     const existingOgMeta = (invitation.og_meta && typeof invitation.og_meta === "object")
       ? invitation.og_meta as Record<string, unknown>
@@ -742,6 +754,12 @@ export default function CustomizeClient({
     }
     lastKnownUpdatedAtRef.current = nextUpdatedAt
     setInitialFingerprint(dirtyFingerprint)
+    // 저장하면서 빈 문자를 바꿨다면 입력칸도 같은 값으로 맞춘다. 그러면 지문이 바뀌므로
+    // 바뀐 뒤의 지문을 기준으로 다시 잡아야 "저장 안 한 변경사항"으로 오인하지 않는다.
+    if (Object.values(content).some(hasInvisibleFiller)) {
+      resetBaselineRef.current = true
+      setContent((cur) => Object.fromEntries(Object.entries(cur).map(([k, v]) => [k, replaceInvisibleFillers(v)])))
+    }
     toast.success("저장되었습니다.")
     const { data: userData } = await supabase.auth.getUser()
     logAuditEvent(supabase, {

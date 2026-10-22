@@ -1,4 +1,8 @@
 import type { FieldData } from "@/components/invitation/invitation-frame"
+import { preserveSpaceRuns, replaceInvisibleFillers } from "@/lib/text-spacing"
+
+/** 스페이스를 여러 번 친 그대로 보여줄 필드 — 고객이 줄 폭을 공백으로 맞추는 긴 문구 */
+const SPACE_PRESERVING_FIELDS = new Set(["greeting_message"])
 
 /**
  * 필드키 → 렌더러 데이터 어댑터.
@@ -377,9 +381,14 @@ export function buildFieldData(rawInput: RawInvitationData, now = new Date()): F
   const data: FieldData = {}
 
   // 1) 문자열/숫자 필드 통과 (배열·객체는 슬롯 아일랜드가 raw 로 직접 사용)
+  //    기기마다 사라지는 빈 문자는 전각 공백으로 바꾸고, 인사말은 이어 친 공백도 살린다
+  //    (§lib/text-spacing.ts) — 편집기 미리보기와 휴대폰이 같은 칸 수로 보이게.
   for (const [key, value] of Object.entries(raw)) {
     if (value == null) continue
-    if (typeof value === "string") data[key] = value
+    if (typeof value === "string") {
+      const text = replaceInvisibleFillers(value)
+      data[key] = SPACE_PRESERVING_FIELDS.has(key) ? preserveSpaceRuns(text) : text
+    }
     else if (typeof value === "number" || typeof value === "boolean") data[key] = String(value)
   }
 
