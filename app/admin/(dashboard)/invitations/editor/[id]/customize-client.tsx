@@ -23,6 +23,8 @@ import {
   ALL_TEXT_FIELD_DEFS,
   MANAGED_CONTENT_KEYS,
   moveArrayItem,
+  buildBlockListItems,
+  dropInBlockList,
   extractTokenDefault,
   type FieldDef,
 } from "./field-defs"
@@ -92,7 +94,7 @@ import { ArrowDown, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Copy, Exter
 import { toast } from "sonner"
 import { confirmDialog } from "@/components/ui/confirm-dialog"
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core"
-import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable"
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 
 /**
  * 템플릿 청첩장 커스터마이즈 편집기.
@@ -283,7 +285,9 @@ export default function CustomizeClient({
       const url = await uploadImage(file, "invitations/section-images")
       setSectionImages((cur) => [
         ...cur,
-        { id: `si_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, url, afterBlock: editableBlocks[0]?.key ?? "" },
+        // 추가 버튼이 블럭 목록 맨 아래(공유하기 바로 밑)에 있으므로 새 사진도 그 자리에 나타나고,
+        // 거기서 원하는 블럭 아래로 끌어 옮긴다
+        { id: `si_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, url, afterBlock: "share" },
       ])
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "이미지 업로드에 실패했습니다.")
@@ -295,8 +299,6 @@ export default function CustomizeClient({
     setSectionImages((cur) => cur.map((img) => (img.id === id ? { ...img, ...patch } : img)))
   const removeSectionImage = (id: string) =>
     setSectionImages((cur) => cur.filter((img) => img.id !== id))
-  const moveSectionImage = (id: string, direction: -1 | 1) =>
-    setSectionImages((cur) => moveArrayItem(cur, cur.findIndex((img) => img.id === id), direction))
 
   // 혼주 계좌는 값이 배열이라 문자열 맵인 content 에 담기지 않는다 — 갤러리 이미지처럼
   // 별도 state 로 들고 저장 시 합친다. null 이면 "배열 값이 없음"이고, 이 경우 예전
@@ -552,15 +554,6 @@ export default function CustomizeClient({
     [draggableBlocks]
   )
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
-  const handleBlockDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-    const keys = draggableBlocks.map((b) => b.key)
-    const oldIndex = keys.indexOf(String(active.id))
-    const newIndex = keys.indexOf(String(over.id))
-    if (oldIndex === -1 || newIndex === -1) return
-    setBlockOrder(arrayMove(keys, oldIndex, newIndex))
-  }
 
   const uploadImageField = async (key: string, file: File) => {
     setUploadingKey(key)
@@ -866,6 +859,20 @@ export default function CustomizeClient({
   )
   /** 블럭 목록·이전/다음 이동이 공유하는 순서 — 메인은 맨 앞, 공유하기는 맨 뒤 고정 */
   const blockRowKeys = ["hero", ...draggableBlocks.map((b) => b.key), ...extraBlockKeys, "share"]
+  /** 블럭 목록 행 순서 — 블럭과 그 사이에 끼운 섹션 사이 사진(§field-defs.ts buildBlockListItems) */
+  const blockListItems = buildBlockListItems(blockRowKeys, sectionImages)
+  const handleBlockListDragEnd = ({ active, over }: DragEndEvent) => {
+    const result = dropInBlockList(
+      blockListItems,
+      blockListItems.indexOf(String(active.id)),
+      over ? blockListItems.indexOf(String(over.id)) : -1,
+      sectionImages,
+      draggableBlocks.map((b) => b.key),
+    )
+    if (!result) return
+    if ("images" in result) setSectionImages(result.images)
+    else setBlockOrder(result.blockOrder)
+  }
   /** 블럭 목록에도 블럭 상세에도 속하지 않는 슬롯 스위치 — 배경음악은 스타일 탭, 지도는 오시는 길에 있다 */
   const otherToggleSlots = standaloneToggleSlots.filter((s) => s !== "bgm" && s !== "map" && !extraBlockKeys.includes(s as (typeof BLOCK_KEYS)[number]))
   /** 블럭 상세에서 편집하는 필드 — 정보 탭의 "남은 필드" 목록에서 빠진다 */
@@ -909,7 +916,9 @@ export default function CustomizeClient({
     if (!focusBlock || !el) return
     const col = el.closest<HTMLElement>("[data-edit-column]")
     if (col && col.scrollHeight > col.clientHeight) {
-      const above = el.getBoundingClientRect().top - col.getBoundingClientRect().top
+      // 맨 위에 붙어 있는 탭 바 아래가 실제로 보이는 영역의 시작이다
+      const stickyHeight = col.querySelector("[data-sticky-tabs]")?.getBoundingClientRect().height ?? 0
+      const above = el.getBoundingClientRect().top - col.getBoundingClientRect().top - stickyHeight
       if (above < 0) col.scrollTop += above
     } else if (el.getBoundingClientRect().top < 0) {
       el.scrollIntoView({ block: "start" })
@@ -954,6 +963,27 @@ if (!template) {
       </div>
     )
   }
+
+  /** 블럭 목록 사이에 놓인 섹션 사이 사진 한 행 — 손잡이로 끌어 위치를, 칸에서 캡션을 바꾼다 */
+  const renderSectionImageRow = (img: SectionImage, drag: Parameters<typeof DragHandle>[0]) => (
+    <div className="flex items-center gap-2 bg-muted/40 py-2 pr-1">
+      <DragHandle {...drag} />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={img.url} alt="" className="h-10 w-10 shrink-0 rounded object-cover" />
+      {/* 줄바꿈·연속 공백을 그대로 보여준다(§invitation-frame.tsx .vs-section-image__caption pre-wrap) */}
+      <Textarea
+        rows={1}
+        value={img.caption ?? ""}
+        onChange={(e) => updateSectionImage(img.id, { caption: e.target.value })}
+        placeholder="섹션 사이 사진 · 캡션 (선택, Enter로 줄바꿈)"
+        aria-label="섹션 사이 사진 캡션"
+        className="min-h-8 min-w-0 flex-1 resize-none bg-background py-1.5 text-xs md:text-xs"
+      />
+      <Button type="button" variant="ghost" size="icon-sm" className="text-destructive" aria-label="섹션 사이 사진 삭제" onClick={() => removeSectionImage(img.id)}>
+        <X className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  )
 
   /** 블럭 상세 — 모든 블럭이 같은 틀을 쓴다: 내용(글자·사진) → 표시(켜고 끄는 옵션) → 접힌 모양 */
   const renderBlockDetail = (key: string) => {
@@ -1345,19 +1375,24 @@ if (!template) {
         <FieldGroup className="space-y-4">
           <Field>
             <FieldLabel>달력 아래 날짜 문구</FieldLabel>
-            <Input
+            <Textarea
+              rows={1}
               value={override?.calendarDateText ?? ""}
               onChange={(e) => setBlockOverride(key, { calendarDateText: e.target.value })}
               placeholder="비워두면 예식일로 자동 표시"
+              className="min-h-9 resize-none"
             />
           </Field>
           <Field>
             <FieldLabel>달력 아래 시간 문구</FieldLabel>
-            <Input
+            <Textarea
+              rows={1}
               value={override?.calendarTimeText ?? ""}
               onChange={(e) => setBlockOverride(key, { calendarTimeText: e.target.value })}
               placeholder="비워두면 요일·예식 시간으로 자동 표시"
+              className="min-h-9 resize-none"
             />
+            <FieldDescription>Enter로 줄을 나눌 수 있고, 띄어 쓴 칸 수도 그대로 표시됩니다.</FieldDescription>
           </Field>
         </FieldGroup>
       )
@@ -2016,13 +2051,27 @@ if (!template) {
 
     return (
       <div key={key} className="space-y-6">
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant="ghost" size="sm" className="-ml-2 gap-1 text-muted-foreground" onClick={() => setFocusBlock(null)}>
+        {/* 블럭 목록 · [이전 블럭 · 지금 블럭 · 다음 블럭] · 표시 스위치. 가운데 묶음은 양옆 칸 너비가 같아
+            항상 한가운데에 있고, 좁은 화면(sm 미만)에서는 둘째 줄로 내려간다 */}
+        <div className="grid grid-cols-[1fr_auto] items-center gap-x-2 gap-y-1 sm:grid-cols-[1fr_auto_1fr]">
+          <Button type="button" variant="ghost" size="sm" className="col-start-1 row-start-1 -ml-2 gap-1 justify-self-start text-muted-foreground" onClick={() => setFocusBlock(null)}>
             <ChevronLeft className="h-4 w-4" /> 블럭 목록
           </Button>
-          <h2 className="min-w-0 flex-1 text-lg font-semibold text-foreground">{blockLabel(key)}</h2>
+          <div className="col-span-2 row-start-2 grid grid-cols-[1fr_auto_1fr] items-center gap-1 sm:col-span-1 sm:col-start-2 sm:row-start-1">
+            {prevKey ? (
+              <Button type="button" variant="ghost" size="sm" className="justify-self-end gap-0.5 px-2 text-muted-foreground" onClick={() => setFocusBlock(prevKey)}>
+                <ChevronLeft className="h-4 w-4" /> {blockLabel(prevKey)}
+              </Button>
+            ) : <span />}
+            <h2 className="px-2 text-center text-lg font-semibold text-foreground">{blockLabel(key)}</h2>
+            {nextKey ? (
+              <Button type="button" variant="ghost" size="sm" className="justify-self-start gap-0.5 px-2 text-muted-foreground" onClick={() => setFocusBlock(nextKey)}>
+                {blockLabel(nextKey)} <ChevronRight className="h-4 w-4" />
+              </Button>
+            ) : <span />}
+          </div>
           {toggle && (
-            <div className="flex items-center gap-2">
+            <div className="col-start-2 row-start-1 flex items-center gap-2 justify-self-end sm:col-start-3">
               <Label htmlFor={`block-on-${key}`} className="text-sm font-normal text-muted-foreground cursor-pointer">이 블럭 표시</Label>
               <Switch id={`block-on-${key}`} checked={toggle.on} onCheckedChange={toggle.set} />
             </div>
@@ -2066,18 +2115,6 @@ if (!template) {
           <p className="text-sm text-muted-foreground">이 테마에서는 이 블럭에 바꿀 수 있는 항목이 없습니다.</p>
         )}
 
-        <div className="flex items-center justify-between">
-          {prevKey ? (
-            <Button type="button" variant="ghost" size="sm" className="-ml-2 gap-1" onClick={() => setFocusBlock(prevKey)}>
-              <ChevronLeft className="h-4 w-4" /> {blockLabel(prevKey)}
-            </Button>
-          ) : <span />}
-          {nextKey && (
-            <Button type="button" variant="ghost" size="sm" className="-mr-2 gap-1" onClick={() => setFocusBlock(nextKey)}>
-              {blockLabel(nextKey)} <ChevronRight className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
       </div>
     )
   }
@@ -2094,71 +2131,37 @@ if (!template) {
     // 맞춰 404px로 커지고, 같은 트랙을 공유하는 편집 패널까지 화면 밖으로 밀려 오른쪽이
     // 잘린다(가로 스크롤도 없어 접근 불가) — 기본값을 minmax(0,1fr)로 고정해 트랙이
     // 컨테이너 너비를 넘지 않게 한다.
-    <div className="mx-auto flex max-w-[1280px] flex-col gap-6 font-sans xl:h-[calc(100vh-100px)]">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div className="min-w-0 flex-1">
+    <div className="mx-auto grid max-w-[1280px] grid-cols-[minmax(0,1fr)] gap-6 font-sans xl:h-[calc(100vh-100px)] xl:grid-cols-[minmax(0,1fr)_420px]">
+      {/* 편집 */}
+      <div data-edit-column className="order-2 min-w-0 pb-24 xl:order-1 xl:h-full xl:max-w-3xl xl:overflow-y-auto xl:pb-0 xl:pr-1">
+        <div className="mb-6">
           <h1 className="text-2xl font-semibold text-foreground">청첩장 편집기</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {groom && bride ? `${groom} ♥ ${bride}` : "청첩장"}
           </p>
         </div>
 
-        {/* 편집 바 — xl 이상에서는 제목 오른쪽에 놓이고, xl 미만(1단 레이아웃)에서는 실제 스크롤이 main이
-            아니라 html에서 일어나(admin 레이아웃의 고질적인 문제) sticky가 기준을 잃으므로 fixed로 뷰포트
-            하단에 고정한다(사이드바 폭만큼 lg:left-64 로 비켜준다). 자주 쓰지 않는 링크 복사·QR은
-            「공유」 메뉴로, 검수 요청은 검수 탭으로 옮겨 버튼을 셋으로 줄였다 — 좁은 화면에서도 한 줄에
-            들어가고, 가장 많이 쓰는 "저장"은 좁은 화면에서 맨 앞, 넓은 화면에서 맨 끝이다. */}
-        <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 overflow-x-auto border-t bg-background px-4 py-4 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] [&>*]:shrink-0 lg:left-64 lg:px-6 xl:static xl:z-auto xl:overflow-x-visible xl:border-t-0 xl:bg-transparent xl:p-0 xl:shadow-none">
-          <SaveButton onSave={save} className="gap-2 xl:order-last" />
-          {publicSlug && (
-            <Button variant="outline" asChild>
-              <a href={`/w/${publicSlug}`} target="_blank" rel="noreferrer" className="gap-2">
-                발행 청첩장 열기 <ExternalLink className="h-3.5 w-3.5" />
-              </a>
-            </Button>
-          )}
-          {publicSlug && (
-            // modal={false}: 메뉴 항목으로 QR 다이얼로그를 열 때 모달 두 개가 포커스 잠금을 다투다
-            // body 에 pointer-events:none 이 남는 Radix 문제를 피한다
-            <DropdownMenu modal={false}>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="gap-2">
-                  <Share2 className="h-3.5 w-3.5" /> 공유 <ChevronDown className="h-3.5 w-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={copyInvitationLink}>
-                  <Copy className="h-3.5 w-3.5" /> 청첩장 주소 복사하기
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setQrOpen(true)}>
-                  <QrCode className="h-3.5 w-3.5" /> QR코드 생성
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={copyDashboardLink}>
-                  <Copy className="h-3.5 w-3.5" /> 고객용 대시보드 복사하기
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_420px]">
-      {/* 편집 */}
-      <div data-edit-column className="order-2 min-w-0 pb-24 xl:order-1 xl:h-full xl:max-w-3xl xl:overflow-y-auto xl:pb-0 xl:pr-1">
-        <Tabs value={tab} onValueChange={setTab} className="gap-6">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="info">정보</TabsTrigger>
-            <TabsTrigger value="blocks">블럭</TabsTrigger>
-            <TabsTrigger value="style">스타일</TabsTrigger>
-            <TabsTrigger value="review" className="gap-1.5">
-              검수
-              {revisionsQuery.data && revisionsQuery.data.filter((r) => r.status === "open").length > 0 && (
-                <span className="rounded-full bg-destructive px-1.5 text-[10px] font-medium text-destructive-foreground">
-                  {revisionsQuery.data.filter((r) => r.status === "open").length}
-                </span>
-              )}
-            </TabsTrigger>
-          </TabsList>
+        <Tabs value={tab} onValueChange={setTab} className="gap-3">
+          {/* 탭은 편집 컬럼이 스크롤해도 맨 위에 붙어 있다. 붙어 있는 동안 아래 내용이 비치지 않도록
+              admin main 배경(background 위의 muted/30)을 그대로 깐다. xl 미만에서는 페이지(window)가
+              스크롤하는데 main 의 overflow-auto 가 sticky 의 기준을 가로채 붙지 않는다(위 설명 참고). */}
+          <div data-sticky-tabs className="sticky top-0 z-10 bg-background">
+            <div className="bg-muted/30 pb-3">
+              <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="info">정보</TabsTrigger>
+                <TabsTrigger value="blocks">블럭</TabsTrigger>
+                <TabsTrigger value="style">스타일</TabsTrigger>
+                <TabsTrigger value="review" className="gap-1.5">
+                  검수
+                  {revisionsQuery.data && revisionsQuery.data.filter((r) => r.status === "open").length > 0 && (
+                    <span className="rounded-full bg-destructive px-1.5 text-[10px] font-medium text-destructive-foreground">
+                      {revisionsQuery.data.filter((r) => r.status === "open").length}
+                    </span>
+                  )}
+                </TabsTrigger>
+              </TabsList>
+            </div>
+          </div>
 
           {/* 정보 — 두 개 이상의 블럭이 함께 쓰는 사실 정보. 한 블럭에만 쓰이는 필드는 블럭 탭에 있다 */}
           <TabsContent value="info" className="space-y-6">
@@ -2292,24 +2295,50 @@ if (!template) {
                   <CardHeader>
                     <CardTitle className="text-base font-medium">블럭</CardTitle>
                     <CardDescription>
-                      청첩장에 보이는 순서입니다. 블럭을 눌러 내용과 모양을 고치고, 왼쪽 손잡이를 드래그해서 순서를 바꿉니다. 끈 블럭은 발행된 청첩장에서 완전히 사라집니다.
+                      청첩장에 보이는 순서입니다. 블럭을 눌러 내용과 모양을 고치고, 왼쪽 손잡이를 드래그해서 순서를 바꿉니다. 섹션 사이 사진도 같은 방식으로 끌어 원하는 블럭 아래에 놓습니다. 끈 블럭은 발행된 청첩장에서 완전히 사라집니다.
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    {renderBlockRow("hero", undefined, "항상 맨 위에 위치합니다")}
-                    <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleBlockDragEnd}>
-                      <SortableContext items={draggableBlocks.map((b) => b.key)} strategy={verticalListSortingStrategy}>
-                        {draggableBlocks.map((b) => (
-                          <SortableBlockRow key={b.key} id={b.key}>
-                            {(drag) => <div className="border-t bg-card">{renderBlockRow(b.key, drag)}</div>}
-                          </SortableBlockRow>
-                        ))}
+                    <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleBlockListDragEnd}>
+                      <SortableContext items={blockListItems} strategy={verticalListSortingStrategy}>
+                        {blockListItems.map((item, i) => {
+                          const img = item.startsWith("img:") ? sectionImages.find((s) => s.id === item.slice(4)) : undefined
+                          const movable = !!img || draggableBlocks.some((b) => b.key === item)
+                          const note = item === "hero" ? "항상 맨 위에 위치합니다" : item === "share" ? "항상 맨 아래에 위치합니다" : undefined
+                          return (
+                            <SortableBlockRow key={item} id={item} fixed={!movable}>
+                              {(drag) => (
+                                <div className={cn("bg-card", i > 0 && "border-t")}>
+                                  {img ? renderSectionImageRow(img, drag) : renderBlockRow(item, movable ? drag : undefined, note)}
+                                </div>
+                              )}
+                            </SortableBlockRow>
+                          )
+                        })}
                       </SortableContext>
                     </DndContext>
-                    {extraBlockKeys.map((k) => (
-                      <div key={k} className="border-t">{renderBlockRow(k)}</div>
-                    ))}
-                    <div className="border-t">{renderBlockRow("share", undefined, "항상 맨 아래에 위치합니다")}</div>
+
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t pt-4">
+                      <Button variant="outline" size="sm" className="relative overflow-hidden" disabled={isUploadingSectionImage}>
+                        {isUploadingSectionImage ? (
+                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> 업로드 중...</>
+                        ) : (
+                          <><Plus className="mr-2 h-4 w-4" /> 섹션 사이 사진 추가</>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="absolute inset-0 cursor-pointer opacity-0"
+                          disabled={isUploadingSectionImage}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (file) addSectionImage(file)
+                            e.target.value = ""
+                          }}
+                        />
+                      </Button>
+                      <span className="text-xs text-muted-foreground">추가한 사진은 맨 아래에 놓입니다. 손잡이로 끌어 원하는 블럭 아래로 옮기세요.</span>
+                    </div>
 
                     {otherToggleSlots.length > 0 && (
                       <div className="mt-2 space-y-1 border-t pt-3">
@@ -2324,79 +2353,6 @@ if (!template) {
                         })}
                       </div>
                     )}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base font-medium">섹션 사이 사진</CardTitle>
-                    <CardDescription>
-                      원하는 섹션 바로 아래에 사진을 끼워 넣습니다. 위치는 드롭다운으로, 순서는 위/아래 버튼으로
-                      바로 바꿀 수 있어 다시 업로드할 필요가 없습니다.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {sectionImages.map((img, i) => (
-                      <div key={img.id} className="flex gap-3 rounded-lg border p-3">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={img.url} alt="" className="h-16 w-16 shrink-0 rounded object-cover" />
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center gap-2">
-                            <FieldLabel className="w-10 shrink-0 text-xs font-normal text-muted-foreground">위치</FieldLabel>
-                            <Select value={img.afterBlock} onValueChange={(v) => updateSectionImage(img.id, { afterBlock: v })}>
-                              <SelectTrigger className="h-8 flex-1">
-                                <SelectValue placeholder="섹션 선택" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {blockManifest.map((b) => (
-                                  <SelectItem key={b.key} value={b.key}>{b.label} 다음</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <Input
-                            value={img.caption ?? ""}
-                            onChange={(e) => updateSectionImage(img.id, { caption: e.target.value })}
-                            placeholder="캡션 (선택)"
-                            className="h-8 text-xs"
-                          />
-                        </div>
-                        <div className="flex shrink-0 flex-col items-center justify-between">
-                          <div className="flex flex-col">
-                            <Button variant="ghost" size="icon-sm" disabled={i === 0} onClick={() => moveSectionImage(img.id, -1)}>
-                              <ArrowUp className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button variant="ghost" size="icon-sm" disabled={i === sectionImages.length - 1} onClick={() => moveSectionImage(img.id, 1)}>
-                              <ArrowDown className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                          <Button variant="ghost" size="icon-sm" className="text-destructive" onClick={() => removeSectionImage(img.id)}>
-                            <X className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-
-                    <div>
-                      <Button variant="outline" size="sm" className="relative overflow-hidden" disabled={isUploadingSectionImage}>
-                        {isUploadingSectionImage ? (
-                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> 업로드 중...</>
-                        ) : (
-                          <><Plus className="mr-2 h-4 w-4" /> 사진 추가</>
-                        )}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="absolute inset-0 cursor-pointer opacity-0"
-                          disabled={isUploadingSectionImage}
-                          onChange={(e) => {
-                            const file = e.target.files?.[0]
-                            if (file) addSectionImage(file)
-                            e.target.value = ""
-                          }}
-                        />
-                      </Button>
-                    </div>
                   </CardContent>
                 </Card>
               </>
@@ -2903,7 +2859,46 @@ if (!template) {
       {/* 미리보기 — xl 이상에서는 이 컬럼 자체가 스크롤되지 않아(왼쪽만 overflow-y-auto) 항상 화면에 고정되고,
           그 아래 좁은 화면에서는 편집 영역 위에 쌓여 보인다(order-1) */}
       <div className="order-1 xl:order-2 xl:h-full xl:overflow-hidden">
-        <div className="mb-2.5 text-xs text-muted-foreground">실시간 미리보기 (실제 데이터)</div>
+        {/* 편집 바 — xl 이상에서는 미리보기 바로 위 가운데에 놓인다. xl 미만(1단 레이아웃)에서는 실제 스크롤이
+            main이 아니라 html에서 일어나(admin 레이아웃의 고질적인 문제) sticky가 기준을 잃으므로 fixed로
+            뷰포트 하단에 고정한다(사이드바 폭만큼 lg:left-64 로 비켜준다). 자주 쓰지 않는 링크 복사·QR은
+            「공유」 메뉴로, 검수 요청은 검수 탭으로 옮겨 버튼을 셋으로 줄였다 — 좁은 화면에서도 한 줄에
+            들어가고, 가장 많이 쓰는 "저장"은 좁은 화면에서 맨 앞, 넓은 화면에서 맨 끝이다. */}
+        <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 overflow-x-auto border-t bg-background px-4 py-4 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] [&>*]:shrink-0 lg:left-64 lg:px-6 xl:static xl:z-auto xl:mb-3 xl:justify-center xl:overflow-x-visible xl:border-t-0 xl:bg-transparent xl:p-0 xl:shadow-none">
+          <SaveButton onSave={save} className="gap-2 xl:order-last" />
+          {publicSlug && (
+            <Button variant="outline" asChild>
+              <a href={`/w/${publicSlug}`} target="_blank" rel="noreferrer" className="gap-2">
+                발행 청첩장 열기 <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </Button>
+          )}
+          {publicSlug && (
+            // modal={false}: 메뉴 항목으로 QR 다이얼로그를 열 때 모달 두 개가 포커스 잠금을 다투다
+            // body 에 pointer-events:none 이 남는 Radix 문제를 피한다
+            <DropdownMenu modal={false}>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <Share2 className="h-3.5 w-3.5" /> 공유 <ChevronDown className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={copyInvitationLink}>
+                  <Copy className="h-3.5 w-3.5" /> 청첩장 주소 복사하기
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setQrOpen(true)}>
+                  <QrCode className="h-3.5 w-3.5" /> QR코드 생성
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={copyDashboardLink}>
+                  <Copy className="h-3.5 w-3.5" /> 고객용 대시보드 복사하기
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+        <div className="mb-2.5 text-xs text-muted-foreground">
+          실시간 미리보기 (실제 데이터){tab === "blocks" && " · 블럭을 누르면 그 블럭 편집으로 이동합니다"}
+        </div>
         {/* 좁은 화면(패널 폭이 380px 미만인 태블릿·모바일)에서는 가로 스크롤 대신 비율을 유지한 채 축소한다 */}
         <div className="relative rounded-2xl bg-muted/40 py-5 px-3">
           <ScaledPreview width={380} height={680}>
@@ -2922,6 +2917,9 @@ if (!template) {
               scrollMotion={scrollMotion}
               intro={intro}
               focusBlock={focusBlock}
+              // 블럭 탭에서는 미리보기의 블럭을 눌러 그 블럭 상세로 바로 간다. 이 모드에서는 RSVP 버튼 등
+              // 미리보기 안의 원래 클릭 동작이 막히므로 다른 탭에서는 넘기지 않는다
+              onBlockClick={tab === "blocks" ? setFocusBlock : undefined}
               width={380}
               height={680}
             />
@@ -2934,7 +2932,6 @@ if (!template) {
             </div>
           )}
         </div>
-      </div>
       </div>
 
       {publicSlug && (
