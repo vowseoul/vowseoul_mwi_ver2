@@ -87,7 +87,8 @@ import { isContactFilled, parseContactList, type ContactEntry } from "@/lib/cont
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Slider } from "@/components/ui/slider"
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Copy, ExternalLink, Loader2, Plus, X } from "lucide-react"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { ArrowDown, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Copy, ExternalLink, Loader2, Plus, QrCode, Share2, X } from "lucide-react"
 import { toast } from "sonner"
 import { confirmDialog } from "@/components/ui/confirm-dialog"
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core"
@@ -842,13 +843,1241 @@ export default function CustomizeClient({
     }
   }
 
-  const groom = String(data.groom_name ?? "")
-  const bride = String(data.bride_name ?? "")
+  /** 편집기 탭 — 정보(여러 블럭이 함께 쓰는 정보) · 블럭(블럭 하나에만 쓰이는 모든 것) ·
+   *  스타일(청첩장 전체) · 검수. 수정 요청을 누르면 블럭 탭의 그 블럭으로 보내야 해서 제어형이다. */
+  const [tab, setTab] = useState("info")
+  const [qrOpen, setQrOpen] = useState(false)
 
-  if (!template) {
+  const manifestHas = (key: string) => visibleContentFields.some((f) => f.key === key)
+  const blockLabel = (key: string) =>
+    blockManifest.find((b) => b.key === key)?.label ?? BLOCK_LABEL_FALLBACK[key as keyof typeof BLOCK_LABEL_FALLBACK] ?? key
+  /** block_manifest 가 비어 있거나 일부만 선언된 테마에서도 콘텐츠 편집을 잃지 않도록, 매니페스트에
+   *  없는 블럭이라도 편집할 내용(필드·슬롯)이 있으면 순서 변경 없이 목록에 넣는다 */
+  const greetingHasContent = ["greeting_message", "greeting_image", "groom_photo", "bride_photo"].some(manifestHas)
+  const locationHasContent = showMap || ["traffic_info", "parking_info", "shuttle_info", "custom_notice_body"].some(manifestHas)
+  // 아래 filter 콜백 안에서 show* 값을 읽으면 React Compiler가 위 memo들을 "변경될 수 있음"으로 보고
+  // 경고하므로, 내용이 있는 블럭 키를 콜백 밖에서 먼저 모은다
+  const contentBlockKeys: string[] = [
+    greetingHasContent ? "greeting" : "", showGallery ? "gallery" : "", showSequence ? "sequence" : "",
+    locationHasContent ? "location" : "", showAccountFields ? "account" : "", showContact ? "contact" : "",
+  ]
+  const extraBlockKeys = BLOCK_KEYS.filter(
+    (k) => k !== "hero" && k !== "share" && !draggableBlocks.some((b) => b.key === k) && (contentBlockKeys.includes(k) || slots.includes(k))
+  )
+  /** 블럭 목록·이전/다음 이동이 공유하는 순서 — 메인은 맨 앞, 공유하기는 맨 뒤 고정 */
+  const blockRowKeys = ["hero", ...draggableBlocks.map((b) => b.key), ...extraBlockKeys, "share"]
+  /** 블럭 목록에도 블럭 상세에도 속하지 않는 슬롯 스위치 — 배경음악은 스타일 탭, 지도는 오시는 길에 있다 */
+  const otherToggleSlots = standaloneToggleSlots.filter((s) => s !== "bgm" && s !== "map" && !extraBlockKeys.includes(s as (typeof BLOCK_KEYS)[number]))
+  /** 블럭 상세에서 편집하는 필드 — 정보 탭의 "남은 필드" 목록에서 빠진다 */
+  const blockFieldKeys = new Set([
+    "main_image", "greeting_message", "greeting_image", "groom_photo", "bride_photo",
+    "traffic_info", "parking_info", "shuttle_info", "custom_notice_title", "custom_notice_body",
+    ...CONTACT_FIELD_DEFS.map((c) => c.key),
+    ...(showContact ? ["groom_sns_instagram", "bride_sns_instagram"] : []),
+    ...(blockRowKeys.includes("rsvp") ? ["rsvp_meal_menu"] : []),
+  ])
+  const PARENT_KEYS = ["groom_father_name", "groom_mother_name", "bride_father_name", "bride_mother_name"]
+  const VENUE_KEYS = ["venue_name", "venue_hall", "venue_address"]
+  const coupleFields = visibleContentFields.filter((f) => !blockFieldKeys.has(f.key) && !PARENT_KEYS.includes(f.key) && !VENUE_KEYS.includes(f.key))
+  const parentFields = visibleContentFields.filter((f) => PARENT_KEYS.includes(f.key))
+
+  /** 블럭 표시 스위치. 같은 섹션을 숨기는 콘텐츠 스위치(식순 노출 · 연락처 표시)는 블럭 스위치 하나로
+   *  합쳤다 — 둘 중 하나만 꺼져도 섹션이 사라지므로(§sequence-island.tsx · contact-island.tsx) 함께
+   *  켜고 끈다. 저장되는 키는 예전 그대로다. */
+  const blockToggle = (key: string): { on: boolean; set: (on: boolean) => void } | null => {
+    const hasSlot = slots.includes(key)
+    const flag = key === "sequence" ? { value: showProgram, set: setShowProgram }
+      : key === "contact" ? { value: phoneExpose, set: setPhoneExpose }
+      : null
+    if (!hasSlot && !flag) return null
+    return {
+      on: (!hasSlot || !disabledSlots.includes(key)) && (flag ? flag.value : true),
+      set: (on) => {
+        if (hasSlot) toggleSlot(key, on)
+        flag?.set(on)
+      },
+    }
+  }
+
+  // 목록 아래쪽의 블럭을 열면 편집 패널이 목록을 보던 스크롤 위치에 그대로 남아 상세의 머리(뒤로·제목)가
+  // 화면 밖에 있게 된다 — 블럭이 바뀔 때마다 상세 맨 위를 보이게 한다
+  const blockDetailRef = useRef<HTMLDivElement>(null)
+  // (scrollIntoView 는 상세가 패널보다 길면 아래쪽에 맞추거나 바깥 main 까지 움직여서 직접 계산한다 —
+  // xl 이상은 편집 컬럼이, 그 아래는 페이지가 스크롤한다)
+  useEffect(() => {
+    const el = blockDetailRef.current
+    if (!focusBlock || !el) return
+    const col = el.closest<HTMLElement>("[data-edit-column]")
+    if (col && col.scrollHeight > col.clientHeight) {
+      const above = el.getBoundingClientRect().top - col.getBoundingClientRect().top
+      if (above < 0) col.scrollTop += above
+    } else if (el.getBoundingClientRect().top < 0) {
+      el.scrollIntoView({ block: "start" })
+    }
+  }, [focusBlock])
+
+  const openBlockFromReview = (blockKey: string) => {
+    setFocusBlock(blockKey)
+    setTab("blocks")
+  }
+
+const groom = String(data.groom_name ?? "")
+const bride = String(data.bride_name ?? "")
+
+if (!template) {
+  return (
+    <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
+      템플릿 테마를 불러올 수 없습니다.
+    </div>
+  )
+}
+
+  /** 블럭 목록 한 행 — 이름을 누르면 상세가 열린다(미리보기도 그 블럭으로 이동) */
+  const renderBlockRow = (key: string, drag?: Parameters<typeof DragHandle>[0], note?: string) => {
+    const toggle = blockToggle(key)
+    const isOn = toggle ? toggle.on : true
     return (
-      <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
-        템플릿 테마를 불러올 수 없습니다.
+      <div className="flex items-center gap-2">
+        {drag ? <DragHandle {...drag} /> : <span className="w-4 shrink-0" />}
+        <button
+          type="button"
+          onClick={() => setFocusBlock(key)}
+          className="flex min-w-0 flex-1 items-center gap-2 py-4 text-left"
+        >
+          <span className={cn("text-sm font-medium", !isOn && "text-muted-foreground")}>{blockLabel(key)}</span>
+          {note && <span className="text-xs text-muted-foreground">{note}</span>}
+        </button>
+        {toggle && <Switch checked={toggle.on} onCheckedChange={toggle.set} aria-label={`${blockLabel(key)} 표시`} />}
+        <button type="button" onClick={() => setFocusBlock(key)} aria-label={`${blockLabel(key)} 편집`} className="text-muted-foreground hover:text-foreground">
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+    )
+  }
+
+  /** 블럭 상세 — 모든 블럭이 같은 틀을 쓴다: 내용(글자·사진) → 표시(켜고 끄는 옵션) → 접힌 모양 */
+  const renderBlockDetail = (key: string) => {
+    const entry = blockManifest.find((b) => b.key === key)
+    const override = blockOverrides[key]
+    const toggle = blockToggle(key)
+    const index = blockRowKeys.indexOf(key)
+    const prevKey = index > 0 ? blockRowKeys[index - 1] : null
+    const nextKey = index >= 0 && index < blockRowKeys.length - 1 ? blockRowKeys[index + 1] : null
+
+    let contentPart: React.ReactNode = null
+    let displayPart: React.ReactNode = null
+    let lookPart: React.ReactNode = null
+
+    if (key === "hero") {
+      contentPart = (manifestHas("main_image") || heroManifest) && (
+        <FieldGroup className="space-y-4">
+          {manifestHas("main_image") && (
+            <ImageField
+              def={visibleContentFields.find((f) => f.key === "main_image")!}
+              value={content.main_image || ""}
+              uploading={uploadingKey === "main_image"}
+              onUpload={(file) => uploadImageField("main_image", file)}
+              onClear={() => setField("main_image", "")}
+            />
+          )}
+          {heroManifest && (
+            <>
+              {heroManifest.heroTexts!.map((defaultText, i) => (
+                <Field key={i}>
+                  <FieldLabel>{heroManifest.heroTexts!.length > 1 ? `문구 ${i + 1}` : "문구"}</FieldLabel>
+                  <Input
+                    value={blockOverrides.hero?.heroTexts?.[i] ?? ""}
+                    onChange={(e) => {
+                      const next = [...(blockOverrides.hero?.heroTexts ?? [])]
+                      next[i] = e.target.value
+                      setBlockOverride("hero", { heroTexts: next })
+                    }}
+                    placeholder={defaultText}
+                  />
+                </Field>
+              ))}
+            </>
+          )}
+        </FieldGroup>
+      )
+      lookPart = heroManifest && (
+        <>
+          <Field>
+            <FieldLabel>서체</FieldLabel>
+            <div className="flex items-start gap-2">
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                {fonts.length > 0 && (
+                  <Select
+                    value={fonts.map((f) => buildFontStack(f, "--font-kr")).find((s) => s === blockOverrides.hero?.heroFont) || ""}
+                    onValueChange={(v) => { if (v) setBlockOverride("hero", { heroFont: v }) }}
+                  >
+                    <SelectTrigger className="w-full" style={blockOverrides.hero?.heroFont ? { fontFamily: blockOverrides.hero.heroFont } : undefined}>
+                      <SelectValue placeholder="에셋에 등록된 폰트 선택…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {fonts.map((f) => (
+                        <SelectItem key={f.id} value={buildFontStack(f, "--font-kr")} style={fontPreviewStyle(f)}>{f.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <Input
+                  value={blockOverrides.hero?.heroFont ?? ""}
+                  onChange={(e) => setBlockOverride("hero", { heroFont: e.target.value || undefined })}
+                  placeholder="비워두면 테마 기본 폰트"
+                />
+              </div>
+              {blockOverrides.hero?.heroFont && (
+                <Button type="button" variant="ghost" size="icon-sm" title="테마 기본 폰트로" onClick={() => setBlockOverride("hero", { heroFont: undefined })}>
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
+          </Field>
+
+          <SizeSliderField
+            label="문구 크기"
+            value={blockOverrides.hero?.heroFontSize}
+            defaultValue={16}
+            min={10}
+            max={64}
+            onChange={(v) => setBlockOverride("hero", { heroFontSize: v })}
+            onReset={() => setBlockOverride("hero", { heroFontSize: undefined })}
+          />
+
+          <SizeSliderField
+            label="자간"
+            value={blockOverrides.hero?.heroLetterSpacing}
+            defaultValue={0}
+            min={-2}
+            max={20}
+            onChange={(v) => setBlockOverride("hero", { heroLetterSpacing: v })}
+            onReset={() => setBlockOverride("hero", { heroLetterSpacing: undefined })}
+          />
+        </>
+      )
+    }
+
+    if (key === "greeting") {
+      contentPart = greetingHasContent && (
+        <FieldGroup className="space-y-4">
+          {manifestHas("greeting_message") && (
+            <TextField
+              def={{ key: "greeting_message", label: "인사말", type: "textarea" }}
+              value={content.greeting_message || ""}
+              onChange={(v) => setField("greeting_message", v)}
+            />
+          )}
+          {manifestHas("greeting_image") && (
+            <>
+              <ImageField
+                def={visibleContentFields.find((f) => f.key === "greeting_image")!}
+                value={content.greeting_image || ""}
+                uploading={uploadingKey === "greeting_image"}
+                onUpload={(file) => uploadImageField("greeting_image", file)}
+                onClear={() => setField("greeting_image", "")}
+              />
+              <Field>
+                <FieldLabel>인사말 이미지 비율</FieldLabel>
+                <RadioGroup
+                  value={greetingImageRatio}
+                  onValueChange={(v) => setGreetingImageRatio(v as "natural" | "fill")}
+                  className="flex flex-row gap-6"
+                >
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="natural" id="greeting-ratio-natural" />
+                    <Label htmlFor="greeting-ratio-natural" className="font-normal cursor-pointer">현재 비율</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="fill" id="greeting-ratio-fill" />
+                    <Label htmlFor="greeting-ratio-fill" className="font-normal cursor-pointer">좌우로 꽉 채우기</Label>
+                  </div>
+                </RadioGroup>
+              </Field>
+            </>
+          )}
+          {(manifestHas("groom_photo") || manifestHas("bride_photo")) && (
+            <div className="grid grid-cols-2 gap-4">
+              {visibleContentFields.filter((f) => f.key === "groom_photo" || f.key === "bride_photo").map((f) => (
+                <ImageField
+                  key={f.key}
+                  def={f}
+                  value={content[f.key] || ""}
+                  uploading={uploadingKey === f.key}
+                  onUpload={(file) => uploadImageField(f.key, file)}
+                  onClear={() => setField(f.key, "")}
+                />
+              ))}
+            </div>
+          )}
+        </FieldGroup>
+      )
+      lookPart = (
+        <>
+          <Field>
+            <FieldLabel>인사말 아이콘 모양</FieldLabel>
+            <RadioGroup
+              value={override?.greetingIconShape || "heart"}
+              onValueChange={(v) => setBlockOverride(key, { greetingIconShape: v as "heart" | "custom" })}
+              className="flex flex-row gap-6"
+            >
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="heart" id={`${key}-icon-heart`} />
+                <Label htmlFor={`${key}-icon-heart`} className="font-normal cursor-pointer">하트</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="custom" id={`${key}-icon-custom`} />
+                <Label htmlFor={`${key}-icon-custom`} className="font-normal cursor-pointer">직접 업로드</Label>
+              </div>
+            </RadioGroup>
+          </Field>
+
+          {override?.greetingIconShape === "custom" && (
+            <ImageField
+              def={{ key: "greetingIconCustomUrl", label: "아이콘 이미지", type: "image" }}
+              value={override?.greetingIconCustomUrl || ""}
+              uploading={uploadingKey === "greetingIconCustomUrl"}
+              onUpload={(file) => uploadGreetingIcon(key, file)}
+              onClear={() => setBlockOverride(key, { greetingIconCustomUrl: undefined })}
+            />
+          )}
+
+          <SizeSliderField
+            label="아이콘 크기"
+            value={override?.greetingIconSize}
+            defaultValue={24}
+            min={12}
+            max={64}
+            onChange={(v) => setBlockOverride(key, { greetingIconSize: v })}
+            onReset={() => setBlockOverride(key, { greetingIconSize: undefined })}
+          />
+
+          <BlockColorField
+            label="아이콘 색상"
+            value={override?.greetingIconColor}
+            defaultValue={accent}
+            onChange={(v) => setBlockOverride(key, { greetingIconColor: v })}
+            onReset={() => setBlockOverride(key, { greetingIconColor: undefined })}
+          />
+        </>
+      )
+    }
+
+    if (key === "gallery" && showGallery) {
+      contentPart = (
+        <FieldGroup>
+          <Field>
+            <FieldLabel>사진 목록</FieldLabel>
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(90px,1fr))] gap-2">
+              {galleryImages.map((url, i) => (
+                <div key={url} className="group relative aspect-square overflow-hidden rounded-md border">
+                  <img src={url} alt="" className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setGalleryImages((cur) => cur.filter((_, idx) => idx !== i))}
+                    title="삭제"
+                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                  <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-black/50 px-1 py-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                    <button
+                      type="button"
+                      onClick={() => moveGalleryImage(i, -1)}
+                      disabled={i === 0}
+                      title="앞으로 이동"
+                      aria-label="앞으로 이동"
+                      className="flex h-5 w-5 items-center justify-center rounded text-white hover:bg-white/20 disabled:opacity-30"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </button>
+                    <span className="text-[10px] text-white/80">{i + 1}</span>
+                    <button
+                      type="button"
+                      onClick={() => moveGalleryImage(i, 1)}
+                      disabled={i === galleryImages.length - 1}
+                      title="뒤로 이동"
+                      aria-label="뒤로 이동"
+                      className="flex h-5 w-5 items-center justify-center rounded text-white hover:bg-white/20 disabled:opacity-30"
+                    >
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <GalleryUploadButton uploading={uploadingKey === "gallery_images"} onSelect={addGalleryImages} />
+          </Field>
+        </FieldGroup>
+      )
+      displayPart = (
+        <FieldGroup className="space-y-4">
+          <Field>
+            <FieldLabel>갤러리 형태</FieldLabel>
+            <RadioGroup
+              value={galleryViewType}
+              onValueChange={(v) => setGalleryViewType(v as "slide" | "grid")}
+              className="flex flex-row gap-6"
+            >
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="slide" id="gallery-view-slide" />
+                <Label htmlFor="gallery-view-slide" className="font-normal cursor-pointer">슬라이드형</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="grid" id="gallery-view-grid" />
+                <Label htmlFor="gallery-view-grid" className="font-normal cursor-pointer">그리드형</Label>
+              </div>
+            </RadioGroup>
+          </Field>
+
+          {galleryViewType === "grid" && (
+            <>
+              <Field>
+                <FieldLabel>그리드 가로 줄 수</FieldLabel>
+                <RadioGroup
+                  value={galleryGridCols}
+                  onValueChange={(v) => setGalleryGridCols(v as "2" | "3")}
+                  className="flex flex-row gap-6"
+                >
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="2" id="gallery-grid-cols-2" />
+                    <Label htmlFor="gallery-grid-cols-2" className="font-normal cursor-pointer">2줄</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="3" id="gallery-grid-cols-3" />
+                    <Label htmlFor="gallery-grid-cols-3" className="font-normal cursor-pointer">3줄</Label>
+                  </div>
+                </RadioGroup>
+              </Field>
+
+              <SizeSliderField
+                label="아래로 보여줄 기본 줄 수"
+                unit="줄"
+                value={galleryGridShowRows}
+                defaultValue={galleryGridCols === "3" ? 4 : 3}
+                min={1}
+                max={10}
+                onChange={setGalleryGridShowRows}
+                onReset={() => setGalleryGridShowRows(undefined)}
+              />
+              <FieldDescription>
+                정해진 줄 수를 넘는 사진은 화면에 바로 보이지 않고, 하객이 &ldquo;더보기&rdquo;를 눌러야 나머지가 펼쳐집니다.
+              </FieldDescription>
+            </>
+          )}
+
+          {galleryViewType === "slide" && (
+            <Field>
+              <FieldLabel>사진 정렬 (슬라이드형)</FieldLabel>
+              <RadioGroup
+                value={galleryAlign}
+                onValueChange={(v) => setGalleryAlign(v as "center" | "bottom")}
+                className="flex flex-row gap-6"
+              >
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="center" id="gallery-align-center" />
+                  <Label htmlFor="gallery-align-center" className="font-normal cursor-pointer">중앙정렬</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="bottom" id="gallery-align-bottom" />
+                  <Label htmlFor="gallery-align-bottom" className="font-normal cursor-pointer">하단정렬</Label>
+                </div>
+              </RadioGroup>
+            </Field>
+          )}
+
+          <Field>
+            <div className="flex items-center gap-3">
+              <Switch id="galleryZoomBlock" checked={galleryZoomBlock} onCheckedChange={setGalleryZoomBlock} />
+              <Label htmlFor="galleryZoomBlock" className="font-normal cursor-pointer">사진 확대 방지</Label>
+            </div>
+            <FieldDescription>
+              켜면 하객이 갤러리 사진을 크게 볼 수 없습니다 — 사진을 눌러 확대(라이트박스)하는 기능이 꺼지고,
+              모바일 핀치줌·더블탭과 PC 우클릭·드래그·Ctrl+휠 확대가 모두 차단됩니다.
+            </FieldDescription>
+          </Field>
+        </FieldGroup>
+      )
+    }
+
+    if (key === "sequence" && showSequence) {
+      contentPart = (
+        <div className="space-y-2">
+          {sequenceRows.map((row, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <Input
+                value={row.time}
+                onChange={(e) => setSequenceRows((cur) => cur.map((r, idx) => idx === i ? { ...r, time: e.target.value } : r))}
+                placeholder="12:00"
+                className="w-24 shrink-0"
+              />
+              <Input
+                value={row.title}
+                onChange={(e) => setSequenceRows((cur) => cur.map((r, idx) => idx === i ? { ...r, title: e.target.value } : r))}
+                placeholder="신랑 신부 입장"
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setSequenceRows((cur) => cur.filter((_, idx) => idx !== i))}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setSequenceRows((cur) => [...cur, { time: "", title: "" }])}
+          >
+            <Plus className="h-3.5 w-3.5" /> 순서 추가
+          </Button>
+        </div>
+      )
+    }
+
+    if (key === "calendar") {
+      contentPart = (
+        <FieldGroup className="space-y-4">
+          <Field>
+            <FieldLabel>달력 아래 날짜 문구</FieldLabel>
+            <Input
+              value={override?.calendarDateText ?? ""}
+              onChange={(e) => setBlockOverride(key, { calendarDateText: e.target.value })}
+              placeholder="비워두면 예식일로 자동 표시"
+            />
+          </Field>
+          <Field>
+            <FieldLabel>달력 아래 시간 문구</FieldLabel>
+            <Input
+              value={override?.calendarTimeText ?? ""}
+              onChange={(e) => setBlockOverride(key, { calendarTimeText: e.target.value })}
+              placeholder="비워두면 요일·예식 시간으로 자동 표시"
+            />
+          </Field>
+        </FieldGroup>
+      )
+      displayPart = (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm">D-day 카운트다운 표시</span>
+            <Switch
+              checked={override?.ddayEnabled !== false}
+              onCheckedChange={(c) => setBlockOverride(key, { ddayEnabled: c })}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm">&ldquo;캘린더 앱에 추가&rdquo; 버튼</span>
+            <Switch
+              checked={override?.icsButtonEnabled !== false}
+              onCheckedChange={(c) => setBlockOverride(key, { icsButtonEnabled: c })}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm">&ldquo;구글 캘린더&rdquo; 버튼</span>
+            <Switch
+              checked={override?.googleCalendarButtonEnabled !== false}
+              onCheckedChange={(c) => setBlockOverride(key, { googleCalendarButtonEnabled: c })}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm">D-day 숫자 굴러 올라오는 연출</span>
+            <Switch
+              checked={override?.ddayRollingEnabled === true}
+              onCheckedChange={(c) => setBlockOverride(key, { ddayRollingEnabled: c })}
+            />
+          </div>
+        </div>
+      )
+      lookPart = (
+        <>
+          <Field>
+            <FieldLabel>예식일 강조 표시 모양</FieldLabel>
+            <RadioGroup
+              value={override?.calendarDayShape || "circle"}
+              onValueChange={(v) => setBlockOverride(key, { calendarDayShape: v as "circle" | "heart" | "custom" })}
+              className="flex flex-row gap-6"
+            >
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="circle" id={`${key}-shape-circle`} />
+                <Label htmlFor={`${key}-shape-circle`} className="font-normal cursor-pointer">동그라미</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="heart" id={`${key}-shape-heart`} />
+                <Label htmlFor={`${key}-shape-heart`} className="font-normal cursor-pointer">하트</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="custom" id={`${key}-shape-custom`} />
+                <Label htmlFor={`${key}-shape-custom`} className="font-normal cursor-pointer">직접 업로드</Label>
+              </div>
+            </RadioGroup>
+          </Field>
+
+          {override?.calendarDayShape === "custom" && (
+            <>
+              <ImageField
+                def={{ key: "calendarDayCustomShapeUrl", label: "강조 이미지", type: "image" }}
+                value={override?.calendarDayCustomShapeUrl || ""}
+                uploading={uploadingKey === "calendarDayCustomShapeUrl"}
+                onUpload={(file) => uploadCalendarDayShape(key, file)}
+                onClear={() => setBlockOverride(key, { calendarDayCustomShapeUrl: undefined })}
+              />
+              {override?.calendarDayCustomShapeUrl?.toLowerCase().split("?")[0].endsWith(".svg") && (
+                <BlockColorField
+                  label="업로드 이미지 색상 (SVG 전용)"
+                  value={override?.calendarDaySvgColor}
+                  defaultValue={accent}
+                  onChange={(v) => setBlockOverride(key, { calendarDaySvgColor: v })}
+                  onReset={() => setBlockOverride(key, { calendarDaySvgColor: undefined })}
+                />
+              )}
+            </>
+          )}
+
+          <SizeSliderField
+            label="강조 표시 크기"
+            value={override?.calendarDayShapeSize}
+            defaultValue={32}
+            min={20}
+            max={48}
+            onChange={(v) => setBlockOverride(key, { calendarDayShapeSize: v })}
+            onReset={() => setBlockOverride(key, { calendarDayShapeSize: undefined })}
+          />
+
+          <BlockColorField
+            label="강조일자 텍스트 색상"
+            value={override?.calendarDayTextColor}
+            defaultValue="#ffffff"
+            onChange={(v) => setBlockOverride(key, { calendarDayTextColor: v })}
+            onReset={() => setBlockOverride(key, { calendarDayTextColor: undefined })}
+          />
+
+          <BlockColorField
+            label="달력 박스 배경색"
+            value={override?.calendarBoxColor}
+            defaultValue={CALENDAR_BOX_DEFAULT.color}
+            onChange={(v) => setBlockOverride(key, { calendarBoxColor: v })}
+            onReset={() => setBlockOverride(key, { calendarBoxColor: undefined })}
+          />
+          <SizeSliderField
+            label="달력 박스 배경 불투명도"
+            unit="%"
+            value={override?.calendarBoxOpacity}
+            defaultValue={CALENDAR_BOX_DEFAULT.opacity}
+            min={0}
+            max={100}
+            onChange={(v) => setBlockOverride(key, { calendarBoxOpacity: v })}
+            onReset={() => setBlockOverride(key, { calendarBoxOpacity: undefined })}
+          />
+        </>
+      )
+    }
+
+    if (key === "location") {
+      contentPart = locationHasContent && (
+        <FieldGroup className="space-y-4">
+          {showMap && (
+            <Field>
+              <FieldLabel htmlFor={MAP_FIELD_DEF.key}>{MAP_FIELD_DEF.label}</FieldLabel>
+              <Input
+                id={MAP_FIELD_DEF.key}
+                value={content[MAP_FIELD_DEF.key] || ""}
+                onChange={(e) => setField(MAP_FIELD_DEF.key, e.target.value)}
+                placeholder="https://map.naver.com/p/entry/place/..."
+              />
+              {content[MAP_FIELD_DEF.key]?.trim() && !isNaverPlaceUrl(content[MAP_FIELD_DEF.key]) ? (
+                <p className="text-xs text-destructive">
+                  네이버 지도 주소만 넣을 수 있습니다. 저장되더라도 이 값은 무시되고 주소 검색으로 열립니다.
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  비워두면 예식장 주소로 검색합니다. 네이버 지도 앱·웹에서 예식장을 열고
+                  주소(또는 공유 링크)를 그대로 붙여넣으면 그 장소가 바로 열립니다.
+                </p>
+              )}
+            </Field>
+          )}
+
+          {visibleContentFields.filter((f) => ["traffic_info", "parking_info", "shuttle_info"].includes(f.key)).map((f) => (
+            <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
+          ))}
+
+          {/* 교통·주차·셔틀 말고 더 적을 것이 있을 때. 내용이 비어 있으면 하객 화면에
+              아무것도 나타나지 않으므로(§template.html data-field-when), 접어두고
+              필요할 때만 펼친다 — 늘 펼쳐 두면 안 쓰는 칸이 화면만 차지한다. */}
+          {visibleContentFields.some((f) => f.key === "custom_notice_body") && (
+            customNoticeOpen ? (
+              <div className="space-y-3 rounded-lg border border-border p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-foreground">추가 안내문구</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs text-muted-foreground"
+                    onClick={() => {
+                      setField("custom_notice_title", "")
+                      setField("custom_notice_body", "")
+                      setCustomNoticeOpen(false)
+                    }}
+                  >
+                    지우기
+                  </Button>
+                </div>
+                {visibleContentFields
+                  .filter((f) => ["custom_notice_title", "custom_notice_body"].includes(f.key))
+                  .map((f) => (
+                    <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
+                  ))}
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full gap-2"
+                onClick={() => setCustomNoticeOpen(true)}
+              >
+                <Plus className="h-4 w-4" /> 안내문구 추가하기
+              </Button>
+            )
+          )}
+        </FieldGroup>
+      )
+      displayPart = slots.includes("map") && (
+        <div className="flex items-center justify-between">
+          <span className="text-sm">{SLOT_LABELS.map}</span>
+          <Switch checked={!disabledSlots.includes("map")} onCheckedChange={(c) => toggleSlot("map", c)} />
+        </div>
+      )
+    }
+
+    if (key === "account") {
+      contentPart = showAccountFields && (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">혼주 계좌는 필요한 만큼 추가·삭제할 수 있습니다. 계좌마다 따로 넣어야 하객 화면에서 계좌번호만 정확히 복사됩니다.</p>
+          <Tabs defaultValue="groom" className="gap-4">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="groom">신랑측</TabsTrigger>
+              <TabsTrigger value="bride">신부측</TabsTrigger>
+            </TabsList>
+            <TabsContent value="groom">
+              <FieldGroup className="space-y-4">
+                {ACCOUNT_FIELD_DEFS.slice(0, 3).map((f) => (
+                  <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
+                ))}
+                <ExtraAccountEditor
+                  label="신랑측 혼주 계좌"
+                  legacyText={content.extra_account_groom || ""}
+                  list={extraGroomList}
+                  onChangeList={setExtraGroomList}
+                  onChangeLegacy={(v) => setField("extra_account_groom", v)}
+                />
+              </FieldGroup>
+            </TabsContent>
+            <TabsContent value="bride">
+              <FieldGroup className="space-y-4">
+                {ACCOUNT_FIELD_DEFS.slice(3, 6).map((f) => (
+                  <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
+                ))}
+                <ExtraAccountEditor
+                  label="신부측 혼주 계좌"
+                  legacyText={content.extra_account_bride || ""}
+                  list={extraBrideList}
+                  onChangeList={setExtraBrideList}
+                  onChangeLegacy={(v) => setField("extra_account_bride", v)}
+                />
+              </FieldGroup>
+            </TabsContent>
+          </Tabs>
+        </div>
+      )
+      displayPart = (
+        <FieldGroup className="space-y-5">
+          {showAccountFields && (
+            <Field>
+              <div className="flex items-center gap-3">
+                <Switch id="accountCollapsed" checked={accountCollapsed} onCheckedChange={setAccountCollapsed} />
+                <Label htmlFor="accountCollapsed" className="font-normal cursor-pointer">계좌 정보 접어두기</Label>
+              </div>
+              <FieldDescription>
+                켜면 청첩장에서 계좌 정보가 바로 보이지 않고 &ldquo;마음 전하실 곳 보기&rdquo; 버튼을 눌러야 펼쳐집니다.
+              </FieldDescription>
+            </Field>
+          )}
+          <Field>
+            <FieldLabel>계좌 표시 방식</FieldLabel>
+            <RadioGroup
+              value={override?.accountLayout || "list"}
+              onValueChange={(v) => setBlockOverride(key, { accountLayout: v as "list" | "card" })}
+              className="flex flex-row gap-6"
+            >
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="list" id={`${key}-layout-list`} />
+                <Label htmlFor={`${key}-layout-list`} className="font-normal cursor-pointer">목록형</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="card" id={`${key}-layout-card`} />
+                <Label htmlFor={`${key}-layout-card`} className="font-normal cursor-pointer">2열 카드형</Label>
+              </div>
+            </RadioGroup>
+            <p className="text-xs text-muted-foreground">
+              카드형은 카드를 누르면 계좌번호가 복사됩니다. 예전 자유 입력으로 등록된 혼주 계좌는
+              은행·번호가 나뉘어 있지 않아 카드형에서도 기존 줄 형태로 표시됩니다.
+            </p>
+          </Field>
+          <Field>
+            <FieldLabel>계좌 순서</FieldLabel>
+            <div className="space-y-1.5">
+              {parseAccountGroupOrder(override?.accountOrder).map((key, i, arr) => (
+                <div key={key} className="flex items-center gap-2 rounded-md border border-border px-2.5 py-1.5">
+                  <span className="w-5 text-xs text-muted-foreground tabular-nums">{i + 1}</span>
+                  <span className="flex-1 text-sm">{ACCOUNT_GROUP_LABELS[key]}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={i === 0}
+                    aria-label={`${ACCOUNT_GROUP_LABELS[key]} 위로`}
+                    onClick={() => setBlockOverride(key, { accountOrder: moveArrayItem(arr, i, -1) })}
+                  >
+                    <ArrowUp className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={i === arr.length - 1}
+                    aria-label={`${ACCOUNT_GROUP_LABELS[key]} 아래로`}
+                    onClick={() => setBlockOverride(key, { accountOrder: moveArrayItem(arr, i, 1) })}
+                  >
+                    <ArrowDown className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              혼주 계좌가 여러 건이면 그 안의 순서는 입력한 순서를 따르고, 여기서는 그룹 전체가
+              몇 번째로 나올지만 정합니다.
+            </p>
+          </Field>
+        </FieldGroup>
+      )
+      lookPart = (
+        <>
+          <Field>
+            <FieldLabel>계좌 아이콘 순서</FieldLabel>
+            <div className="space-y-1.5">
+              {parseAccountIconOrder(override?.accountIconOrder).map((key, i, arr) => (
+                <div key={key} className="flex items-center gap-2 rounded-md border border-border px-2.5 py-1.5">
+                  <span className="w-5 text-xs text-muted-foreground tabular-nums">{i + 1}</span>
+                  <span className="flex-1 text-sm">{ACCOUNT_ICON_LABELS[key]}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={i === 0}
+                    aria-label={`${ACCOUNT_ICON_LABELS[key]} 위로`}
+                    onClick={() => setBlockOverride(key, { accountIconOrder: moveArrayItem(arr, i, -1) })}
+                  >
+                    <ArrowUp className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={i === arr.length - 1}
+                    aria-label={`${ACCOUNT_ICON_LABELS[key]} 아래로`}
+                    onClick={() => setBlockOverride(key, { accountIconOrder: moveArrayItem(arr, i, 1) })}
+                  >
+                    <ArrowDown className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              위에서부터 왼쪽 순서로 놓입니다.
+            </p>
+          </Field>
+
+          {(override?.accountLayout || "list") === "list" && (
+            <div className="space-y-4 border-t pt-4">
+              <p className="text-xs text-muted-foreground">
+                계좌번호가 길어 한 줄에 다 안 들어가고 2줄로 넘어갈 때, 아이콘을 줄이거나 글자 크기를
+                줄여 한 줄에 들어가게 할 수 있습니다.
+              </p>
+              <SizeSliderField
+                label="아이콘 크기"
+                value={override?.accountIconSize}
+                defaultValue={38}
+                min={26}
+                max={40}
+                onChange={(v) => setBlockOverride(key, { accountIconSize: v })}
+                onReset={() => setBlockOverride(key, { accountIconSize: undefined })}
+              />
+              <SizeSliderField
+                label="계좌 정보 글자 크기"
+                value={override?.accountTextSize}
+                defaultValue={13.5}
+                min={10}
+                max={16}
+                onChange={(v) => setBlockOverride(key, { accountTextSize: v })}
+                onReset={() => setBlockOverride(key, { accountTextSize: undefined })}
+              />
+            </div>
+          )}
+
+          {(override?.accountLayout === "card") && (
+            <div className="space-y-4 border-t pt-4">
+              <Field>
+                <FieldLabel>카드 배경색</FieldLabel>
+                <RadioGroup
+                  value={override?.accountCardBg || ACCOUNT_CARD_BG_DEFAULT.source}
+                  onValueChange={(v) => setBlockOverride(key, { accountCardBg: v as "auto" | "accent" | "bg" | "custom" })}
+                  className="flex flex-row flex-wrap gap-x-6 gap-y-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="auto" id={`${key}-cardbg-auto`} />
+                    <Label htmlFor={`${key}-cardbg-auto`} className="font-normal cursor-pointer">자동</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="accent" id={`${key}-cardbg-accent`} />
+                    <Label htmlFor={`${key}-cardbg-accent`} className="font-normal cursor-pointer">테마 포인트 색상</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="bg" id={`${key}-cardbg-bg`} />
+                    <Label htmlFor={`${key}-cardbg-bg`} className="font-normal cursor-pointer">테마 배경색</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="custom" id={`${key}-cardbg-custom`} />
+                    <Label htmlFor={`${key}-cardbg-custom`} className="font-normal cursor-pointer">직접 선택</Label>
+                  </div>
+                </RadioGroup>
+                <p className="text-xs text-muted-foreground">
+                  자동은 섹션 배경이 밝든 어둡든 대비가 생기게 맞춥니다. 테마 색을 고르면 테마를 바꿔도
+                  카드가 함께 따라가지만, 섹션 배경과 같은 색이면 카드가 보이지 않습니다 — 고르고 나서
+                  미리보기를 확인하세요.
+                </p>
+              </Field>
+
+              {override?.accountCardBg === "custom" && (
+                <BlockColorField
+                  label="카드 배경 직접 선택"
+                  value={override?.accountCardBgColor}
+                  defaultValue={ACCOUNT_CARD_BG_DEFAULT.color}
+                  onChange={(v) => setBlockOverride(key, { accountCardBgColor: v })}
+                  onReset={() => setBlockOverride(key, { accountCardBgColor: undefined })}
+                />
+              )}
+
+              <SizeSliderField
+                label="카드 배경 불투명도"
+                unit="%"
+                value={override?.accountCardBgOpacity}
+                defaultValue={ACCOUNT_CARD_BG_DEFAULT.opacity}
+                min={0}
+                max={100}
+                onChange={(v) => setBlockOverride(key, { accountCardBgOpacity: v })}
+                onReset={() => setBlockOverride(key, { accountCardBgOpacity: undefined })}
+              />
+            </div>
+          )}
+        </>
+      )
+    }
+
+    if (key === "contact" && showContact) {
+      contentPart = (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">신랑·신부 및 혼주 연락처를 청첩장에 노출합니다. 비워둔 항목은 표시되지 않습니다.</p>
+          <Tabs defaultValue="groom" className="gap-4">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="groom">신랑측</TabsTrigger>
+              <TabsTrigger value="bride">신부측</TabsTrigger>
+            </TabsList>
+            <TabsContent value="groom">
+              <FieldGroup className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="groomShowPhone" className="font-normal cursor-pointer">신랑 연락처 노출</Label>
+                  <Switch id="groomShowPhone" checked={groomShowPhone} onCheckedChange={setGroomShowPhone} />
+                </div>
+                {CONTACT_FIELD_DEFS.slice(0, 3).map((f) => (
+                  <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
+                ))}
+                <TextField
+                  def={CONTENT_FIELD_DEFS.find((f) => f.key === "groom_sns_instagram")!}
+                  value={content.groom_sns_instagram || ""}
+                  onChange={(v) => setField("groom_sns_instagram", v)}
+                />
+              </FieldGroup>
+            </TabsContent>
+            <TabsContent value="bride">
+              <FieldGroup className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="brideShowPhone" className="font-normal cursor-pointer">신부 연락처 노출</Label>
+                  <Switch id="brideShowPhone" checked={brideShowPhone} onCheckedChange={setBrideShowPhone} />
+                </div>
+                {CONTACT_FIELD_DEFS.slice(3, 6).map((f) => (
+                  <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
+                ))}
+                <TextField
+                  def={CONTENT_FIELD_DEFS.find((f) => f.key === "bride_sns_instagram")!}
+                  value={content.bride_sns_instagram || ""}
+                  onChange={(v) => setField("bride_sns_instagram", v)}
+                />
+              </FieldGroup>
+            </TabsContent>
+          </Tabs>
+          <div className="space-y-2">
+            <p className="text-sm font-medium">그 외 연락처 (혼주 등)</p>
+            <ContactListField
+              idPrefix="extra-contacts"
+              items={extraContactsList ?? []}
+              onChange={setExtraContactsList}
+              addLabel="연락처 추가"
+            />
+          </div>
+        </div>
+      )
+    }
+
+    if (key === "rsvp") {
+      displayPart = (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm">식사 여부 질문</span>
+            <Switch
+              checked={override?.mealEnabled !== false}
+              onCheckedChange={(c) => setBlockOverride(key, { mealEnabled: c })}
+            />
+          </div>
+          {override?.mealEnabled !== false && (
+            <TextField
+              def={ALL_TEXT_FIELD_DEFS.find((f) => f.key === "rsvp_meal_menu")!}
+              value={content.rsvp_meal_menu || ""}
+              onChange={(v) => setField("rsvp_meal_menu", v)}
+            />
+          )}
+          <div className="flex items-center justify-between">
+            <span className="text-sm">셔틀버스 이용 질문</span>
+            <Switch
+              checked={override?.shuttleEnabled !== false}
+              onCheckedChange={(c) => setBlockOverride(key, { shuttleEnabled: c })}
+            />
+          </div>
+          <Field>
+            <FieldLabel>응답 마감일</FieldLabel>
+            <Input
+              type="date"
+              value={override?.rsvpDeadline ?? ""}
+              onChange={(e) => setBlockOverride(key, { rsvpDeadline: e.target.value || undefined })}
+            />
+            <FieldDescription>비워두면 마감 없이 상시 접수됩니다.</FieldDescription>
+          </Field>
+        </div>
+      )
+    }
+
+    if (key === "share") {
+      contentPart = (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            청첩장 링크를 카카오톡 등에 공유할 때 보여줄 썸네일·제목·설명입니다. 비워두면 신랑·신부 이름과 예식 정보로 자동 채워집니다.
+          </p>
+          <FieldGroup className="space-y-4">
+            <p className="text-sm font-medium">링크 미리보기 (카카오톡에 주소를 붙여넣어 보낼 때)</p>
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
+              <div className="space-y-4">
+                <ImageField
+                  def={{ key: "og_image", label: "썸네일 이미지", type: "image" }}
+                  value={ogImage}
+                  uploading={uploadingOgImage}
+                  onUpload={uploadOgImage}
+                  onClear={() => setOgImage("")}
+                />
+                <Field>
+                  <FieldLabel htmlFor="ogTitle">제목</FieldLabel>
+                  <Input
+                    id="ogTitle"
+                    value={ogTitle}
+                    onChange={(e) => setOgTitle(e.target.value)}
+                    placeholder={linkPreviewDefaults.title}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="ogDescription">설명</FieldLabel>
+                  <Input
+                    id="ogDescription"
+                    value={ogDescription}
+                    onChange={(e) => setOgDescription(e.target.value)}
+                    placeholder={linkPreviewDefaults.description || "예: 2026년 5월 7일 낮 12시"}
+                  />
+                  <FieldDescription>주소 붙여넣기 미리보기는 줄바꿈이 적용되지 않습니다.</FieldDescription>
+                </Field>
+              </div>
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground">미리보기</p>
+                <LinkPreviewCard content={linkPreview} />
+              </div>
+            </div>
+
+            <div className="space-y-4 border-t pt-4">
+              <div>
+                <p className="text-sm font-medium">공유하기 버튼 카드 (청첩장 하단 &ldquo;카카오톡 공유&rdquo; 버튼)</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  비워두면 위 링크 미리보기의 사진·제목·설명이 그대로 쓰입니다. 다르게 보내고 싶은 항목만 채우세요.
+                </p>
+              </div>
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
+                <div className="space-y-4">
+                  <ImageField
+                    def={{ key: "share_btn_img", label: "썸네일 이미지", type: "image" }}
+                    value={shareBtnImg}
+                    uploading={uploadingShareBtnImg}
+                    onUpload={uploadShareBtnImg}
+                    onClear={() => setShareBtnImg("")}
+                  />
+                  <Field>
+                    <FieldLabel htmlFor="shareBtnTitle">제목</FieldLabel>
+                    <Input
+                      id="shareBtnTitle"
+                      value={shareBtnTitle}
+                      onChange={(e) => setShareBtnTitle(e.target.value)}
+                      placeholder={shareCardDefaults.title}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="shareBtnText">설명</FieldLabel>
+                    <Textarea
+                      id="shareBtnText"
+                      value={shareBtnText}
+                      onChange={(e) => setShareBtnText(e.target.value)}
+                      placeholder={shareCardDefaults.description}
+                      rows={2}
+                    />
+                    <FieldDescription>
+                      Enter로 줄을 나눌 수 있습니다. 카카오 카드는 설명을 최대 2줄까지만 보여주고 넘으면 &ldquo;...&rdquo;로 잘립니다.
+                    </FieldDescription>
+                  </Field>
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-xs text-muted-foreground">미리보기</p>
+                  <ShareButtonCard content={shareCard} hasLocation={!!data.venue_address} />
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              미리보기는 입력하는 대로 바로 바뀝니다. 사진을 자르는 위치·비율은 카카오톡이 정해서 실제 카드와 조금 다를 수 있습니다.
+            </p>
+          </FieldGroup>
+        </div>
+      )
+    }
+
+    // 제목·영문 소제목·여백은 블럭마다 같은 자리(모양 맨 아래)에 둔다
+    const commonLook = (entry?.title || entry?.padding) && (
+      <>
+        {entry?.title && (
+          <>
+            <Field>
+              <FieldLabel>제목</FieldLabel>
+              <Input
+                value={override?.title ?? ""}
+                onChange={(e) => setBlockOverride(key, { title: e.target.value })}
+                placeholder="테마 기본값"
+              />
+            </Field>
+            <Field>
+              <FieldLabel>영문 소제목</FieldLabel>
+              <Input
+                value={override?.label ?? ""}
+                onChange={(e) => setBlockOverride(key, { label: e.target.value })}
+                placeholder="테마 기본값"
+              />
+            </Field>
+          </>
+        )}
+        {entry?.padding && (
+          <SizeSliderField
+            label="위·아래 여백"
+            value={override?.py}
+            defaultValue={globalSectionPy}
+            min={16}
+            max={120}
+            onChange={(v) => setBlockOverride(key, { py: v })}
+            onReset={() => setBlockOverride(key, { py: undefined })}
+          />
+        )}
+      </>
+    )
+
+    return (
+      <div key={key} className="space-y-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="ghost" size="sm" className="-ml-2 gap-1 text-muted-foreground" onClick={() => setFocusBlock(null)}>
+            <ChevronLeft className="h-4 w-4" /> 블럭 목록
+          </Button>
+          <h2 className="min-w-0 flex-1 text-lg font-semibold text-foreground">{blockLabel(key)}</h2>
+          {toggle && (
+            <div className="flex items-center gap-2">
+              <Label htmlFor={`block-on-${key}`} className="text-sm font-normal text-muted-foreground cursor-pointer">이 블럭 표시</Label>
+              <Switch id={`block-on-${key}`} checked={toggle.on} onCheckedChange={toggle.set} />
+            </div>
+          )}
+        </div>
+
+        {contentPart && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-medium">내용</CardTitle>
+            </CardHeader>
+            <CardContent>{contentPart}</CardContent>
+          </Card>
+        )}
+
+        {displayPart && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-medium">표시</CardTitle>
+            </CardHeader>
+            <CardContent>{displayPart}</CardContent>
+          </Card>
+        )}
+
+        {(lookPart || commonLook) && (
+          <Card className="py-0">
+            <Accordion type="single" collapsible>
+              <AccordionItem value="look" className="border-b-0">
+                <AccordionTrigger className="px-6 py-5 text-base font-medium hover:no-underline">모양</AccordionTrigger>
+                <AccordionContent className="space-y-4 px-6 pb-6">
+                  {lookPart}
+                  {lookPart && commonLook && <div className="border-t" />}
+                  {commonLook}
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </Card>
+        )}
+
+        {!contentPart && !displayPart && !lookPart && !commonLook && (
+          <p className="text-sm text-muted-foreground">이 테마에서는 이 블럭에 바꿀 수 있는 항목이 없습니다.</p>
+        )}
+
+        <div className="flex items-center justify-between">
+          {prevKey ? (
+            <Button type="button" variant="ghost" size="sm" className="-ml-2 gap-1" onClick={() => setFocusBlock(prevKey)}>
+              <ChevronLeft className="h-4 w-4" /> {blockLabel(prevKey)}
+            </Button>
+          ) : <span />}
+          {nextKey && (
+            <Button type="button" variant="ghost" size="sm" className="-mr-2 gap-1" onClick={() => setFocusBlock(nextKey)}>
+              {blockLabel(nextKey)} <ChevronRight className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
     )
   }
@@ -865,20 +2094,62 @@ export default function CustomizeClient({
     // 맞춰 404px로 커지고, 같은 트랙을 공유하는 편집 패널까지 화면 밖으로 밀려 오른쪽이
     // 잘린다(가로 스크롤도 없어 접근 불가) — 기본값을 minmax(0,1fr)로 고정해 트랙이
     // 컨테이너 너비를 넘지 않게 한다.
-    <div className="mx-auto grid max-w-[1280px] grid-cols-[minmax(0,1fr)] gap-6 font-sans xl:h-[calc(100vh-100px)] xl:grid-cols-[minmax(0,1fr)_420px]">
-      {/* 편집 */}
-      <div className="order-2 min-w-0 pb-24 xl:order-1 xl:h-full xl:max-w-3xl xl:overflow-y-auto xl:pb-0 xl:pr-1">
-        <div className="mb-6">
+    <div className="mx-auto flex max-w-[1280px] flex-col gap-6 font-sans xl:h-[calc(100vh-100px)]">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-semibold text-foreground">청첩장 편집기</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {groom && bride ? `${groom} ♥ ${bride}` : "청첩장"}
           </p>
         </div>
 
-        <Tabs defaultValue="content" className="gap-6">
+        {/* 편집 바 — xl 이상에서는 제목 오른쪽에 놓이고, xl 미만(1단 레이아웃)에서는 실제 스크롤이 main이
+            아니라 html에서 일어나(admin 레이아웃의 고질적인 문제) sticky가 기준을 잃으므로 fixed로 뷰포트
+            하단에 고정한다(사이드바 폭만큼 lg:left-64 로 비켜준다). 자주 쓰지 않는 링크 복사·QR은
+            「공유」 메뉴로, 검수 요청은 검수 탭으로 옮겨 버튼을 셋으로 줄였다 — 좁은 화면에서도 한 줄에
+            들어가고, 가장 많이 쓰는 "저장"은 좁은 화면에서 맨 앞, 넓은 화면에서 맨 끝이다. */}
+        <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 overflow-x-auto border-t bg-background px-4 py-4 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] [&>*]:shrink-0 lg:left-64 lg:px-6 xl:static xl:z-auto xl:overflow-x-visible xl:border-t-0 xl:bg-transparent xl:p-0 xl:shadow-none">
+          <SaveButton onSave={save} className="gap-2 xl:order-last" />
+          {publicSlug && (
+            <Button variant="outline" asChild>
+              <a href={`/w/${publicSlug}`} target="_blank" rel="noreferrer" className="gap-2">
+                발행 청첩장 열기 <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </Button>
+          )}
+          {publicSlug && (
+            // modal={false}: 메뉴 항목으로 QR 다이얼로그를 열 때 모달 두 개가 포커스 잠금을 다투다
+            // body 에 pointer-events:none 이 남는 Radix 문제를 피한다
+            <DropdownMenu modal={false}>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <Share2 className="h-3.5 w-3.5" /> 공유 <ChevronDown className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={copyInvitationLink}>
+                  <Copy className="h-3.5 w-3.5" /> 청첩장 주소 복사하기
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setQrOpen(true)}>
+                  <QrCode className="h-3.5 w-3.5" /> QR코드 생성
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={copyDashboardLink}>
+                  <Copy className="h-3.5 w-3.5" /> 고객용 대시보드 복사하기
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_420px]">
+      {/* 편집 */}
+      <div data-edit-column className="order-2 min-w-0 pb-24 xl:order-1 xl:h-full xl:max-w-3xl xl:overflow-y-auto xl:pb-0 xl:pr-1">
+        <Tabs value={tab} onValueChange={setTab} className="gap-6">
           <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="content">내용</TabsTrigger>
-            <TabsTrigger value="design">디자인</TabsTrigger>
+            <TabsTrigger value="info">정보</TabsTrigger>
+            <TabsTrigger value="blocks">블럭</TabsTrigger>
+            <TabsTrigger value="style">스타일</TabsTrigger>
             <TabsTrigger value="review" className="gap-1.5">
               검수
               {revisionsQuery.data && revisionsQuery.data.filter((r) => r.status === "open").length > 0 && (
@@ -887,13 +2158,66 @@ export default function CustomizeClient({
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="history">이력</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="content" className="space-y-6">
+          {/* 정보 — 두 개 이상의 블럭이 함께 쓰는 사실 정보. 한 블럭에만 쓰이는 필드는 블럭 탭에 있다 */}
+          <TabsContent value="info" className="space-y-6">
+            {coupleFields.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base font-medium">신랑 · 신부</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <FieldGroup className="grid grid-cols-2 gap-4">
+                    {coupleFields.map((f) => f.type === "image" ? (
+                      <ImageField
+                        key={f.key}
+                        def={f}
+                        value={content[f.key] || ""}
+                        uploading={uploadingKey === f.key}
+                        onUpload={(file) => uploadImageField(f.key, file)}
+                        onClear={() => setField(f.key, "")}
+                      />
+                    ) : (
+                      <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
+                    ))}
+                  </FieldGroup>
+                </CardContent>
+              </Card>
+            )}
+
+            {parentFields.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base font-medium">혼주</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <FieldGroup className="grid grid-cols-2 gap-4">
+                    {parentFields.map((f) => {
+                      const deceasedKey = DECEASED_KEY_BY_NAME_FIELD[f.key]
+                      return (
+                        <div key={f.key} className="space-y-1.5">
+                          <TextField def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
+                          {deceasedKey && (
+                            <label className="flex items-center gap-1.5 pl-0.5 text-xs text-muted-foreground cursor-pointer">
+                              <Checkbox
+                                checked={content[deceasedKey] === "예"}
+                                onCheckedChange={(checked) => setField(deceasedKey, checked ? "예" : "아니오")}
+                              />
+                              故 (고인)
+                            </label>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </FieldGroup>
+                </CardContent>
+              </Card>
+            )}
+
             <Card>
               <CardHeader>
-                <CardTitle className="text-base font-medium">예식 일시 · 장소</CardTitle>
+                <CardTitle className="text-base font-medium">예식 일시</CardTitle>
               </CardHeader>
               <CardContent>
                 <FieldGroup className="space-y-4">
@@ -940,612 +2264,147 @@ export default function CustomizeClient({
                         : <>테마마다 표기가 다를 수 있습니다(예: Color Atelier 메인 화면은 &ldquo;4:10PM&rdquo;). 한 가지로 맞추려면 표기 방식을 고르세요.</>}
                     </FieldDescription>
                   </Field>
-                  {visibleContentFields.filter((f) => ["venue_name", "venue_hall", "venue_address"].includes(f.key)).map((f) => (
-                    <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
-                  ))}
-                  {/* "네이버지도" 버튼이 열 주소. 비워두면 지금처럼 주소 문자열을 검색한다 —
-                      그러면 건물이 아니라 지번·도로명 결과가 뜬다. 네이버 지도에서 그 예식장을
-                      열고 주소창을 그대로 붙여넣으면 그 장소 페이지로 바로 보낸다. */}
-                  {showMap && (
-                    <Field>
-                      <FieldLabel htmlFor={MAP_FIELD_DEF.key}>{MAP_FIELD_DEF.label}</FieldLabel>
-                      <Input
-                        id={MAP_FIELD_DEF.key}
-                        value={content[MAP_FIELD_DEF.key] || ""}
-                        onChange={(e) => setField(MAP_FIELD_DEF.key, e.target.value)}
-                        placeholder="https://map.naver.com/p/entry/place/..."
-                      />
-                      {content[MAP_FIELD_DEF.key]?.trim() && !isNaverPlaceUrl(content[MAP_FIELD_DEF.key]) ? (
-                        <p className="text-xs text-destructive">
-                          네이버 지도 주소만 넣을 수 있습니다. 저장되더라도 이 값은 무시되고 주소 검색으로 열립니다.
-                        </p>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">
-                          비워두면 예식장 주소로 검색합니다. 네이버 지도 앱·웹에서 예식장을 열고
-                          주소(또는 공유 링크)를 그대로 붙여넣으면 그 장소가 바로 열립니다.
-                        </p>
-                      )}
-                    </Field>
-                  )}
-
-                  {visibleContentFields.filter((f) => ["traffic_info", "parking_info", "shuttle_info"].includes(f.key)).map((f) => (
-                    <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
-                  ))}
-
-                  {/* 교통·주차·셔틀 말고 더 적을 것이 있을 때. 내용이 비어 있으면 하객 화면에
-                      아무것도 나타나지 않으므로(§template.html data-field-when), 접어두고
-                      필요할 때만 펼친다 — 늘 펼쳐 두면 안 쓰는 칸이 화면만 차지한다. */}
-                  {visibleContentFields.some((f) => f.key === "custom_notice_body") && (
-                    customNoticeOpen ? (
-                      <div className="space-y-3 rounded-lg border border-border p-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-foreground">추가 안내문구</span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 text-xs text-muted-foreground"
-                            onClick={() => {
-                              setField("custom_notice_title", "")
-                              setField("custom_notice_body", "")
-                              setCustomNoticeOpen(false)
-                            }}
-                          >
-                            지우기
-                          </Button>
-                        </div>
-                        {visibleContentFields
-                          .filter((f) => ["custom_notice_title", "custom_notice_body"].includes(f.key))
-                          .map((f) => (
-                            <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
-                          ))}
-                      </div>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full gap-2"
-                        onClick={() => setCustomNoticeOpen(true)}
-                      >
-                        <Plus className="h-4 w-4" /> 안내문구 추가하기
-                      </Button>
-                    )
-                  )}
                 </FieldGroup>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base font-medium">신랑 · 신부 정보</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <FieldGroup className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  {visibleContentFields
-                    .filter((f) => !["venue_name", "venue_hall", "venue_address", "traffic_info", "parking_info", "shuttle_info", "custom_notice_title", "custom_notice_body", "greeting_message", "main_image", "groom_photo", "bride_photo", "greeting_image", ...CONTACT_FIELD_DEFS.map((c) => c.key)].includes(f.key))
-                    .map((f) => {
-                      const deceasedKey = DECEASED_KEY_BY_NAME_FIELD[f.key]
-                      return (
-                        <div key={f.key} className="space-y-1.5">
-                          <TextField def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
-                          {deceasedKey && (
-                            <label className="flex items-center gap-1.5 pl-0.5 text-xs text-muted-foreground cursor-pointer">
-                              <Checkbox
-                                checked={content[deceasedKey] === "예"}
-                                onCheckedChange={(checked) => setField(deceasedKey, checked ? "예" : "아니오")}
-                              />
-                              故 (고인)
-                            </label>
-                          )}
-                        </div>
-                      )
-                    })}
-                </FieldGroup>
-              </CardContent>
-            </Card>
-
-            {visibleContentFields.some((f) => f.key === "greeting_message") && (
+            {visibleContentFields.some((f) => VENUE_KEYS.includes(f.key)) && (
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base font-medium">인사말</CardTitle>
+                  <CardTitle className="text-base font-medium">예식장</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <TextField
-                    def={{ key: "greeting_message", label: "인사말", type: "textarea" }}
-                    value={content.greeting_message || ""}
-                    onChange={(v) => setField("greeting_message", v)}
-                  />
-                </CardContent>
-              </Card>
-            )}
-
-            {visibleContentFields.some((f) => f.type === "image") && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base font-medium">사진</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <FieldGroup className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                    {visibleContentFields.filter((f) => f.type === "image").map((f) => (
-                      <ImageField
-                        key={f.key}
-                        def={f}
-                        value={content[f.key] || ""}
-                        uploading={uploadingKey === f.key}
-                        onUpload={(file) => uploadImageField(f.key, file)}
-                        onClear={() => setField(f.key, "")}
-                      />
+                  <FieldGroup className="space-y-4">
+                    {visibleContentFields.filter((f) => ["venue_name", "venue_hall", "venue_address"].includes(f.key)).map((f) => (
+                      <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
                     ))}
                   </FieldGroup>
-                  {visibleContentFields.some((f) => f.key === "greeting_image") && (
-                    <Field className="mt-4">
-                      <FieldLabel>인사말 이미지 비율</FieldLabel>
-                      <RadioGroup
-                        value={greetingImageRatio}
-                        onValueChange={(v) => setGreetingImageRatio(v as "natural" | "fill")}
-                        className="flex flex-row gap-6"
-                      >
-                        <div className="flex items-center gap-2">
-                          <RadioGroupItem value="natural" id="greeting-ratio-natural" />
-                          <Label htmlFor="greeting-ratio-natural" className="font-normal cursor-pointer">현재 비율</Label>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <RadioGroupItem value="fill" id="greeting-ratio-fill" />
-                          <Label htmlFor="greeting-ratio-fill" className="font-normal cursor-pointer">좌우로 꽉 채우기</Label>
-                        </div>
-                      </RadioGroup>
-                    </Field>
-                  )}
                 </CardContent>
               </Card>
             )}
-
-            {showGallery && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base font-medium">갤러리</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <FieldGroup className="space-y-4">
-                    <Field>
-                      <FieldLabel>갤러리 형태</FieldLabel>
-                      <RadioGroup
-                        value={galleryViewType}
-                        onValueChange={(v) => setGalleryViewType(v as "slide" | "grid")}
-                        className="flex flex-row gap-6"
-                      >
-                        <div className="flex items-center gap-2">
-                          <RadioGroupItem value="slide" id="gallery-view-slide" />
-                          <Label htmlFor="gallery-view-slide" className="font-normal cursor-pointer">슬라이드형</Label>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <RadioGroupItem value="grid" id="gallery-view-grid" />
-                          <Label htmlFor="gallery-view-grid" className="font-normal cursor-pointer">그리드형</Label>
-                        </div>
-                      </RadioGroup>
-                    </Field>
-
-                    {galleryViewType === "grid" && (
-                      <>
-                        <Field>
-                          <FieldLabel>그리드 가로 줄 수</FieldLabel>
-                          <RadioGroup
-                            value={galleryGridCols}
-                            onValueChange={(v) => setGalleryGridCols(v as "2" | "3")}
-                            className="flex flex-row gap-6"
-                          >
-                            <div className="flex items-center gap-2">
-                              <RadioGroupItem value="2" id="gallery-grid-cols-2" />
-                              <Label htmlFor="gallery-grid-cols-2" className="font-normal cursor-pointer">2줄</Label>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <RadioGroupItem value="3" id="gallery-grid-cols-3" />
-                              <Label htmlFor="gallery-grid-cols-3" className="font-normal cursor-pointer">3줄</Label>
-                            </div>
-                          </RadioGroup>
-                        </Field>
-
-                        <SizeSliderField
-                          label="아래로 보여줄 기본 줄 수"
-                          unit="줄"
-                          value={galleryGridShowRows}
-                          defaultValue={galleryGridCols === "3" ? 4 : 3}
-                          min={1}
-                          max={10}
-                          onChange={setGalleryGridShowRows}
-                          onReset={() => setGalleryGridShowRows(undefined)}
-                        />
-                        <FieldDescription>
-                          정해진 줄 수를 넘는 사진은 화면에 바로 보이지 않고, 하객이 &ldquo;더보기&rdquo;를 눌러야 나머지가 펼쳐집니다.
-                        </FieldDescription>
-                      </>
-                    )}
-
-                    {galleryViewType === "slide" && (
-                      <Field>
-                        <FieldLabel>사진 정렬 (슬라이드형)</FieldLabel>
-                        <RadioGroup
-                          value={galleryAlign}
-                          onValueChange={(v) => setGalleryAlign(v as "center" | "bottom")}
-                          className="flex flex-row gap-6"
-                        >
-                          <div className="flex items-center gap-2">
-                            <RadioGroupItem value="center" id="gallery-align-center" />
-                            <Label htmlFor="gallery-align-center" className="font-normal cursor-pointer">중앙정렬</Label>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <RadioGroupItem value="bottom" id="gallery-align-bottom" />
-                            <Label htmlFor="gallery-align-bottom" className="font-normal cursor-pointer">하단정렬</Label>
-                          </div>
-                        </RadioGroup>
-                      </Field>
-                    )}
-
-                    <Field>
-                      <div className="flex items-center gap-3">
-                        <Switch id="galleryZoomBlock" checked={galleryZoomBlock} onCheckedChange={setGalleryZoomBlock} />
-                        <Label htmlFor="galleryZoomBlock" className="font-normal cursor-pointer">사진 확대 방지</Label>
-                      </div>
-                      <FieldDescription>
-                        켜면 하객이 갤러리 사진을 크게 볼 수 없습니다 — 사진을 눌러 확대(라이트박스)하는 기능이 꺼지고,
-                        모바일 핀치줌·더블탭과 PC 우클릭·드래그·Ctrl+휠 확대가 모두 차단됩니다.
-                      </FieldDescription>
-                    </Field>
-
-                    <Field>
-                      <FieldLabel>사진 목록</FieldLabel>
-                      <div className="grid grid-cols-[repeat(auto-fill,minmax(90px,1fr))] gap-2">
-                        {galleryImages.map((url, i) => (
-                          <div key={url} className="group relative aspect-square overflow-hidden rounded-md border">
-                            <img src={url} alt="" className="h-full w-full object-cover" />
-                            <button
-                              type="button"
-                              onClick={() => setGalleryImages((cur) => cur.filter((_, idx) => idx !== i))}
-                              title="삭제"
-                              className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                            <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-black/50 px-1 py-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                              <button
-                                type="button"
-                                onClick={() => moveGalleryImage(i, -1)}
-                                disabled={i === 0}
-                                title="앞으로 이동"
-                                aria-label="앞으로 이동"
-                                className="flex h-5 w-5 items-center justify-center rounded text-white hover:bg-white/20 disabled:opacity-30"
-                              >
-                                <ChevronLeft className="h-3.5 w-3.5" />
-                              </button>
-                              <span className="text-[10px] text-white/80">{i + 1}</span>
-                              <button
-                                type="button"
-                                onClick={() => moveGalleryImage(i, 1)}
-                                disabled={i === galleryImages.length - 1}
-                                title="뒤로 이동"
-                                aria-label="뒤로 이동"
-                                className="flex h-5 w-5 items-center justify-center rounded text-white hover:bg-white/20 disabled:opacity-30"
-                              >
-                                <ChevronRight className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      <GalleryUploadButton uploading={uploadingKey === "gallery_images"} onSelect={addGalleryImages} />
-                    </Field>
-                  </FieldGroup>
-                </CardContent>
-              </Card>
-            )}
-
-            {showSequence && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base font-medium">식순</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <FieldGroup className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <Switch id="showProgram" checked={showProgram} onCheckedChange={setShowProgram} />
-                      <Label htmlFor="showProgram" className="font-normal cursor-pointer">식순 섹션 노출</Label>
-                    </div>
-                    {showProgram && (
-                      <div className="space-y-2">
-                        {sequenceRows.map((row, i) => (
-                          <div key={i} className="flex items-center gap-2">
-                            <Input
-                              value={row.time}
-                              onChange={(e) => setSequenceRows((cur) => cur.map((r, idx) => idx === i ? { ...r, time: e.target.value } : r))}
-                              placeholder="12:00"
-                              className="w-24 shrink-0"
-                            />
-                            <Input
-                              value={row.title}
-                              onChange={(e) => setSequenceRows((cur) => cur.map((r, idx) => idx === i ? { ...r, title: e.target.value } : r))}
-                              placeholder="신랑 신부 입장"
-                              className="flex-1"
-                            />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() => setSequenceRows((cur) => cur.filter((_, idx) => idx !== i))}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ))}
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="gap-1.5"
-                          onClick={() => setSequenceRows((cur) => [...cur, { time: "", title: "" }])}
-                        >
-                          <Plus className="h-3.5 w-3.5" /> 순서 추가
-                        </Button>
-                      </div>
-                    )}
-                  </FieldGroup>
-                </CardContent>
-              </Card>
-            )}
-
-            {showAccountFields && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base font-medium">마음 전하실 곳 (계좌)</CardTitle>
-                  <CardDescription>혼주 계좌는 필요한 만큼 추가·삭제할 수 있습니다. 계좌마다 따로 넣어야 하객 화면에서 계좌번호만 정확히 복사됩니다.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <Field>
-                    <div className="flex items-center gap-3">
-                      <Switch id="accountCollapsed" checked={accountCollapsed} onCheckedChange={setAccountCollapsed} />
-                      <Label htmlFor="accountCollapsed" className="font-normal cursor-pointer">계좌 정보 접어두기</Label>
-                    </div>
-                    <FieldDescription>
-                      켜면 청첩장에서 계좌 정보가 바로 보이지 않고 &ldquo;마음 전하실 곳 보기&rdquo; 버튼을 눌러야 펼쳐집니다.
-                    </FieldDescription>
-                  </Field>
-                  <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                    <FieldGroup className="space-y-4">
-                      <p className="text-sm font-medium text-muted-foreground">신랑측</p>
-                      {ACCOUNT_FIELD_DEFS.slice(0, 3).map((f) => (
-                        <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
-                      ))}
-                      <ExtraAccountEditor
-                        label="신랑측 혼주 계좌"
-                        legacyText={content.extra_account_groom || ""}
-                        list={extraGroomList}
-                        onChangeList={setExtraGroomList}
-                        onChangeLegacy={(v) => setField("extra_account_groom", v)}
-                      />
-                    </FieldGroup>
-                    <FieldGroup className="space-y-4">
-                      <p className="text-sm font-medium text-muted-foreground">신부측</p>
-                      {ACCOUNT_FIELD_DEFS.slice(3, 6).map((f) => (
-                        <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
-                      ))}
-                      <ExtraAccountEditor
-                        label="신부측 혼주 계좌"
-                        legacyText={content.extra_account_bride || ""}
-                        list={extraBrideList}
-                        onChangeList={setExtraBrideList}
-                        onChangeLegacy={(v) => setField("extra_account_bride", v)}
-                      />
-                    </FieldGroup>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {showContact && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base font-medium">연락처</CardTitle>
-                  <CardDescription>신랑·신부 및 혼주 연락처를 청첩장에 노출합니다. 비워둔 항목은 표시되지 않습니다.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <FieldGroup className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <Switch id="phoneExpose" checked={phoneExpose} onCheckedChange={setPhoneExpose} />
-                      <Label htmlFor="phoneExpose" className="font-normal cursor-pointer">연락처 표시</Label>
-                    </div>
-                    {phoneExpose && (
-                      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                        <FieldGroup className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm font-medium text-muted-foreground">신랑측</p>
-                            <div className="flex items-center gap-2">
-                              <Label htmlFor="groomShowPhone" className="text-xs font-normal text-muted-foreground cursor-pointer">신랑 연락처 노출</Label>
-                              <Switch id="groomShowPhone" checked={groomShowPhone} onCheckedChange={setGroomShowPhone} />
-                            </div>
-                          </div>
-                          {CONTACT_FIELD_DEFS.slice(0, 3).map((f) => (
-                            <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
-                          ))}
-                          <TextField
-                            def={CONTENT_FIELD_DEFS.find((f) => f.key === "groom_sns_instagram")!}
-                            value={content.groom_sns_instagram || ""}
-                            onChange={(v) => setField("groom_sns_instagram", v)}
-                          />
-                        </FieldGroup>
-                        <FieldGroup className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm font-medium text-muted-foreground">신부측</p>
-                            <div className="flex items-center gap-2">
-                              <Label htmlFor="brideShowPhone" className="text-xs font-normal text-muted-foreground cursor-pointer">신부 연락처 노출</Label>
-                              <Switch id="brideShowPhone" checked={brideShowPhone} onCheckedChange={setBrideShowPhone} />
-                            </div>
-                          </div>
-                          {CONTACT_FIELD_DEFS.slice(3, 6).map((f) => (
-                            <TextField key={f.key} def={f} value={content[f.key] || ""} onChange={(v) => setField(f.key, v)} />
-                          ))}
-                          <TextField
-                            def={CONTENT_FIELD_DEFS.find((f) => f.key === "bride_sns_instagram")!}
-                            value={content.bride_sns_instagram || ""}
-                            onChange={(v) => setField("bride_sns_instagram", v)}
-                          />
-                        </FieldGroup>
-                      </div>
-                    )}
-                    {phoneExpose && (
-                      <div className="space-y-2">
-                        <p className="text-sm font-medium">그 외 연락처 (혼주 등)</p>
-                        <ContactListField
-                          idPrefix="extra-contacts"
-                          items={extraContactsList ?? []}
-                          onChange={setExtraContactsList}
-                          addLabel="연락처 추가"
-                        />
-                      </div>
-                    )}
-                  </FieldGroup>
-                </CardContent>
-              </Card>
-            )}
-
-            {showBgm && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base font-medium">배경음악</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <FieldGroup className="space-y-3">
-                    <Field>
-                      <Select
-                        value={bgms.some((b) => b.url === bgmUrl) ? bgmUrl : "custom"}
-                        onValueChange={(v) => { if (v !== "custom") setBgmUrl(v) }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="custom">직접 입력 (아래)</SelectItem>
-                          {bgms.map((b) => (
-                            <SelectItem key={b.id} value={b.url}>{b.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                    <Field>
-                      <Input value={bgmUrl} onChange={(e) => setBgmUrl(e.target.value)} placeholder="BGM 파일 URL" />
-                    </Field>
-                    <Field>
-                      <div className="flex items-center gap-3">
-                        <Switch id="bgmAutoplay" checked={bgmAutoplay} onCheckedChange={setBgmAutoplay} />
-                        <Label htmlFor="bgmAutoplay" className="font-normal cursor-pointer">자동 재생</Label>
-                      </div>
-                      <FieldDescription>
-                        꺼두면 청첩장을 열자마자 음악이 나오지 않고, 하객이 우측 상단 ♪ 버튼을 눌렀을 때만 재생됩니다.
-                        (조용한 자리에서 열어본 하객이 당황하지 않도록 기본값은 꺼짐입니다)
-                      </FieldDescription>
-                    </Field>
-                  </FieldGroup>
-                </CardContent>
-              </Card>
-            )}
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base font-medium">카카오톡 공유</CardTitle>
-                <CardDescription>
-                  청첩장 링크를 카카오톡 등에 공유할 때 보여줄 썸네일·제목·설명입니다. 비워두면 신랑·신부 이름과 예식 정보로 자동 채워집니다.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <FieldGroup className="space-y-4">
-                  <p className="text-sm font-medium">링크 미리보기 (카카오톡에 주소를 붙여넣어 보낼 때)</p>
-                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
-                    <div className="space-y-4">
-                      <ImageField
-                        def={{ key: "og_image", label: "썸네일 이미지", type: "image" }}
-                        value={ogImage}
-                        uploading={uploadingOgImage}
-                        onUpload={uploadOgImage}
-                        onClear={() => setOgImage("")}
-                      />
-                      <Field>
-                        <FieldLabel htmlFor="ogTitle">제목</FieldLabel>
-                        <Input
-                          id="ogTitle"
-                          value={ogTitle}
-                          onChange={(e) => setOgTitle(e.target.value)}
-                          placeholder={linkPreviewDefaults.title}
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="ogDescription">설명</FieldLabel>
-                        <Input
-                          id="ogDescription"
-                          value={ogDescription}
-                          onChange={(e) => setOgDescription(e.target.value)}
-                          placeholder={linkPreviewDefaults.description || "예: 2026년 5월 7일 낮 12시"}
-                        />
-                        <FieldDescription>주소 붙여넣기 미리보기는 줄바꿈이 적용되지 않습니다.</FieldDescription>
-                      </Field>
-                    </div>
-                    <div className="space-y-1.5">
-                      <p className="text-xs text-muted-foreground">미리보기</p>
-                      <LinkPreviewCard content={linkPreview} />
-                    </div>
-                  </div>
-
-                  <div className="space-y-4 border-t pt-4">
-                    <div>
-                      <p className="text-sm font-medium">공유하기 버튼 카드 (청첩장 하단 &ldquo;카카오톡 공유&rdquo; 버튼)</p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        비워두면 위 링크 미리보기의 사진·제목·설명이 그대로 쓰입니다. 다르게 보내고 싶은 항목만 채우세요.
-                      </p>
-                    </div>
-                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
-                      <div className="space-y-4">
-                        <ImageField
-                          def={{ key: "share_btn_img", label: "썸네일 이미지", type: "image" }}
-                          value={shareBtnImg}
-                          uploading={uploadingShareBtnImg}
-                          onUpload={uploadShareBtnImg}
-                          onClear={() => setShareBtnImg("")}
-                        />
-                        <Field>
-                          <FieldLabel htmlFor="shareBtnTitle">제목</FieldLabel>
-                          <Input
-                            id="shareBtnTitle"
-                            value={shareBtnTitle}
-                            onChange={(e) => setShareBtnTitle(e.target.value)}
-                            placeholder={shareCardDefaults.title}
-                          />
-                        </Field>
-                        <Field>
-                          <FieldLabel htmlFor="shareBtnText">설명</FieldLabel>
-                          <Textarea
-                            id="shareBtnText"
-                            value={shareBtnText}
-                            onChange={(e) => setShareBtnText(e.target.value)}
-                            placeholder={shareCardDefaults.description}
-                            rows={2}
-                          />
-                          <FieldDescription>
-                            Enter로 줄을 나눌 수 있습니다. 카카오 카드는 설명을 최대 2줄까지만 보여주고 넘으면 &ldquo;...&rdquo;로 잘립니다.
-                          </FieldDescription>
-                        </Field>
-                      </div>
-                      <div className="space-y-1.5">
-                        <p className="text-xs text-muted-foreground">미리보기</p>
-                        <ShareButtonCard content={shareCard} hasLocation={!!data.venue_address} />
-                      </div>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    미리보기는 입력하는 대로 바로 바뀝니다. 사진을 자르는 위치·비율은 카카오톡이 정해서 실제 카드와 조금 다를 수 있습니다.
-                  </p>
-                </FieldGroup>
-              </CardContent>
-            </Card>
           </TabsContent>
 
-          <TabsContent value="design" className="space-y-6">
+          {/* 블럭 — 청첩장에 보이는 순서와 같은 목록. 블럭을 누르면(focusBlock) 상세가 열리고 미리보기가 그 블럭으로 이동한다 */}
+          <TabsContent value="blocks" className="space-y-6">
+            {focusBlock ? <div ref={blockDetailRef}>{renderBlockDetail(focusBlock)}</div> : (
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base font-medium">블럭</CardTitle>
+                    <CardDescription>
+                      청첩장에 보이는 순서입니다. 블럭을 눌러 내용과 모양을 고치고, 왼쪽 손잡이를 드래그해서 순서를 바꿉니다. 끈 블럭은 발행된 청첩장에서 완전히 사라집니다.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {renderBlockRow("hero", undefined, "항상 맨 위에 위치합니다")}
+                    <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleBlockDragEnd}>
+                      <SortableContext items={draggableBlocks.map((b) => b.key)} strategy={verticalListSortingStrategy}>
+                        {draggableBlocks.map((b) => (
+                          <SortableBlockRow key={b.key} id={b.key}>
+                            {(drag) => <div className="border-t bg-card">{renderBlockRow(b.key, drag)}</div>}
+                          </SortableBlockRow>
+                        ))}
+                      </SortableContext>
+                    </DndContext>
+                    {extraBlockKeys.map((k) => (
+                      <div key={k} className="border-t">{renderBlockRow(k)}</div>
+                    ))}
+                    <div className="border-t">{renderBlockRow("share", undefined, "항상 맨 아래에 위치합니다")}</div>
+
+                    {otherToggleSlots.length > 0 && (
+                      <div className="mt-2 space-y-1 border-t pt-3">
+                        {otherToggleSlots.map((s) => {
+                          const isOn = !disabledSlots.includes(s)
+                          return (
+                            <div key={s} className="flex items-center justify-between py-2">
+                              <span className={cn("text-sm", !isOn && "text-muted-foreground")}>{SLOT_LABELS[s] || s}</span>
+                              <Switch checked={isOn} onCheckedChange={(c) => toggleSlot(s, c)} />
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base font-medium">섹션 사이 사진</CardTitle>
+                    <CardDescription>
+                      원하는 섹션 바로 아래에 사진을 끼워 넣습니다. 위치는 드롭다운으로, 순서는 위/아래 버튼으로
+                      바로 바꿀 수 있어 다시 업로드할 필요가 없습니다.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {sectionImages.map((img, i) => (
+                      <div key={img.id} className="flex gap-3 rounded-lg border p-3">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={img.url} alt="" className="h-16 w-16 shrink-0 rounded object-cover" />
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <FieldLabel className="w-10 shrink-0 text-xs font-normal text-muted-foreground">위치</FieldLabel>
+                            <Select value={img.afterBlock} onValueChange={(v) => updateSectionImage(img.id, { afterBlock: v })}>
+                              <SelectTrigger className="h-8 flex-1">
+                                <SelectValue placeholder="섹션 선택" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {blockManifest.map((b) => (
+                                  <SelectItem key={b.key} value={b.key}>{b.label} 다음</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <Input
+                            value={img.caption ?? ""}
+                            onChange={(e) => updateSectionImage(img.id, { caption: e.target.value })}
+                            placeholder="캡션 (선택)"
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                        <div className="flex shrink-0 flex-col items-center justify-between">
+                          <div className="flex flex-col">
+                            <Button variant="ghost" size="icon-sm" disabled={i === 0} onClick={() => moveSectionImage(img.id, -1)}>
+                              <ArrowUp className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="icon-sm" disabled={i === sectionImages.length - 1} onClick={() => moveSectionImage(img.id, 1)}>
+                              <ArrowDown className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                          <Button variant="ghost" size="icon-sm" className="text-destructive" onClick={() => removeSectionImage(img.id)}>
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+
+                    <div>
+                      <Button variant="outline" size="sm" className="relative overflow-hidden" disabled={isUploadingSectionImage}>
+                        {isUploadingSectionImage ? (
+                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> 업로드 중...</>
+                        ) : (
+                          <><Plus className="mr-2 h-4 w-4" /> 사진 추가</>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="absolute inset-0 cursor-pointer opacity-0"
+                          disabled={isUploadingSectionImage}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (file) addSectionImage(file)
+                            e.target.value = ""
+                          }}
+                        />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </TabsContent>
+
+          {/* 스타일 — 바꾸면 청첩장 전체가 함께 바뀌는 것 */}
+          <TabsContent value="style" className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="text-base font-medium">테마</CardTitle>
@@ -1572,16 +2431,177 @@ export default function CustomizeClient({
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base font-medium">스크롤 모션</CardTitle>
-                <CardDescription>
-                  하객이 스크롤할 때 각 섹션이 나타나는 방식입니다. 신랑신부도 대시보드에서
-                  직접 바꿀 수 있는 항목입니다.
-                </CardDescription>
+                <CardTitle className="text-base font-medium">색상</CardTitle>
+                <CardDescription>비워두면 테마 기본값이 사용됩니다.</CardDescription>
               </CardHeader>
               <CardContent>
-                <ScrollMotionField value={scrollMotion} onChange={setScrollMotion} idPrefix="admin-scroll-motion" />
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {visibleTokenFields.filter((t) => t.type === "color").map((t) => {
+                    const hasOverride = typeof overrides[t.name] === "string"
+                    const overrideValue = hasOverride ? (overrides[t.name] as string) : ""
+                    const themeDefault = themeTokens[t.name] || ""
+                    // 오버라이드가 없으면(=테마 기본값을 그대로 쓰는 중) 입력칸을 비워두지 않고
+                    // 현재 실제로 적용 중인 테마 기본 색을 그대로 채워 보여준다 — 빈 칸은 "색이
+                    // 없다"처럼 보이지만 실제로는 테마 기본색이 적용되어 있는 상태였다.
+                    const displayValue = overrideValue || themeDefault
+                    return (
+                      <Field key={t.name}>
+                        <FieldLabel>{t.label}</FieldLabel>
+                        <div className="flex items-start gap-2">
+                          <input
+                            type="color"
+                            value={/^#[0-9a-fA-F]{6}$/.test(displayValue) ? displayValue : "#ffffff"}
+                            onChange={(e) => setOverride(t.name, e.target.value)}
+                            className="h-9 w-10 shrink-0 cursor-pointer rounded-md border border-input bg-transparent p-1"
+                          />
+                          <Input value={displayValue} onChange={(e) => setOverride(t.name, e.target.value)} placeholder="테마 기본값" className="min-w-0 flex-1" />
+                          {overrideValue && (
+                            <Button type="button" variant="ghost" size="icon-sm" title="테마 기본값으로" onClick={() => clearOverride(t.name)}>
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </Field>
+                    )
+                  })}
+                </div>
+
+                {supportsBlockTint && (
+                  <div className="mt-5 border-t pt-5">
+                    <Field>
+                      <FieldLabel>블럭별 배경 농담</FieldLabel>
+                      <RadioGroup
+                        value={blockTint}
+                        onValueChange={setBlockTint}
+                        className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+                      >
+                        {BLOCK_TINT_PATTERNS.map((p) => (
+                          <div key={p.value} className="flex items-center gap-2">
+                            <RadioGroupItem value={p.value} id={`tint-${p.value}`} />
+                            <Label htmlFor={`tint-${p.value}`} className="font-normal cursor-pointer">{p.label}</Label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                      <p className="text-xs text-muted-foreground">
+                        배경색은 그대로 두고 섹션마다 한 겹 덮어 경계를 만듭니다.
+                        A·B는 흰색, C는 검정을 덮으며 농도는 아래에서 조절합니다.
+                      </p>
+                    </Field>
+
+                    <div className="mt-4 grid grid-cols-1 gap-4 border-t pt-4">
+                      {(Object.keys(BLOCK_TINT_DEFAULT_OPACITY) as BlockTintStep[]).map((step) => (
+                        <SizeSliderField
+                          key={step}
+                          label={BLOCK_TINT_STEP_LABELS[step]}
+                          unit="%"
+                          value={blockTintOpacity[step] === BLOCK_TINT_DEFAULT_OPACITY[step] ? undefined : blockTintOpacity[step]}
+                          defaultValue={BLOCK_TINT_DEFAULT_OPACITY[step]}
+                          min={0}
+                          max={100}
+                          onChange={(v) => setBlockTintOpacity((prev) => ({ ...prev, [step]: v }))}
+                          onReset={() => setBlockTintOpacity((prev) => ({ ...prev, [step]: BLOCK_TINT_DEFAULT_OPACITY[step] }))}
+                        />
+                      ))}
+                      <p className="text-xs text-muted-foreground">
+                        0%면 그 단계는 아무것도 덮지 않습니다 — A의 기본값이 0%인 이유입니다.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-medium">글꼴</CardTitle>
+                <CardDescription>비워두면 테마 기본값이 사용됩니다.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {visibleTokenFields.filter((t) => t.type === "font").map((t) => {
+                    const value = typeof overrides[t.name] === "string" ? (overrides[t.name] as string) : ""
+                    const placeholder = themeTokens[t.name] || "테마 기본값"
+                    const matchedFontStack = fonts.map((f) => buildFontStack(f, t.name)).find((stack) => stack === value)
+                    const matchedFont = fonts.find((f) => buildFontStack(f, t.name) === value)
+                    return (
+                      <Field key={t.name}>
+                        <FieldLabel>{t.label}</FieldLabel>
+                        <div className="flex items-start gap-2">
+                          <div className="flex min-w-0 flex-1 flex-col gap-2">
+                            {fonts.length > 0 && (
+                              <Select
+                                value={matchedFontStack || ""}
+                                onValueChange={(v) => { if (v) setOverride(t.name, v) }}
+                              >
+                                <SelectTrigger className="w-full" style={matchedFontStack ? { fontFamily: matchedFontStack } : undefined}>
+                                  <SelectValue placeholder="에셋에 등록된 폰트 선택…" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {fonts.map((f) => (
+                                    <SelectItem key={f.id} value={buildFontStack(f, t.name)} style={fontPreviewStyle(f)}>{f.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                            <Input value={value} onChange={(e) => setOverride(t.name, e.target.value)} placeholder={placeholder} />
+                            <FontVariantFields tokenName={t.name} font={matchedFont} overrides={overrides} setOverride={setOverride} clearOverride={clearOverride} />
+                          </div>
+                          {value && (
+                            <Button type="button" variant="ghost" size="icon-sm" title="테마 기본값으로" onClick={() => clearOverride(t.name)}>
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </Field>
+                    )
+                  })}
+                </div>
+
+                {typographySizeTokens.length > 0 && (
+                  <div className="grid grid-cols-1 gap-5 border-t pt-5 sm:grid-cols-2">
+                    {typographySizeTokens.map((t) => (
+                      <SizeSliderField
+                        key={t.name}
+                        label={t.label}
+                        value={typeof overrides[t.name] === "number" ? (overrides[t.name] as number) : undefined}
+                        defaultValue={sizeTokenDefaults[t.name] ?? t.min}
+                        min={t.min}
+                        max={t.max}
+                        onChange={(v) => setOverride(t.name, v)}
+                        onReset={() => clearOverride(t.name)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {layoutSizeTokens.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base font-medium">여백 · 모서리</CardTitle>
+                  <CardDescription>
+                    청첩장 전체에 적용되는 기본 여백입니다. 특정 섹션만 다르게 하려면 블럭 탭에서 그 블럭의 모양을 바꾸세요.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                    {layoutSizeTokens.map((t) => (
+                      <SizeSliderField
+                        key={t.name}
+                        label={t.label}
+                        value={typeof overrides[t.name] === "number" ? (overrides[t.name] as number) : undefined}
+                        defaultValue={sizeTokenDefaults[t.name] ?? t.min}
+                        min={t.min}
+                        max={t.max}
+                        onChange={(v) => setOverride(t.name, v)}
+                        onReset={() => clearOverride(t.name)}
+                      />
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
               <CardHeader>
@@ -1712,856 +2732,64 @@ export default function CustomizeClient({
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base font-medium">색상</CardTitle>
-                <CardDescription>비워두면 테마 기본값이 사용됩니다.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  {visibleTokenFields.filter((t) => t.type === "color").map((t) => {
-                    const hasOverride = typeof overrides[t.name] === "string"
-                    const overrideValue = hasOverride ? (overrides[t.name] as string) : ""
-                    const themeDefault = themeTokens[t.name] || ""
-                    // 오버라이드가 없으면(=테마 기본값을 그대로 쓰는 중) 입력칸을 비워두지 않고
-                    // 현재 실제로 적용 중인 테마 기본 색을 그대로 채워 보여준다 — 빈 칸은 "색이
-                    // 없다"처럼 보이지만 실제로는 테마 기본색이 적용되어 있는 상태였다.
-                    const displayValue = overrideValue || themeDefault
-                    return (
-                      <Field key={t.name}>
-                        <FieldLabel>{t.label}</FieldLabel>
-                        <div className="flex items-start gap-2">
-                          <input
-                            type="color"
-                            value={/^#[0-9a-fA-F]{6}$/.test(displayValue) ? displayValue : "#ffffff"}
-                            onChange={(e) => setOverride(t.name, e.target.value)}
-                            className="h-9 w-10 shrink-0 cursor-pointer rounded-md border border-input bg-transparent p-1"
-                          />
-                          <Input value={displayValue} onChange={(e) => setOverride(t.name, e.target.value)} placeholder="테마 기본값" className="min-w-0 flex-1" />
-                          {overrideValue && (
-                            <Button type="button" variant="ghost" size="icon-sm" title="테마 기본값으로" onClick={() => clearOverride(t.name)}>
-                              <X className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        </div>
-                      </Field>
-                    )
-                  })}
-                </div>
-
-                {supportsBlockTint && (
-                  <div className="mt-5 border-t pt-5">
-                    <Field>
-                      <FieldLabel>블럭별 배경 농담</FieldLabel>
-                      <RadioGroup
-                        value={blockTint}
-                        onValueChange={setBlockTint}
-                        className="grid grid-cols-1 gap-2 sm:grid-cols-2"
-                      >
-                        {BLOCK_TINT_PATTERNS.map((p) => (
-                          <div key={p.value} className="flex items-center gap-2">
-                            <RadioGroupItem value={p.value} id={`tint-${p.value}`} />
-                            <Label htmlFor={`tint-${p.value}`} className="font-normal cursor-pointer">{p.label}</Label>
-                          </div>
-                        ))}
-                      </RadioGroup>
-                      <p className="text-xs text-muted-foreground">
-                        배경색은 그대로 두고 섹션마다 한 겹 덮어 경계를 만듭니다.
-                        A·B는 흰색, C는 검정을 덮으며 농도는 아래에서 조절합니다.
-                      </p>
-                    </Field>
-
-                    <div className="mt-4 grid grid-cols-1 gap-4 border-t pt-4">
-                      {(Object.keys(BLOCK_TINT_DEFAULT_OPACITY) as BlockTintStep[]).map((step) => (
-                        <SizeSliderField
-                          key={step}
-                          label={BLOCK_TINT_STEP_LABELS[step]}
-                          unit="%"
-                          value={blockTintOpacity[step] === BLOCK_TINT_DEFAULT_OPACITY[step] ? undefined : blockTintOpacity[step]}
-                          defaultValue={BLOCK_TINT_DEFAULT_OPACITY[step]}
-                          min={0}
-                          max={100}
-                          onChange={(v) => setBlockTintOpacity((prev) => ({ ...prev, [step]: v }))}
-                          onReset={() => setBlockTintOpacity((prev) => ({ ...prev, [step]: BLOCK_TINT_DEFAULT_OPACITY[step] }))}
-                        />
-                      ))}
-                      <p className="text-xs text-muted-foreground">
-                        0%면 그 단계는 아무것도 덮지 않습니다 — A의 기본값이 0%인 이유입니다.
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base font-medium">타이포그래피</CardTitle>
-                <CardDescription>비워두면 테마 기본값이 사용됩니다.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  {visibleTokenFields.filter((t) => t.type === "font").map((t) => {
-                    const value = typeof overrides[t.name] === "string" ? (overrides[t.name] as string) : ""
-                    const placeholder = themeTokens[t.name] || "테마 기본값"
-                    const matchedFontStack = fonts.map((f) => buildFontStack(f, t.name)).find((stack) => stack === value)
-                    const matchedFont = fonts.find((f) => buildFontStack(f, t.name) === value)
-                    return (
-                      <Field key={t.name}>
-                        <FieldLabel>{t.label}</FieldLabel>
-                        <div className="flex items-start gap-2">
-                          <div className="flex min-w-0 flex-1 flex-col gap-2">
-                            {fonts.length > 0 && (
-                              <Select
-                                value={matchedFontStack || ""}
-                                onValueChange={(v) => { if (v) setOverride(t.name, v) }}
-                              >
-                                <SelectTrigger className="w-full" style={matchedFontStack ? { fontFamily: matchedFontStack } : undefined}>
-                                  <SelectValue placeholder="에셋에 등록된 폰트 선택…" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {fonts.map((f) => (
-                                    <SelectItem key={f.id} value={buildFontStack(f, t.name)} style={fontPreviewStyle(f)}>{f.name}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            )}
-                            <Input value={value} onChange={(e) => setOverride(t.name, e.target.value)} placeholder={placeholder} />
-                            <FontVariantFields tokenName={t.name} font={matchedFont} overrides={overrides} setOverride={setOverride} clearOverride={clearOverride} />
-                          </div>
-                          {value && (
-                            <Button type="button" variant="ghost" size="icon-sm" title="테마 기본값으로" onClick={() => clearOverride(t.name)}>
-                              <X className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        </div>
-                      </Field>
-                    )
-                  })}
-                </div>
-
-                {typographySizeTokens.length > 0 && (
-                  <div className="grid grid-cols-1 gap-5 border-t pt-5 sm:grid-cols-2">
-                    {typographySizeTokens.map((t) => (
-                      <SizeSliderField
-                        key={t.name}
-                        label={t.label}
-                        value={typeof overrides[t.name] === "number" ? (overrides[t.name] as number) : undefined}
-                        defaultValue={sizeTokenDefaults[t.name] ?? t.min}
-                        min={t.min}
-                        max={t.max}
-                        onChange={(v) => setOverride(t.name, v)}
-                        onReset={() => clearOverride(t.name)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {layoutSizeTokens.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base font-medium">여백</CardTitle>
-                  <CardDescription>
-                    청첩장 전체에 적용되는 기본 여백입니다. 특정 섹션만 다르게 하려면 아래 블럭에서 설정하세요.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                    {layoutSizeTokens.map((t) => (
-                      <SizeSliderField
-                        key={t.name}
-                        label={t.label}
-                        value={typeof overrides[t.name] === "number" ? (overrides[t.name] as number) : undefined}
-                        defaultValue={sizeTokenDefaults[t.name] ?? t.min}
-                        min={t.min}
-                        max={t.max}
-                        onChange={(v) => setOverride(t.name, v)}
-                        onReset={() => clearOverride(t.name)}
-                      />
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {(editableBlocks.length > 0 || standaloneToggleSlots.length > 0) && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base font-medium">블럭</CardTitle>
-                  <CardDescription>
-                    펼쳐서 제목·여백을 바꾸거나, 이 청첩장에서만 이 블럭을 꺼보세요. 끈 블럭은 발행된 청첩장에서 완전히 사라집니다.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {heroManifest && (
-                    <Accordion
-                      type="single"
-                      collapsible
-                      value={focusBlock ?? ""}
-                      onValueChange={(v) => setFocusBlock(v || null)}
-                      className="mb-2 border-b"
-                    >
-                      <AccordionItem value="hero">
-                        <AccordionTrigger className="text-[15px] font-semibold">{heroManifest.label}</AccordionTrigger>
-                        <AccordionContent className="space-y-4 [&_[data-slot=field-label]]:text-xs [&_[data-slot=field-label]]:font-normal [&_[data-slot=field-label]]:text-muted-foreground">
-                          {heroManifest.heroTexts!.map((defaultText, i) => (
-                            <Field key={i}>
-                              <FieldLabel>{heroManifest.heroTexts!.length > 1 ? `문구 ${i + 1}` : "문구"}</FieldLabel>
-                              <Input
-                                value={blockOverrides.hero?.heroTexts?.[i] ?? ""}
-                                onChange={(e) => {
-                                  const next = [...(blockOverrides.hero?.heroTexts ?? [])]
-                                  next[i] = e.target.value
-                                  setBlockOverride("hero", { heroTexts: next })
-                                }}
-                                placeholder={defaultText}
-                              />
-                            </Field>
-                          ))}
-
-                          <Field className="border-t pt-4">
-                            <FieldLabel>서체</FieldLabel>
-                            <div className="flex items-start gap-2">
-                              <div className="flex min-w-0 flex-1 flex-col gap-2">
-                                {fonts.length > 0 && (
-                                  <Select
-                                    value={fonts.map((f) => buildFontStack(f, "--font-kr")).find((s) => s === blockOverrides.hero?.heroFont) || ""}
-                                    onValueChange={(v) => { if (v) setBlockOverride("hero", { heroFont: v }) }}
-                                  >
-                                    <SelectTrigger className="w-full" style={blockOverrides.hero?.heroFont ? { fontFamily: blockOverrides.hero.heroFont } : undefined}>
-                                      <SelectValue placeholder="에셋에 등록된 폰트 선택…" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {fonts.map((f) => (
-                                        <SelectItem key={f.id} value={buildFontStack(f, "--font-kr")} style={fontPreviewStyle(f)}>{f.name}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                )}
-                                <Input
-                                  value={blockOverrides.hero?.heroFont ?? ""}
-                                  onChange={(e) => setBlockOverride("hero", { heroFont: e.target.value || undefined })}
-                                  placeholder="비워두면 테마 기본 폰트"
-                                />
-                              </div>
-                              {blockOverrides.hero?.heroFont && (
-                                <Button type="button" variant="ghost" size="icon-sm" title="테마 기본 폰트로" onClick={() => setBlockOverride("hero", { heroFont: undefined })}>
-                                  <X className="h-3.5 w-3.5" />
-                                </Button>
-                              )}
-                            </div>
-                          </Field>
-
-                          <SizeSliderField
-                            label="문구 크기"
-                            value={blockOverrides.hero?.heroFontSize}
-                            defaultValue={16}
-                            min={10}
-                            max={64}
-                            onChange={(v) => setBlockOverride("hero", { heroFontSize: v })}
-                            onReset={() => setBlockOverride("hero", { heroFontSize: undefined })}
-                          />
-
-                          <SizeSliderField
-                            label="자간"
-                            value={blockOverrides.hero?.heroLetterSpacing}
-                            defaultValue={0}
-                            min={-2}
-                            max={20}
-                            onChange={(v) => setBlockOverride("hero", { heroLetterSpacing: v })}
-                            onReset={() => setBlockOverride("hero", { heroLetterSpacing: undefined })}
-                          />
-                        </AccordionContent>
-                      </AccordionItem>
-                    </Accordion>
-                  )}
-
-                  <p className="mb-2 text-xs text-muted-foreground">왼쪽 손잡이를 드래그해서 블럭 순서를 바꿀 수 있습니다.</p>
-                  <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleBlockDragEnd}>
-                    <SortableContext items={draggableBlocks.map((b) => b.key)} strategy={verticalListSortingStrategy}>
-                      <Accordion
-                        type="single"
-                        collapsible
-                        value={focusBlock ?? ""}
-                        onValueChange={(v) => setFocusBlock(v || null)}
-                      >
-                        {draggableBlocks.map((b) => {
-                      const hasToggle = slots.includes(b.key)
-                      const hasExpandable = b.title || b.padding
-                      const isOn = !disabledSlots.includes(b.key)
-                      const override = blockOverrides[b.key]
-
-                      if (!hasExpandable) {
-                        return (
-                          <SortableBlockRow key={b.key} id={b.key}>
-                            {(drag) => (
-                              <div className="flex items-center justify-between border-b py-4 last:border-b-0">
-                                <div className="flex min-w-0 flex-1 items-center gap-2">
-                                  <DragHandle {...drag} />
-                                  <span className={cn("text-sm font-medium", !isOn && "text-muted-foreground")}>{b.label}</span>
-                                </div>
-                                {hasToggle && <Switch checked={isOn} onCheckedChange={(c) => toggleSlot(b.key, c)} />}
-                              </div>
-                            )}
-                          </SortableBlockRow>
-                        )
-                      }
-
-                      return (
-                        <SortableBlockRow key={b.key} id={b.key}>
-                          {(drag) => (
-                        <AccordionItem value={b.key}>
-                          <div className="flex items-center gap-2">
-                            <DragHandle {...drag} />
-                            <AccordionTrigger className="flex-1 text-[15px] font-semibold">
-                              <span className={cn(!isOn && "text-muted-foreground")}>{b.label}</span>
-                            </AccordionTrigger>
-                            {hasToggle && (
-                              <Switch
-                                checked={isOn}
-                                onCheckedChange={(c) => toggleSlot(b.key, c)}
-                                onClick={(e) => e.stopPropagation()}
-                              />
-                            )}
-                          </div>
-                          <AccordionContent className="space-y-4 [&_[data-slot=field-label]]:text-xs [&_[data-slot=field-label]]:font-normal [&_[data-slot=field-label]]:text-muted-foreground">
-                            {b.title && (
-                              <>
-                                <Field>
-                                  <FieldLabel>제목</FieldLabel>
-                                  <Input
-                                    value={override?.title ?? ""}
-                                    onChange={(e) => setBlockOverride(b.key, { title: e.target.value })}
-                                    placeholder="테마 기본값"
-                                  />
-                                </Field>
-                                <Field>
-                                  <FieldLabel>영문 소제목</FieldLabel>
-                                  <Input
-                                    value={override?.label ?? ""}
-                                    onChange={(e) => setBlockOverride(b.key, { label: e.target.value })}
-                                    placeholder="테마 기본값"
-                                  />
-                                </Field>
-                              </>
-                            )}
-                            {b.padding && (
-                              <SizeSliderField
-                                label="위·아래 여백"
-                                value={override?.py}
-                                defaultValue={globalSectionPy}
-                                min={16}
-                                max={120}
-                                onChange={(v) => setBlockOverride(b.key, { py: v })}
-                                onReset={() => setBlockOverride(b.key, { py: undefined })}
-                              />
-                            )}
-                            {b.key === "rsvp" && (
-                              <>
-                                <div className="flex items-center justify-between border-t pt-4">
-                                  <span className="text-sm">식사 여부 질문</span>
-                                  <Switch
-                                    checked={override?.mealEnabled !== false}
-                                    onCheckedChange={(c) => setBlockOverride(b.key, { mealEnabled: c })}
-                                  />
-                                </div>
-                                {override?.mealEnabled !== false && (
-                                  <TextField
-                                    def={ALL_TEXT_FIELD_DEFS.find((f) => f.key === "rsvp_meal_menu")!}
-                                    value={content.rsvp_meal_menu || ""}
-                                    onChange={(v) => setField("rsvp_meal_menu", v)}
-                                  />
-                                )}
-                                <div className="flex items-center justify-between">
-                                  <span className="text-sm">셔틀버스 이용 질문</span>
-                                  <Switch
-                                    checked={override?.shuttleEnabled !== false}
-                                    onCheckedChange={(c) => setBlockOverride(b.key, { shuttleEnabled: c })}
-                                  />
-                                </div>
-                                <Field>
-                                  <FieldLabel>응답 마감일</FieldLabel>
-                                  <Input
-                                    type="date"
-                                    value={override?.rsvpDeadline ?? ""}
-                                    onChange={(e) => setBlockOverride(b.key, { rsvpDeadline: e.target.value || undefined })}
-                                  />
-                                  <FieldDescription>비워두면 마감 없이 상시 접수됩니다.</FieldDescription>
-                                </Field>
-                              </>
-                            )}
-                            {b.key === "calendar" && (
-                              <>
-                                <div className="flex items-center justify-between border-t pt-4">
-                                  <span className="text-sm">D-day 카운트다운 표시</span>
-                                  <Switch
-                                    checked={override?.ddayEnabled !== false}
-                                    onCheckedChange={(c) => setBlockOverride(b.key, { ddayEnabled: c })}
-                                  />
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <span className="text-sm">&ldquo;캘린더 앱에 추가&rdquo; 버튼</span>
-                                  <Switch
-                                    checked={override?.icsButtonEnabled !== false}
-                                    onCheckedChange={(c) => setBlockOverride(b.key, { icsButtonEnabled: c })}
-                                  />
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <span className="text-sm">&ldquo;구글 캘린더&rdquo; 버튼</span>
-                                  <Switch
-                                    checked={override?.googleCalendarButtonEnabled !== false}
-                                    onCheckedChange={(c) => setBlockOverride(b.key, { googleCalendarButtonEnabled: c })}
-                                  />
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <span className="text-sm">D-day 숫자 굴러 올라오는 연출</span>
-                                  <Switch
-                                    checked={override?.ddayRollingEnabled === true}
-                                    onCheckedChange={(c) => setBlockOverride(b.key, { ddayRollingEnabled: c })}
-                                  />
-                                </div>
-
-                                <Field className="border-t pt-4">
-                                  <FieldLabel>달력 아래 날짜 문구</FieldLabel>
-                                  <Input
-                                    value={override?.calendarDateText ?? ""}
-                                    onChange={(e) => setBlockOverride(b.key, { calendarDateText: e.target.value })}
-                                    placeholder="비워두면 예식일로 자동 표시"
-                                  />
-                                </Field>
-                                <Field>
-                                  <FieldLabel>달력 아래 시간 문구</FieldLabel>
-                                  <Input
-                                    value={override?.calendarTimeText ?? ""}
-                                    onChange={(e) => setBlockOverride(b.key, { calendarTimeText: e.target.value })}
-                                    placeholder="비워두면 요일·예식 시간으로 자동 표시"
-                                  />
-                                </Field>
-
-                                <Field className="border-t pt-4">
-                                  <FieldLabel>예식일 강조 표시 모양</FieldLabel>
-                                  <RadioGroup
-                                    value={override?.calendarDayShape || "circle"}
-                                    onValueChange={(v) => setBlockOverride(b.key, { calendarDayShape: v as "circle" | "heart" | "custom" })}
-                                    className="flex flex-row gap-6"
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      <RadioGroupItem value="circle" id={`${b.key}-shape-circle`} />
-                                      <Label htmlFor={`${b.key}-shape-circle`} className="font-normal cursor-pointer">동그라미</Label>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <RadioGroupItem value="heart" id={`${b.key}-shape-heart`} />
-                                      <Label htmlFor={`${b.key}-shape-heart`} className="font-normal cursor-pointer">하트</Label>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <RadioGroupItem value="custom" id={`${b.key}-shape-custom`} />
-                                      <Label htmlFor={`${b.key}-shape-custom`} className="font-normal cursor-pointer">직접 업로드</Label>
-                                    </div>
-                                  </RadioGroup>
-                                </Field>
-
-                                {override?.calendarDayShape === "custom" && (
-                                  <>
-                                    <ImageField
-                                      def={{ key: "calendarDayCustomShapeUrl", label: "강조 이미지", type: "image" }}
-                                      value={override?.calendarDayCustomShapeUrl || ""}
-                                      uploading={uploadingKey === "calendarDayCustomShapeUrl"}
-                                      onUpload={(file) => uploadCalendarDayShape(b.key, file)}
-                                      onClear={() => setBlockOverride(b.key, { calendarDayCustomShapeUrl: undefined })}
-                                    />
-                                    {override?.calendarDayCustomShapeUrl?.toLowerCase().split("?")[0].endsWith(".svg") && (
-                                      <BlockColorField
-                                        label="업로드 이미지 색상 (SVG 전용)"
-                                        value={override?.calendarDaySvgColor}
-                                        defaultValue={accent}
-                                        onChange={(v) => setBlockOverride(b.key, { calendarDaySvgColor: v })}
-                                        onReset={() => setBlockOverride(b.key, { calendarDaySvgColor: undefined })}
-                                      />
-                                    )}
-                                  </>
-                                )}
-
-                                <SizeSliderField
-                                  label="강조 표시 크기"
-                                  value={override?.calendarDayShapeSize}
-                                  defaultValue={32}
-                                  min={20}
-                                  max={48}
-                                  onChange={(v) => setBlockOverride(b.key, { calendarDayShapeSize: v })}
-                                  onReset={() => setBlockOverride(b.key, { calendarDayShapeSize: undefined })}
-                                />
-
-                                <BlockColorField
-                                  label="강조일자 텍스트 색상"
-                                  value={override?.calendarDayTextColor}
-                                  defaultValue="#ffffff"
-                                  onChange={(v) => setBlockOverride(b.key, { calendarDayTextColor: v })}
-                                  onReset={() => setBlockOverride(b.key, { calendarDayTextColor: undefined })}
-                                />
-
-                                <BlockColorField
-                                  label="달력 박스 배경색"
-                                  value={override?.calendarBoxColor}
-                                  defaultValue={CALENDAR_BOX_DEFAULT.color}
-                                  onChange={(v) => setBlockOverride(b.key, { calendarBoxColor: v })}
-                                  onReset={() => setBlockOverride(b.key, { calendarBoxColor: undefined })}
-                                />
-                                <SizeSliderField
-                                  label="달력 박스 배경 불투명도"
-                                  unit="%"
-                                  value={override?.calendarBoxOpacity}
-                                  defaultValue={CALENDAR_BOX_DEFAULT.opacity}
-                                  min={0}
-                                  max={100}
-                                  onChange={(v) => setBlockOverride(b.key, { calendarBoxOpacity: v })}
-                                  onReset={() => setBlockOverride(b.key, { calendarBoxOpacity: undefined })}
-                                />
-                              </>
-                            )}
-                            {b.key === "account" && (
-                              <Field className="border-t pt-4">
-                                {/* 계좌 그룹 순서 — 목록형·카드형이 같은 설정을 쓴다. 신랑/신부는
-                                    서로 다른 필드라 열을 섞을 수 없어, 카드형에서는 "어느 열이
-                                    먼저인지"와 "열 안에서 본인·혼주 어느 쪽이 먼저인지"로 반영된다. */}
-                                <FieldLabel>계좌 순서</FieldLabel>
-                                <div className="space-y-1.5">
-                                  {parseAccountGroupOrder(override?.accountOrder).map((key, i, arr) => (
-                                    <div key={key} className="flex items-center gap-2 rounded-md border border-border px-2.5 py-1.5">
-                                      <span className="w-5 text-xs text-muted-foreground tabular-nums">{i + 1}</span>
-                                      <span className="flex-1 text-sm">{ACCOUNT_GROUP_LABELS[key]}</span>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        disabled={i === 0}
-                                        aria-label={`${ACCOUNT_GROUP_LABELS[key]} 위로`}
-                                        onClick={() => setBlockOverride(b.key, { accountOrder: moveArrayItem(arr, i, -1) })}
-                                      >
-                                        <ArrowUp className="h-3.5 w-3.5" />
-                                      </Button>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        disabled={i === arr.length - 1}
-                                        aria-label={`${ACCOUNT_GROUP_LABELS[key]} 아래로`}
-                                        onClick={() => setBlockOverride(b.key, { accountOrder: moveArrayItem(arr, i, 1) })}
-                                      >
-                                        <ArrowDown className="h-3.5 w-3.5" />
-                                      </Button>
-                                    </div>
-                                  ))}
-                                </div>
-                                <p className="text-xs text-muted-foreground">
-                                  혼주 계좌가 여러 건이면 그 안의 순서는 입력한 순서를 따르고, 여기서는 그룹 전체가
-                                  몇 번째로 나올지만 정합니다.
-                                </p>
-
-                                {/* 아이콘 순서 — 카드형·목록형이 같은 설정을 쓴다.
-                                    카드형에는 복사 아이콘이 없지만(카드를 누르면 복사)
-                                    목록형으로 되돌렸을 때를 위해 목록에 남겨 둔다. */}
-                                <FieldLabel className="border-t pt-4">계좌 아이콘 순서</FieldLabel>
-                                <div className="space-y-1.5">
-                                  {parseAccountIconOrder(override?.accountIconOrder).map((key, i, arr) => (
-                                    <div key={key} className="flex items-center gap-2 rounded-md border border-border px-2.5 py-1.5">
-                                      <span className="w-5 text-xs text-muted-foreground tabular-nums">{i + 1}</span>
-                                      <span className="flex-1 text-sm">{ACCOUNT_ICON_LABELS[key]}</span>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        disabled={i === 0}
-                                        aria-label={`${ACCOUNT_ICON_LABELS[key]} 위로`}
-                                        onClick={() => setBlockOverride(b.key, { accountIconOrder: moveArrayItem(arr, i, -1) })}
-                                      >
-                                        <ArrowUp className="h-3.5 w-3.5" />
-                                      </Button>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        disabled={i === arr.length - 1}
-                                        aria-label={`${ACCOUNT_ICON_LABELS[key]} 아래로`}
-                                        onClick={() => setBlockOverride(b.key, { accountIconOrder: moveArrayItem(arr, i, 1) })}
-                                      >
-                                        <ArrowDown className="h-3.5 w-3.5" />
-                                      </Button>
-                                    </div>
-                                  ))}
-                                </div>
-                                <p className="text-xs text-muted-foreground">
-                                  위에서부터 왼쪽 순서로 놓입니다.
-                                </p>
-
-                                <FieldLabel className="border-t pt-4">계좌 표시 방식</FieldLabel>
-                                <RadioGroup
-                                  value={override?.accountLayout || "list"}
-                                  onValueChange={(v) => setBlockOverride(b.key, { accountLayout: v as "list" | "card" })}
-                                  className="flex flex-row gap-6"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <RadioGroupItem value="list" id={`${b.key}-layout-list`} />
-                                    <Label htmlFor={`${b.key}-layout-list`} className="font-normal cursor-pointer">목록형</Label>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <RadioGroupItem value="card" id={`${b.key}-layout-card`} />
-                                    <Label htmlFor={`${b.key}-layout-card`} className="font-normal cursor-pointer">2열 카드형</Label>
-                                  </div>
-                                </RadioGroup>
-                                <p className="text-xs text-muted-foreground">
-                                  카드형은 카드를 누르면 계좌번호가 복사됩니다. 예전 자유 입력으로 등록된 혼주 계좌는
-                                  은행·번호가 나뉘어 있지 않아 카드형에서도 기존 줄 형태로 표시됩니다.
-                                </p>
-
-                                {(override?.accountLayout || "list") === "list" && (
-                                  <div className="space-y-4 border-t pt-4">
-                                    <p className="text-xs text-muted-foreground">
-                                      계좌번호가 길어 한 줄에 다 안 들어가고 2줄로 넘어갈 때, 아이콘을 줄이거나 글자 크기를
-                                      줄여 한 줄에 들어가게 할 수 있습니다.
-                                    </p>
-                                    <SizeSliderField
-                                      label="아이콘 크기"
-                                      value={override?.accountIconSize}
-                                      defaultValue={38}
-                                      min={26}
-                                      max={40}
-                                      onChange={(v) => setBlockOverride(b.key, { accountIconSize: v })}
-                                      onReset={() => setBlockOverride(b.key, { accountIconSize: undefined })}
-                                    />
-                                    <SizeSliderField
-                                      label="계좌 정보 글자 크기"
-                                      value={override?.accountTextSize}
-                                      defaultValue={13.5}
-                                      min={10}
-                                      max={16}
-                                      onChange={(v) => setBlockOverride(b.key, { accountTextSize: v })}
-                                      onReset={() => setBlockOverride(b.key, { accountTextSize: undefined })}
-                                    />
-                                  </div>
-                                )}
-
-                                {(override?.accountLayout === "card") && (
-                                  <div className="space-y-4 border-t pt-4">
-                                    <Field>
-                                      <FieldLabel>카드 배경색</FieldLabel>
-                                      <RadioGroup
-                                        value={override?.accountCardBg || ACCOUNT_CARD_BG_DEFAULT.source}
-                                        onValueChange={(v) => setBlockOverride(b.key, { accountCardBg: v as "auto" | "accent" | "bg" | "custom" })}
-                                        className="flex flex-row flex-wrap gap-x-6 gap-y-2"
-                                      >
-                                        <div className="flex items-center gap-2">
-                                          <RadioGroupItem value="auto" id={`${b.key}-cardbg-auto`} />
-                                          <Label htmlFor={`${b.key}-cardbg-auto`} className="font-normal cursor-pointer">자동</Label>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          <RadioGroupItem value="accent" id={`${b.key}-cardbg-accent`} />
-                                          <Label htmlFor={`${b.key}-cardbg-accent`} className="font-normal cursor-pointer">테마 포인트 색상</Label>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          <RadioGroupItem value="bg" id={`${b.key}-cardbg-bg`} />
-                                          <Label htmlFor={`${b.key}-cardbg-bg`} className="font-normal cursor-pointer">테마 배경색</Label>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          <RadioGroupItem value="custom" id={`${b.key}-cardbg-custom`} />
-                                          <Label htmlFor={`${b.key}-cardbg-custom`} className="font-normal cursor-pointer">직접 선택</Label>
-                                        </div>
-                                      </RadioGroup>
-                                      <p className="text-xs text-muted-foreground">
-                                        자동은 섹션 배경이 밝든 어둡든 대비가 생기게 맞춥니다. 테마 색을 고르면 테마를 바꿔도
-                                        카드가 함께 따라가지만, 섹션 배경과 같은 색이면 카드가 보이지 않습니다 — 고르고 나서
-                                        미리보기를 확인하세요.
-                                      </p>
-                                    </Field>
-
-                                    {override?.accountCardBg === "custom" && (
-                                      <BlockColorField
-                                        label="카드 배경 직접 선택"
-                                        value={override?.accountCardBgColor}
-                                        defaultValue={ACCOUNT_CARD_BG_DEFAULT.color}
-                                        onChange={(v) => setBlockOverride(b.key, { accountCardBgColor: v })}
-                                        onReset={() => setBlockOverride(b.key, { accountCardBgColor: undefined })}
-                                      />
-                                    )}
-
-                                    <SizeSliderField
-                                      label="카드 배경 불투명도"
-                                      unit="%"
-                                      value={override?.accountCardBgOpacity}
-                                      defaultValue={ACCOUNT_CARD_BG_DEFAULT.opacity}
-                                      min={0}
-                                      max={100}
-                                      onChange={(v) => setBlockOverride(b.key, { accountCardBgOpacity: v })}
-                                      onReset={() => setBlockOverride(b.key, { accountCardBgOpacity: undefined })}
-                                    />
-                                  </div>
-                                )}
-                              </Field>
-                            )}
-                            {b.key === "greeting" && (
-                              <>
-                                <Field className="border-t pt-4">
-                                  <FieldLabel>인사말 아이콘 모양</FieldLabel>
-                                  <RadioGroup
-                                    value={override?.greetingIconShape || "heart"}
-                                    onValueChange={(v) => setBlockOverride(b.key, { greetingIconShape: v as "heart" | "custom" })}
-                                    className="flex flex-row gap-6"
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      <RadioGroupItem value="heart" id={`${b.key}-icon-heart`} />
-                                      <Label htmlFor={`${b.key}-icon-heart`} className="font-normal cursor-pointer">하트</Label>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <RadioGroupItem value="custom" id={`${b.key}-icon-custom`} />
-                                      <Label htmlFor={`${b.key}-icon-custom`} className="font-normal cursor-pointer">직접 업로드</Label>
-                                    </div>
-                                  </RadioGroup>
-                                </Field>
-
-                                {override?.greetingIconShape === "custom" && (
-                                  <ImageField
-                                    def={{ key: "greetingIconCustomUrl", label: "아이콘 이미지", type: "image" }}
-                                    value={override?.greetingIconCustomUrl || ""}
-                                    uploading={uploadingKey === "greetingIconCustomUrl"}
-                                    onUpload={(file) => uploadGreetingIcon(b.key, file)}
-                                    onClear={() => setBlockOverride(b.key, { greetingIconCustomUrl: undefined })}
-                                  />
-                                )}
-
-                                <SizeSliderField
-                                  label="아이콘 크기"
-                                  value={override?.greetingIconSize}
-                                  defaultValue={24}
-                                  min={12}
-                                  max={64}
-                                  onChange={(v) => setBlockOverride(b.key, { greetingIconSize: v })}
-                                  onReset={() => setBlockOverride(b.key, { greetingIconSize: undefined })}
-                                />
-
-                                <BlockColorField
-                                  label="아이콘 색상"
-                                  value={override?.greetingIconColor}
-                                  defaultValue={accent}
-                                  onChange={(v) => setBlockOverride(b.key, { greetingIconColor: v })}
-                                  onReset={() => setBlockOverride(b.key, { greetingIconColor: undefined })}
-                                />
-                              </>
-                            )}
-                          </AccordionContent>
-                        </AccordionItem>
-                          )}
-                        </SortableBlockRow>
-                      )
-                    })}
-                      </Accordion>
-                    </SortableContext>
-                  </DndContext>
-
-                  {shareBlock && (
-                    <div className="flex items-center justify-between border-t py-4">
-                      <div className="flex items-center gap-2">
-                        <span className={cn("text-sm font-medium", disabledSlots.includes("share") && "text-muted-foreground")}>{shareBlock.label}</span>
-                        <span className="text-xs text-muted-foreground">항상 맨 아래에 위치합니다</span>
-                      </div>
-                      {slots.includes("share") && (
-                        <Switch
-                          checked={!disabledSlots.includes("share")}
-                          onCheckedChange={(c) => toggleSlot("share", c)}
-                        />
-                      )}
-                    </div>
-                  )}
-
-                  {standaloneToggleSlots.length > 0 && (
-                    <div className={cn("space-y-1", editableBlocks.length > 0 && "mt-2 border-t pt-3")}>
-                      {standaloneToggleSlots.map((s) => {
-                        const isOn = !disabledSlots.includes(s)
-                        return (
-                          <div key={s} className="flex items-center justify-between py-2">
-                            <span className={cn("text-sm", !isOn && "text-muted-foreground")}>{SLOT_LABELS[s] || s}</span>
-                            <Switch checked={isOn} onCheckedChange={(c) => toggleSlot(s, c)} />
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base font-medium">섹션 사이 사진</CardTitle>
+                <CardTitle className="text-base font-medium">스크롤 모션</CardTitle>
                 <CardDescription>
-                  원하는 섹션 바로 아래에 사진을 끼워 넣습니다. 위치는 드롭다운으로, 순서는 위/아래 버튼으로
-                  바로 바꿀 수 있어 다시 업로드할 필요가 없습니다.
+                  하객이 스크롤할 때 각 섹션이 나타나는 방식입니다. 신랑신부도 대시보드에서
+                  직접 바꿀 수 있는 항목입니다.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {sectionImages.map((img, i) => (
-                  <div key={img.id} className="flex gap-3 rounded-lg border p-3">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={img.url} alt="" className="h-16 w-16 shrink-0 rounded object-cover" />
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <FieldLabel className="w-10 shrink-0 text-xs font-normal text-muted-foreground">위치</FieldLabel>
-                        <Select value={img.afterBlock} onValueChange={(v) => updateSectionImage(img.id, { afterBlock: v })}>
-                          <SelectTrigger className="h-8 flex-1">
-                            <SelectValue placeholder="섹션 선택" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {blockManifest.map((b) => (
-                              <SelectItem key={b.key} value={b.key}>{b.label} 다음</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <Input
-                        value={img.caption ?? ""}
-                        onChange={(e) => updateSectionImage(img.id, { caption: e.target.value })}
-                        placeholder="캡션 (선택)"
-                        className="h-8 text-xs"
-                      />
-                    </div>
-                    <div className="flex shrink-0 flex-col items-center justify-between">
-                      <div className="flex flex-col">
-                        <Button variant="ghost" size="icon-sm" disabled={i === 0} onClick={() => moveSectionImage(img.id, -1)}>
-                          <ArrowUp className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon-sm" disabled={i === sectionImages.length - 1} onClick={() => moveSectionImage(img.id, 1)}>
-                          <ArrowDown className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                      <Button variant="ghost" size="icon-sm" className="text-destructive" onClick={() => removeSectionImage(img.id)}>
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-
-                <div>
-                  <Button variant="outline" size="sm" className="relative overflow-hidden" disabled={isUploadingSectionImage}>
-                    {isUploadingSectionImage ? (
-                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> 업로드 중...</>
-                    ) : (
-                      <><Plus className="mr-2 h-4 w-4" /> 사진 추가</>
-                    )}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="absolute inset-0 cursor-pointer opacity-0"
-                      disabled={isUploadingSectionImage}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0]
-                        if (file) addSectionImage(file)
-                        e.target.value = ""
-                      }}
-                    />
-                  </Button>
-                </div>
+              <CardContent>
+                <ScrollMotionField value={scrollMotion} onChange={setScrollMotion} idPrefix="admin-scroll-motion" />
               </CardContent>
             </Card>
+
+            {showBgm && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base font-medium">배경음악</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <FieldGroup className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="bgmEnabled" className="font-normal cursor-pointer">배경음악 사용</Label>
+                      <Switch id="bgmEnabled" checked={!disabledSlots.includes("bgm")} onCheckedChange={(c) => toggleSlot("bgm", c)} />
+                    </div>
+                    <Field>
+                      <Select
+                        value={bgms.some((b) => b.url === bgmUrl) ? bgmUrl : "custom"}
+                        onValueChange={(v) => { if (v !== "custom") setBgmUrl(v) }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="custom">직접 입력 (아래)</SelectItem>
+                          {bgms.map((b) => (
+                            <SelectItem key={b.id} value={b.url}>{b.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <Field>
+                      <Input value={bgmUrl} onChange={(e) => setBgmUrl(e.target.value)} placeholder="BGM 파일 URL" />
+                    </Field>
+                    <Field>
+                      <div className="flex items-center gap-3">
+                        <Switch id="bgmAutoplay" checked={bgmAutoplay} onCheckedChange={setBgmAutoplay} />
+                        <Label htmlFor="bgmAutoplay" className="font-normal cursor-pointer">자동 재생</Label>
+                      </div>
+                      <FieldDescription>
+                        꺼두면 청첩장을 열자마자 음악이 나오지 않고, 하객이 우측 상단 ♪ 버튼을 눌렀을 때만 재생됩니다.
+                        (조용한 자리에서 열어본 하객이 당황하지 않도록 기본값은 꺼짐입니다)
+                      </FieldDescription>
+                    </Field>
+                  </FieldGroup>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
+          {/* 검수 — 예전 검수·이력 탭을 합쳤다. 검수 요청 보내기도 하단 바에서 이리로 옮겼다 */}
           <TabsContent value="review" className="space-y-6">
             <Card>
               <CardHeader>
@@ -2571,12 +2799,18 @@ export default function CustomizeClient({
                   {reviewRound > 0 && ` · ${reviewRound}차 검수`}
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                {publicSlug && (
+                  <Button variant="outline" className="w-full gap-2 sm:w-auto" onClick={sendReviewRequest} disabled={sendingReview}>
+                    {sendingReview ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Copy className="h-3.5 w-3.5" />}
+                    검수 요청 보내기
+                  </Button>
+                )}
                 {revisionsQuery.isLoading ? (
                   <p className="text-sm text-muted-foreground">불러오는 중…</p>
                 ) : !revisionsQuery.data || revisionsQuery.data.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    아직 고객이 남긴 수정 요청이 없습니다. 왼쪽 하단 &ldquo;검수 요청 보내기&rdquo;로 검수 링크를 전달해보세요.
+                    아직 고객이 남긴 수정 요청이 없습니다. 위의 &ldquo;검수 요청 보내기&rdquo;로 검수 링크를 전달해보세요.
                   </p>
                 ) : (
                   <div className="space-y-2">
@@ -2596,7 +2830,7 @@ export default function CustomizeClient({
                               <button
                                 type="button"
                                 className="text-xs font-semibold text-primary hover:underline"
-                                onClick={() => r.block_key && setFocusBlock(r.block_key)}
+                                onClick={() => r.block_key && openBlockFromReview(r.block_key)}
                               >
                                 {label}
                               </button>
@@ -2622,9 +2856,7 @@ export default function CustomizeClient({
                 )}
               </CardContent>
             </Card>
-          </TabsContent>
 
-          <TabsContent value="history" className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="text-base font-medium">변경 이력</CardTitle>
@@ -2666,40 +2898,6 @@ export default function CustomizeClient({
             </Card>
           </TabsContent>
         </Tabs>
-
-        {/* xl 미만(1단 레이아웃)에서는 실제 스크롤이 main이 아니라 html에서 일어나(admin 레이아웃의
-            고질적인 문제) sticky가 기준을 잃으므로 fixed로 뷰포트 하단에 고정하고(사이드바 폭만큼
-            lg:left-64 로 비켜준다), xl 이상에서는 원래의(검증된) 컬럼 내부 sticky로 되돌린다. */}
-        {/* 버튼이 6개라 좁은 화면에서는 한 줄에 안 들어간다. 줄바꿈(flex-wrap)을 쓰면 바가
-            2~3줄로 높아져 편집 패널의 pb-24(96px)를 넘어 내용을 가리므로, 높이는 한 줄로
-            유지한 채 가로 스크롤시킨다 — 가장 많이 쓰는 "저장"이 맨 앞이라 항상 보인다. */}
-        <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 overflow-x-auto border-t bg-background px-4 py-4 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] [&>*]:shrink-0 lg:left-64 lg:px-6 xl:sticky xl:inset-x-auto xl:left-auto xl:z-auto xl:mt-6 xl:flex-wrap xl:overflow-x-visible xl:px-0 xl:shadow-none">
-          <SaveButton onSave={save} className="gap-2" />
-          {publicSlug && (
-            <Button variant="outline" asChild>
-              <a href={`/w/${publicSlug}`} target="_blank" rel="noreferrer" className="gap-2">
-                발행 청첩장 열기 <ExternalLink className="h-3.5 w-3.5" />
-              </a>
-            </Button>
-          )}
-          {publicSlug && (
-            <Button variant="outline" className="gap-2" onClick={copyInvitationLink}>
-              <Copy className="h-3.5 w-3.5" /> 청첩장 주소 복사하기
-            </Button>
-          )}
-          {publicSlug && <QrCodeDialog invitationId={invitationId} path={`/w/${publicSlug}`} fileBaseName={publicSlug} weddingDate={weddingDate} />}
-          {publicSlug && (
-            <Button variant="outline" className="gap-2" onClick={copyDashboardLink}>
-              <Copy className="h-3.5 w-3.5" /> 고객용 대시보드 복사하기
-            </Button>
-          )}
-          {publicSlug && (
-            <Button variant="outline" className="gap-2" onClick={sendReviewRequest} disabled={sendingReview}>
-              {sendingReview ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Copy className="h-3.5 w-3.5" />}
-              검수 요청 보내기
-            </Button>
-          )}
-        </div>
       </div>
 
       {/* 미리보기 — xl 이상에서는 이 컬럼 자체가 스크롤되지 않아(왼쪽만 overflow-y-auto) 항상 화면에 고정되고,
@@ -2737,6 +2935,18 @@ export default function CustomizeClient({
           )}
         </div>
       </div>
+      </div>
+
+      {publicSlug && (
+        <QrCodeDialog
+          invitationId={invitationId}
+          path={`/w/${publicSlug}`}
+          fileBaseName={publicSlug}
+          weddingDate={weddingDate}
+          open={qrOpen}
+          onOpenChange={setQrOpen}
+        />
+      )}
     </div>
   )
 }
