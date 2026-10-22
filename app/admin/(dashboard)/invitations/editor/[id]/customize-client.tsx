@@ -892,7 +892,9 @@ export default function CustomizeClient({
    *  합쳤다 — 둘 중 하나만 꺼져도 섹션이 사라지므로(§sequence-island.tsx · contact-island.tsx) 함께
    *  켜고 끈다. 저장되는 키는 예전 그대로다. */
   const blockToggle = (key: string): { on: boolean; set: (on: boolean) => void } | null => {
-    const hasSlot = slots.includes(key)
+    // 식장 위치는 슬롯이 아니지만(그 안의 지도만 슬롯) disabled_slots 에 블럭 키를 넣으면
+    // getHiddenBlocks 가 미리보기·검수·발행 화면에서 블럭째 숨긴다
+    const hasSlot = slots.includes(key) || key === "location"
     const flag = key === "sequence" ? { value: showProgram, set: setShowProgram }
       : key === "contact" ? { value: phoneExpose, set: setPhoneExpose }
       : null
